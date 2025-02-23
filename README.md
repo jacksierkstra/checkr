@@ -1,2 +1,2 @@
-# checkr
+# Checkr
 A pure validation library. 
