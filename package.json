@@ -1,6 +1,6 @@
 {
   "name": "@jacksierkstra/checkr",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A pure validation library.",
   "packageManager": "yarn@4.5.3",
   "devDependencies": {
