@@ -1,5 +1,5 @@
 import { ValidationResult } from "@lib/types/validation";
-import { XSDSchema } from "@lib/types/xsd";
+import { XSDElement, XSDSchema } from "@lib/types/xsd";
 import { GlobalValidationPipeline, GlobalValidationPipelineImpl } from "@lib/validator/pipeline/global";
 import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validator/pipeline/node";
 import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
@@ -31,15 +31,26 @@ export class ValidatorImpl implements Validator {
         const schema: XSDSchema = await this.xsdParser.parse(xsd);
         const xmlDoc = this.xmlParser.parse(xml);
 
+        const validateElement = (node: Element, schemaElement: XSDElement): string[] => [
+            ...this.nodePipeline.execute(node, schemaElement),
+            ...(schemaElement.children || []).flatMap((childSchema) => {
+                const childNodes = Array.from(node.getElementsByTagName(childSchema.name));
+                return [
+                    ...this.globalPipeline.execute(childNodes, childSchema),
+                    ...childNodes.flatMap((childNode) => validateElement(childNode, childSchema)),
+                ];
+            }),
+        ];
+
         const errors = schema.elements.flatMap((element) => {
             const nodes = Array.from(xmlDoc.getElementsByTagName(element.name));
-
             return [
-                ...this.globalPipeline.execute(nodes, element), // Global validation
-                ...nodes.flatMap((node) => this.nodePipeline.execute(node, element)), // Node-level validation
+                ...this.globalPipeline.execute(nodes, element),
+                ...nodes.flatMap((node) => validateElement(node, element)),
             ];
         });
 
         return { valid: errors.length === 0, errors };
     }
+
 }

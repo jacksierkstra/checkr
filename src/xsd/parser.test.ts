@@ -1,6 +1,6 @@
+import { XSDSchema } from "@lib/types/xsd";
 import { XMLParserImpl } from "@lib/xml/parser";
 import { XSDParserImpl } from "@lib/xsd/parser";
-import { XSDSchema, XSDElement } from "@lib/types/xsd";
 
 describe("XSDParser", () => {
   let parser: XSDParserImpl;
@@ -15,7 +15,7 @@ describe("XSDParser", () => {
     expectations(schema);
   };
 
-  it("should parse the targetNamespace and handle empty elements", async () => {
+  it("should parse the targetNamespace and handle empty schema", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/schema">
       </xs:schema>
@@ -46,7 +46,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should extract attributes from xs:element", async () => {
+  it("should extract attributes from elements", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Item">
@@ -71,7 +71,7 @@ describe("XSDParser", () => {
       const categoryAttribute = itemElement?.attributes?.find((attr) => attr.name === "category");
       expect(categoryAttribute).toBeDefined();
       expect(categoryAttribute?.type).toBe("xs:string");
-      expect(categoryAttribute?.use).toBe("optional"); // Default is optional.
+      expect(categoryAttribute?.use).toBe("optional");
 
       const fixedValueAttribute = itemElement?.attributes?.find((attr) => attr.name === "fixedValue");
       expect(fixedValueAttribute).toBeDefined();
@@ -79,18 +79,91 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle elements without attributes", async () => {
+  it("should parse minOccurs and maxOccurs correctly", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
-        <xs:element name="SimpleItem"/>
+        <xs:element name="Product" minOccurs="1" maxOccurs="5"/>
       </xs:schema>
     `;
     await parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(1);
 
-      const simpleItem = schema.elements.find((el) => el.name === "SimpleItem");
-      expect(simpleItem).toBeDefined();
-      expect(simpleItem?.attributes).toHaveLength(0);
+      const productElement = schema.elements.find((el) => el.name === "Product");
+      expect(productElement).toBeDefined();
+      expect(productElement?.minOccurs).toBe(1);
+      expect(productElement?.maxOccurs).toBe(5);
+    });
+  });
+
+  it("should handle default minOccurs and maxOccurs", async () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="Product"/>
+      </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      expect(schema.elements).toHaveLength(1);
+
+      const productElement = schema.elements.find((el) => el.name === "Product");
+      expect(productElement).toBeDefined();
+      expect(productElement?.minOccurs).toBe(0); // Default
+      expect(productElement?.maxOccurs).toBe(1); // Default
+    });
+  });
+
+  it("should parse nested elements inside complex types", async () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="Order">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Item" minOccurs="1" maxOccurs="unbounded"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      expect(schema.elements).toHaveLength(1);
+
+      const orderElement = schema.elements.find((el) => el.name === "Order");
+      expect(orderElement).toBeDefined();
+      expect(orderElement?.children).toHaveLength(1);
+
+      const itemElement = orderElement?.children?.find((el) => el.name === "Item");
+      expect(itemElement).toBeDefined();
+      expect(itemElement?.minOccurs).toBe(1);
+      expect(itemElement?.maxOccurs).toBeNaN(); // "unbounded" is parsed as NaN
+    });
+  });
+
+  it("should handle multiple nested elements", async () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="Company">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Employee"/>
+              <xs:element name="Department"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      expect(schema.elements).toHaveLength(1);
+
+      const companyElement = schema.elements.find((el) => el.name === "Company");
+      expect(companyElement).toBeDefined();
+      expect(companyElement?.children).toHaveLength(2);
+
+      const employeeElement = companyElement?.children?.find((el) => el.name === "Employee");
+      expect(employeeElement).toBeDefined();
+      expect(employeeElement?.name).toBe("Employee");
+
+      const departmentElement = companyElement?.children?.find((el) => el.name === "Department");
+      expect(departmentElement).toBeDefined();
+      expect(departmentElement?.name).toBe("Department");
     });
   });
 

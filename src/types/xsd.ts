@@ -9,6 +9,7 @@ export interface XSDElement {
     minOccurs?: number;
     maxOccurs?: number | "unbounded";
     attributes?: XSDAttribute[];
+    children?: XSDElement[];
 }
 
 export interface XSDAttribute {
