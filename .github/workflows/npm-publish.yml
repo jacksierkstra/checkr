@@ -30,10 +30,6 @@ jobs:
           registry-url: https://registry.npmjs.org/
       - run: corepack enable
       - run: yarn install --immutable
-      - name: Yarn Login
-        run: yarn npm login --token ${{ secrets.NPM_PUBLISH_TOKEN }}
-      - run: yarn npm publish --access public
+      - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-          NPM_CONFIG_USERCONFIG: ${{ github.workspace }}/.npmrc
-
