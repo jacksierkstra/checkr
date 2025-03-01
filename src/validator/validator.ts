@@ -1,8 +1,9 @@
 import { ValidationResult } from "@lib/types/validation";
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
+import { XSDChoice, XSDElement, XSDSchema } from "@lib/types/xsd";
 import { GlobalValidationPipeline, GlobalValidationPipelineImpl } from "@lib/validator/pipeline/global";
 import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validator/pipeline/node";
 import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
+import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
 import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
 import { validateType } from "@lib/validator/pipeline/steps/type";
 import { XMLParser } from "@lib/xml/parser";
@@ -20,37 +21,83 @@ export class ValidatorImpl implements Validator {
         private xmlParser: XMLParser,
         private xsdParser: XSDParser
     ) {
+        // Node-level pipeline (type checks, attribute checks, etc.)
         this.nodePipeline = new NodeValidationPipelineImpl()
             .addStep(validateType)
-            .addStep(validateAttributes);
+            .addStep(validateAttributes)
+            .addStep(validateConstraints);
+
+        // Global pipeline (occurrence checks, etc.)
         this.globalPipeline = new GlobalValidationPipelineImpl()
             .addStep(validateOccurrence);
     }
 
+    private validateElements(xmlDoc: Document, elements: XSDElement[]): string[] {
+        return elements.flatMap((schemaElement) => {
+            const nodes = Array.from(xmlDoc.getElementsByTagName(schemaElement.name));
+
+            return [
+                // Global checks (e.g., occurrence constraints) for this element
+                ...this.globalPipeline.execute(nodes, schemaElement),
+
+                // Node-level checks for each instance of this element
+                ...nodes.flatMap((node) => this.validateNode(node, schemaElement)),
+            ];
+        });
+    }
+
+    private validateNode(node: Element, schemaElement: XSDElement): string[] {
+        const errors: string[] = [];
+
+        // Node-level checks
+        errors.push(...this.nodePipeline.execute(node, schemaElement));
+
+        // If choices exist, validate them
+        if (schemaElement.choices && schemaElement.choices.length > 0) {
+            // For simplicity, assume 1 XSDChoice
+            const [choiceDef] = schemaElement.choices;
+            errors.push(...this.validateChoice(node, choiceDef));
+        }
+
+        // Recursively validate normal children
+        const childrenErrors = (schemaElement.children || []).flatMap((childSchema) => {
+            const childNodes = Array.from(node.getElementsByTagName(childSchema.name));
+            return [
+                ...this.globalPipeline.execute(childNodes, childSchema),
+                ...childNodes.flatMap((childNode) => this.validateNode(childNode, childSchema)),
+            ];
+        });
+
+        return [...errors, ...childrenErrors];
+    }
+
+
+    private validateChoice(node: Element, choice: XSDChoice): string[] {
+        // Sum how many total child elements from the choice are present
+        const matches = choice.elements.reduce((count, el) => {
+            return count + node.getElementsByTagName(el.name).length;
+        }, 0);
+
+        // If exactly 1 is found, good
+        if (matches === 1) return [];
+
+        // Otherwise, produce an error
+        return [
+            `Choice error: Expected exactly one of [${choice.elements
+                .map((x) => x.name)
+                .join(", ")}], but found ${matches}.`
+        ];
+    }
+
+
+    /**
+     * Main entry point: parses XSD, parses XML, and runs pipelines.
+     */
     async validate(xml: string, xsd: string): Promise<ValidationResult> {
         const schema: XSDSchema = await this.xsdParser.parse(xsd);
         const xmlDoc = this.xmlParser.parse(xml);
 
-        const validateElement = (node: Element, schemaElement: XSDElement): string[] => [
-            ...this.nodePipeline.execute(node, schemaElement),
-            ...(schemaElement.children || []).flatMap((childSchema) => {
-                const childNodes = Array.from(node.getElementsByTagName(childSchema.name));
-                return [
-                    ...this.globalPipeline.execute(childNodes, childSchema),
-                    ...childNodes.flatMap((childNode) => validateElement(childNode, childSchema)),
-                ];
-            }),
-        ];
-
-        const errors = schema.elements.flatMap((element) => {
-            const nodes = Array.from(xmlDoc.getElementsByTagName(element.name));
-            return [
-                ...this.globalPipeline.execute(nodes, element),
-                ...nodes.flatMap((node) => validateElement(node, element)),
-            ];
-        });
-
+        const errors = this.validateElements(xmlDoc, schema.elements);
         return { valid: errors.length === 0, errors };
     }
-
 }
