@@ -1,5 +1,5 @@
 {
-  "name": "checkr",
+  "name": "@jacksierkstra/checkr",
   "version": "0.0.1",
   "description": "A pure validation library.",
   "packageManager": "yarn@4.5.3",
