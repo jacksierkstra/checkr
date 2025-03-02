@@ -2,7 +2,6 @@
 .github/
 .vscode/
 jest.config.ts
-src/**/*.test.ts
 
 # Exclude coverage output
 coverage/
@@ -10,3 +9,11 @@ coverage/
 # Yarn internals
 .yarn/
 .yarnrc.yml
+
+# Ignore test files
+dist/**/*.test.js
+dist/**/*.test.d.ts
+dist/**/*.test.d.ts.map
+
+# Ignore source maps (optional if you don’t need them)
+dist/**/*.d.ts.map
