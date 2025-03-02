@@ -30,6 +30,19 @@ jobs:
           registry-url: https://registry.npmjs.org/
       - run: corepack enable
       - run: yarn install --immutable
+      - name: Bump version
+        run: |
+          # strip off the 'v' if present:
+          VERSION="${{ github.event.release.tag_name#v }}"
+          
+          # Bump package.json to that version, but don't generate a new git tag:
+          npm version "$VERSION" --allow-same-version --no-git-tag-version
+          
+          # Commit + push back so package.json is updated in your main branch
+          git config user.name github-actions
+          git config user.email github-actions@github.com
+          git commit -am "Bump to version $VERSION"
+          git push
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
