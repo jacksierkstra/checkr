@@ -11,41 +11,38 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out main
+        uses: actions/checkout@v4
         with:
-          node-version: 20
-      - run: corepack enable
-      - run: yarn install --immutable
-      - run: yarn test
+          # Ensure we pull down all commits & branches, not just this tag
+          fetch-depth: 0
+          # Force-checkout "main" or whatever branch you want to push changes to
+          ref: main
 
-  publish-npm:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://registry.npmjs.org/
+
       - run: corepack enable
       - run: yarn install --immutable
+      - run: yarn test
+
       - name: Bump version
         run: |
-          # Grab the entire tag (e.g. "v1.2.3")
+          # e.g., "v1.2.3"
           FULL_TAG="${{ github.event.release.tag_name }}"
-          
-          # Strip off leading "v" if present
           VERSION="${FULL_TAG#v}"
 
-          # Use that version in package.json
+          # Update version without creating a new tag
           npm version "$VERSION" --allow-same-version --no-git-tag-version
 
-          # Commit & push back so package.json is updated
+          # Commit + push back to main
           git config user.name github-actions
           git config user.email github-actions@github.com
           git commit -am "Bump to version $VERSION"
-          git push
+          git push origin HEAD:main
+
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
