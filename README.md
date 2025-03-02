@@ -28,7 +28,7 @@ yarn add @jacksierkstra/checkr
 ## Usage
 
 ```ts
-import { Validator } from "@jacksierkstra/checkr";
+import { Checkr } from "@jacksierkstra/checkr";
 
 const xml = `<root><element>Value</element></root>`;
 const xsd = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
@@ -41,11 +41,13 @@ const xsd = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
               </xs:element>
             </xs:schema>`;
 
-const validator = new Validator();
-const result = validator.validate(xml, xsd);
+const validator = new Checkr();
+const validation = validator.validate(xml, xsd);
 
-console.log(result.valid); // true or false
-console.log(result.errors); // Array of validation errors (if any)
+validation.then(result => {
+    console.log('Valid: ', result.valid);
+    console.log('Errors: ', result.errors);
+});
 ```
 
 ## Validation Pipeline
