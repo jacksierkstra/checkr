@@ -32,13 +32,16 @@ jobs:
       - run: yarn install --immutable
       - name: Bump version
         run: |
-          # strip off the 'v' if present:
-          VERSION="${{ github.event.release.tag_name#v }}"
+          # Grab the entire tag (e.g. "v1.2.3")
+          FULL_TAG="${{ github.event.release.tag_name }}"
           
-          # Bump package.json to that version, but don't generate a new git tag:
+          # Strip off leading "v" if present
+          VERSION="${FULL_TAG#v}"
+
+          # Use that version in package.json
           npm version "$VERSION" --allow-same-version --no-git-tag-version
-          
-          # Commit + push back so package.json is updated in your main branch
+
+          # Commit & push back so package.json is updated
           git config user.name github-actions
           git config user.email github-actions@github.com
           git commit -am "Bump to version $VERSION"
