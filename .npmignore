@@ -1,0 +1,12 @@
+# .npmignore
+.github/
+.vscode/
+jest.config.ts
+src/**/*.test.ts
+
+# Exclude coverage output
+coverage/
+
+# Yarn internals
+.yarn/
+.yarnrc.yml
