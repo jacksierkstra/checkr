@@ -16,6 +16,9 @@
     "LICENSE",
     "README.md"
   ],
+  "dependencies": {
+    "xmldom": "^0.6.0"
+  },
   "devDependencies": {
     "@jest/globals": "^29.7.0",
     "@types/jest": "^29.5.14",
@@ -25,8 +28,7 @@
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",
     "tsc-alias": "^1.8.11",
-    "typescript": "^5.7.3",
-    "xmldom": "^0.6.0"
+    "typescript": "^5.7.3"
   },
   "publishConfig": {
     "access": "public"
