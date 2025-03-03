@@ -1,13 +1,13 @@
 import { Validator, ValidatorImpl } from "@lib/validator/validator";
 import { XMLParserImpl } from "@lib/xml/parser";
-import { XSDParserImpl } from "@lib/xsd/parser";
+import { XSDStandardParserImpl } from "@lib/xsd/standard";
 
 describe("Validator", () => {
   let validator: Validator;
 
   beforeAll(() => {
     const xmlParser = new XMLParserImpl();
-    const xsdParser = new XSDParserImpl(xmlParser);
+    const xsdParser = new XSDStandardParserImpl(xmlParser);
     validator = new ValidatorImpl(xmlParser, xsdParser);
   });
 

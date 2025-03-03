@@ -1,13 +1,16 @@
 import { XSDSchema } from "@lib/types/xsd";
 import { XMLParserImpl } from "@lib/xml/parser";
-import { XSDParserImpl } from "@lib/xsd/parser";
+import { XSDParser } from "@lib/xsd/parser";
+import { XSDPipelineParserImpl } from "@lib/xsd/pipeline";
+import { XSDStandardParserImpl } from "@lib/xsd/standard";
 
-describe("XSDParser", () => {
-  let parser: XSDParserImpl;
+
+
+const runCommonTests = (xsdParser: XSDParser) => {
+  let parser: XSDParser;
 
   beforeAll(() => {
-    const xmlParser = new XMLParserImpl();
-    parser = new XSDParserImpl(xmlParser);
+    parser = xsdParser;
   });
 
   const parseAndExpect = async (xsd: string, expectations: (schema: XSDSchema) => void) => {
@@ -177,4 +180,17 @@ describe("XSDParser", () => {
       expect(schema.elements).toHaveLength(0);
     });
   });
+};
+
+describe('XSDParser Implementations', () => {
+  const xmlParser = new XMLParserImpl();
+
+  describe('XSDStandardParserImpl', () => {
+    runCommonTests(new XSDStandardParserImpl(xmlParser));
+  });
+
+  describe('XSDPipelineParserImpl', () => {
+    runCommonTests(new XSDPipelineParserImpl(xmlParser));
+  });
+  
 });
