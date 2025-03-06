@@ -7,12 +7,13 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "test": "jest",
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
     "prepublishOnly": "yarn clean && yarn build && tsc-alias"
   },
   "files": [
     "dist/",
+    "package.json",
     "LICENSE",
     "README.md"
   ],

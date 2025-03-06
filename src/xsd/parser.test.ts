@@ -318,6 +318,90 @@ const runCommonTests = (xsdParser: XSDParser) => {
     });
   });
 
+  it("should parse nested complex types", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Root">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Nested">
+                            <xs:complexType>
+                                <xs:sequence>
+                                    <xs:element name="Inner"/>
+                                </xs:sequence>
+                            </xs:complexType>
+                        </xs:element>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const rootElement = schema.elements.find((el) => el.name === "Root");
+      const nestedElement = rootElement?.children?.find((el) => el.name === "Nested");
+      const innerElement = nestedElement?.children?.find((el) => el.name === "Inner");
+      expect(innerElement).toBeDefined();
+    });
+  });
+
+  it("should handle empty complex types", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Empty">
+                <xs:complexType/>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const emptyElement = schema.elements.find((el) => el.name === "Empty");
+      expect(emptyElement?.children).toHaveLength(0);
+      expect(emptyElement?.attributes).toHaveLength(0);
+    });
+  });
+
+  it("should handle empty enumeration values", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Status">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:enumeration value="Value1"/>
+                        <xs:enumeration value=""/>
+                        <xs:enumeration value="Value3"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const statusElement = schema.elements.find((el) => el.name === "Status");
+      expect(statusElement?.enumeration).toEqual(["Value1", "", "Value3"]);
+    });
+  });
+
+  it("should handle elements with namespaces", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com">
+            <xs:element name="ex:Data"/>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const dataElement = schema.elements.find((el) => el.name === "ex:Data");
+      expect(dataElement).toBeDefined();
+    });
+  });
+
+  it("should handle elements with empty names", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name=""/>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      expect(schema.elements).toHaveLength(0);
+    });
+  });
+
 };
 
 describe('XSDParser Implementations', () => {

@@ -68,7 +68,7 @@ describe("ParseNestedElementsStep", () => {
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
         const result = step.execute(element);
-        expect(result.children).toEqual([{ name: "nestedChild", minOccurs: 0, maxOccurs: 1 }]);
+        expect(result.children).toEqual([{ name: "nestedChild", minOccurs: 1, maxOccurs: 1 }]);
     });
 
     it("should parse nested choices", () => {
@@ -103,7 +103,7 @@ describe("ParseNestedElementsStep", () => {
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
         const result = step.execute(element);
-        expect(result.children).toEqual([{ name: "seqChild", minOccurs: 0, maxOccurs: 1 }]);
+        expect(result.children).toEqual([{ name: "seqChild", minOccurs: 1, maxOccurs: 1 }]);
         expect(result.choices).toEqual([{ elements: [{ name: "choiceChild", minOccurs: 0, maxOccurs: 1 }] }]);
     });
 
@@ -129,7 +129,7 @@ describe("ParseNestedElementsStep", () => {
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
         const result = step.execute(element);
-        expect(result.children).toEqual([{ name: "child", minOccurs: 0, maxOccurs: 1 }]);
+        expect(result.children).toEqual([{ name: "child", minOccurs: 1, maxOccurs: 1 }]);
     });
 
     it("should ignore text nodes other than whitespace", () => {
@@ -143,7 +143,7 @@ describe("ParseNestedElementsStep", () => {
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
         const result = step.execute(element);
-        expect(result.children).toEqual([{ name: "child", minOccurs: 0, maxOccurs: 1 }]);
+        expect(result.children).toEqual([{ name: "child", minOccurs: 1, maxOccurs: 1 }]);
     });
 
     it("should handle minOccurs and maxOccurs variations", () => {
