@@ -180,6 +180,144 @@ const runCommonTests = (xsdParser: XSDParser) => {
       expect(schema.elements).toHaveLength(0);
     });
   });
+
+  it("should parse enumeration restrictions", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Status">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:enumeration value="Pending"/>
+                        <xs:enumeration value="Approved"/>
+                        <xs:enumeration value="Rejected"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const statusElement = schema.elements.find((el) => el.name === "Status");
+      expect(statusElement?.enumeration).toEqual(["Pending", "Approved", "Rejected"]);
+    });
+  });
+
+  it("should parse pattern restrictions", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Code">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:pattern value="[A-Z]{3}[0-9]{2}"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const codeElement = schema.elements.find((el) => el.name === "Code");
+      expect(codeElement?.pattern).toBe("[A-Z]{3}[0-9]{2}");
+    });
+  });
+
+  it("should parse minLength and maxLength restrictions", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Comment">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:minLength value="10"/>
+                        <xs:maxLength value="100"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const commentElement = schema.elements.find((el) => el.name === "Comment");
+      expect(commentElement?.minLength).toBe(10);
+      expect(commentElement?.maxLength).toBe(100);
+    });
+  });
+
+  it("should parse all restrictions combined", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="ComplexString">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:enumeration value="Value1"/>
+                        <xs:enumeration value="Value2"/>
+                        <xs:pattern value="[A-Z]+"/>
+                        <xs:minLength value="3"/>
+                        <xs:maxLength value="10"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const complexStringElement = schema.elements.find((el) => el.name === "ComplexString");
+      expect(complexStringElement?.enumeration).toEqual(["Value1", "Value2"]);
+      expect(complexStringElement?.pattern).toBe("[A-Z]+");
+      expect(complexStringElement?.minLength).toBe(3);
+      expect(complexStringElement?.maxLength).toBe(10);
+    });
+  });
+
+  it("should handle whitespace in attribute values", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Item">
+                <xs:attribute name=" attr1 " type=" xs:integer " fixed=" fixed value " />
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const itemElement = schema.elements.find((el) => el.name === "Item");
+      const attr1 = itemElement?.attributes?.find((attr) => attr.name === " attr1 ");
+      expect(attr1?.type).toBe(" xs:integer ");
+      expect(attr1?.fixed).toBe(" fixed value ");
+    });
+  });
+
+  it("should handle whitespace in enumeration values", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Status">
+                <xs:simpleType>
+                    <xs:restriction base="xs:string">
+                        <xs:enumeration value=" Value 1 "/>
+                        <xs:enumeration value="Value 2"/>
+                    </xs:restriction>
+                </xs:simpleType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const statusElement = schema.elements.find((el) => el.name === "Status");
+      expect(statusElement?.enumeration).toEqual([" Value 1 ", "Value 2"]);
+    });
+  });
+
+  it("should handle maxOccurs='unbounded' in nested elements", async () => {
+    const xsd = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:element name="Order">
+                <xs:complexType>
+                    <xs:sequence>
+                        <xs:element name="Item" maxOccurs="unbounded"/>
+                    </xs:sequence>
+                </xs:complexType>
+            </xs:element>
+        </xs:schema>
+    `;
+    await parseAndExpect(xsd, (schema) => {
+      const orderElement = schema.elements.find((el) => el.name === "Order");
+      const itemElement = orderElement?.children?.find((el) => el.name === "Item");
+      expect(itemElement?.maxOccurs).toBeNaN();
+    });
+  });
+
 };
 
 describe('XSDParser Implementations', () => {
@@ -192,5 +330,5 @@ describe('XSDParser Implementations', () => {
   describe('XSDPipelineParserImpl', () => {
     runCommonTests(new XSDPipelineParserImpl(xmlParser));
   });
-  
+
 });

@@ -26,16 +26,33 @@ export class XSDPipelineParserImpl implements XSDParser {
     async parse(xsd: string): Promise<XSDSchema> {
         const doc = this.xmlParser.parse(xsd);
 
-        const elements: XSDElement[] = Array.from(doc.documentElement.childNodes)
-            .filter((node) => node.nodeType === 1 && node.nodeName === "xs:element")
-            .map((el) => {
-                const partials = this.pipeline.execute(el as Element);
-                return partials.reduce((acc, partial) => ({ ...acc, ...partial }), {} as XSDElement);
-            })
-            .filter((element): element is XSDElement => element.name !== undefined);
+        const elementNodes = this.extractElementNodes(doc.documentElement);
+        const partialXSDElementObjects = this.mapElementNodesToPartialXSDElementObjects(elementNodes);
+        const xsdElements = this.mergePartialXSDElementObjects(partialXSDElementObjects);
+        const filteredXSDElementObjects = this.filterValidXSDElementObjects(xsdElements);
 
         const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
 
-        return { targetNamespace, elements };
+        return { targetNamespace, elements: filteredXSDElementObjects };
+    }
+
+    private extractElementNodes(documentElement: Element): Element[] {
+        return Array.from(documentElement.childNodes)
+            .filter((node) => node.nodeType === 1 && node.nodeName === "xs:element") as Element[];
+    }
+
+    private mapElementNodesToPartialXSDElementObjects(elementNodes: Element[]): Partial<XSDElement>[][] {
+        return elementNodes.map((el) => this.pipeline.execute(el));
+    }
+
+    private mergePartialXSDElementObjects(partialXSDElementObjects: Partial<XSDElement>[][]): XSDElement[] {
+        return partialXSDElementObjects.map((partials) => {
+            const merged = partials.reduce((acc, partial) => ({ ...acc, ...partial }), {} as XSDElement);
+            return merged as XSDElement; // Explicitly cast to XSDElement
+        });
+    }
+
+    private filterValidXSDElementObjects(xsdElements: XSDElement[]): XSDElement[] {
+        return xsdElements.filter((element): element is XSDElement => !!element.name);
     }
 }
