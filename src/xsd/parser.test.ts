@@ -1,7 +1,7 @@
 import { XSDSchema } from "@lib/types/xsd";
 import { XMLParserImpl } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
-import { XSDPipelineParserImpl } from "@lib/xsd/pipeline";
+import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
 import { XSDStandardParserImpl } from "@lib/xsd/standard";
 
 

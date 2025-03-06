@@ -1,12 +1,11 @@
 import { XSDElement, XSDSchema } from "@lib/types/xsd";
 import { XMLParser } from "@lib/xml/parser";
-import { ParseAttributesStep } from "@lib/xsd/steps/attributes";
-import { ParseEnumerationStep } from "@lib/xsd/steps/enumeration";
-import { ParseNestedElementsStep } from "@lib/xsd/steps/nestedElement";
-import { Pipeline, PipelineImpl } from "@lib/xsd/steps/pipeline";
-import { ParseRestrictionsStep } from "@lib/xsd/steps/restriction";
-import { ParseRootElementStep } from "@lib/xsd/steps/rootElement";
-
+import { Pipeline, PipelineImpl } from "@lib/xsd/pipeline/pipeline";
+import { ParseAttributesStep } from "@lib/xsd/pipeline/steps/attributes";
+import { ParseEnumerationStep } from "@lib/xsd/pipeline/steps/enumeration";
+import { ParseNestedElementsStep } from "@lib/xsd/pipeline/steps/nestedElement";
+import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
+import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
 
 export interface XSDParser {
     parse(xsd: string): Promise<XSDSchema>;
