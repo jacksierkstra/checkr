@@ -1,15 +1,20 @@
 {
   "name": "@jacksierkstra/checkr",
-  "version": "0.0.11",
+  "version": "0.0.12-WIP",
   "description": "A pure validation library.",
   "packageManager": "yarn@4.5.3",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "import": "./dist/index.js",
+    "require": "./dist/index.js"
+  },
   "scripts": {
     "test": "jest",
-    "build": "tsc -p tsconfig.build.json",
     "clean": "rimraf dist",
-    "prepublishOnly": "yarn clean && yarn build && tsc-alias"
+    "build": "tspc -p tsconfig.build.json",
+    "publish:local": "yarn clean && yalc publish",
+    "prepublishOnly": "yarn build"
   },
   "files": [
     "dist/",
@@ -29,8 +34,10 @@
     "rimraf": "^6.0.1",
     "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",
-    "tsc-alias": "^1.8.11",
-    "typescript": "^5.7.3"
+    "ts-patch": "^3.3.0",
+    "typescript": "^5.7.3",
+    "typescript-transform-paths": "^3.5.3",
+    "yalc": "^1.0.0-pre.53"
   },
   "publishConfig": {
     "access": "public"

@@ -1,6 +1,10 @@
 {
     "extends": "./tsconfig.json",
     "compilerOptions": {
+      "module": "NodeNext",
+      "outDir": "dist",
+      "target": "ESNext",
+      "moduleResolution": "NodeNext",
     },
     "exclude": [
       "src/**/*.test.ts"
