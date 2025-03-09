@@ -9,7 +9,7 @@ export class XSDStandardParserImpl implements XSDParser {
         const doc = this.xmlParser.parse(xsd);
 
         // Ensure documentElement is valid
-        if (!doc.documentElement || doc.documentElement.tagName !== "xs:schema") {
+        if (!doc.documentElement || doc.documentElement.tagName.indexOf('schema') === -1) {
             throw new Error("Invalid XSD: Missing root <xs:schema>");
         }
 
