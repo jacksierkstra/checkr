@@ -25,7 +25,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         }
       });
     }
-    
+
     return result;
   }
 
@@ -60,25 +60,27 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     return { children, choices };
   }
 
-  /**
-   * Parse an xs:element node.
-   * If isInChoice is true and no explicit minOccurs is provided, default to 0.
-   */
   private parseElement(el: Element, isInChoice: boolean = false): XSDElement | null {
     const name = el.getAttribute("name");
     if (!name) return null;
-    let minOccurs = parseInt(el.getAttribute("minOccurs") ?? "1", 10);
-    if (isInChoice && !el.hasAttribute("minOccurs")) {
-      minOccurs = 0;
-    }
+
+    // Get the minOccurs attribute. If it's missing or empty, default to "1".
+    const minOccursAttr = el.getAttribute("minOccurs");
+    const minOccurs = parseInt(minOccursAttr && minOccursAttr.trim() !== "" ? minOccursAttr : "1", 10);
+    // For elements in a choice, default missing minOccurs to 0.
+    const effectiveMinOccurs = isInChoice && (!minOccursAttr || minOccursAttr.trim() === "")
+      ? 0
+      : minOccurs;
+
+    // Get the maxOccurs attribute. If it's missing or empty, default to "1".
     const maxOccursAttr = el.getAttribute("maxOccurs");
-    const maxOccurs = maxOccursAttr === "unbounded" 
-      ? NaN 
-      : parseInt(maxOccursAttr ?? "1", 10);
+    const maxOccurs = maxOccursAttr === "unbounded"
+      ? NaN
+      : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
 
-    const xsdElement: XSDElement = { name, minOccurs, maxOccurs };
+    const xsdElement: XSDElement = { name, minOccurs: effectiveMinOccurs, maxOccurs };
 
-    // Check for an inline complexType and, if present, recursively parse it.
+    // Check for an inline complexType by scanning immediate children
     const inlineComplexType = Array.from(el.childNodes)
       .filter(n => n.nodeType === 1 && (n as Element).localName === "complexType")
       .map(n => n as Element)[0];
@@ -93,4 +95,5 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     }
     return xsdElement;
   }
+
 }
