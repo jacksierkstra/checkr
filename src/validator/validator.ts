@@ -5,6 +5,7 @@ import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validat
 import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
 import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
 import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
+import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
 import { validateType } from "@lib/validator/pipeline/steps/type";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
@@ -25,7 +26,8 @@ export class ValidatorImpl implements Validator {
         this.nodePipeline = new NodeValidationPipelineImpl()
             .addStep(validateType)
             .addStep(validateAttributes)
-            .addStep(validateConstraints);
+            .addStep(validateConstraints)
+            .addStep(validateRequiredChildren);
 
         // Global pipeline (occurrence checks, etc.)
         this.globalPipeline = new GlobalValidationPipelineImpl()
@@ -48,28 +50,35 @@ export class ValidatorImpl implements Validator {
 
     private validateNode(node: Element, schemaElement: XSDElement): string[] {
         const errors: string[] = [];
-
+    
         // Node-level checks
         errors.push(...this.nodePipeline.execute(node, schemaElement));
-
+    
         // If choices exist, validate them
         if (schemaElement.choices && schemaElement.choices.length > 0) {
             // For simplicity, assume 1 XSDChoice
             const [choiceDef] = schemaElement.choices;
             errors.push(...this.validateChoice(node, choiceDef));
         }
-
-        // Recursively validate normal children
+    
+        // Recursively validate direct children only
         const childrenErrors = (schemaElement.children || []).flatMap((childSchema) => {
-            const childNodes = Array.from(node.getElementsByTagName(childSchema.name));
+            const childNodes = (
+                node.children 
+                  ? Array.from(node.children)
+                  : Array.from(node.childNodes).filter((child): child is Element => child.nodeType === 1)
+              ).filter(child => child.tagName === childSchema.name);
+        
             return [
-                ...this.globalPipeline.execute(childNodes, childSchema),
-                ...childNodes.flatMap((childNode) => this.validateNode(childNode, childSchema)),
+                ...this.globalPipeline.execute(childNodes, childSchema), // This throws an error: Argument of type 'ChildNode[]' is not assignable to parameter of type 'Element[]'.
+                ...childNodes.flatMap((childNode) => this.validateNode(childNode, childSchema)), // This throws an error: Argument of type 'ChildNode' is not assignable to parameter of type 'Element'.
             ];
         });
-
+    
         return [...errors, ...childrenErrors];
     }
+    
+    
 
 
     private validateChoice(node: Element, choice: XSDChoice): string[] {
@@ -89,10 +98,6 @@ export class ValidatorImpl implements Validator {
         ];
     }
 
-
-    /**
-     * Main entry point: parses XSD, parses XML, and runs pipelines.
-     */
     async validate(xml: string, xsd: string): Promise<ValidationResult> {
         const schema: XSDSchema = await this.xsdParser.parse(xsd);
         const xmlDoc = this.xmlParser.parse(xml);

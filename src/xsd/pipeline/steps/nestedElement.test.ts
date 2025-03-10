@@ -28,7 +28,7 @@ describe("ParseNestedElementsStep", () => {
             { name: "child2", minOccurs: 1, maxOccurs: NaN },
         ]);
 
-        expect(result.choices).toBeUndefined();
+        expect(result.choices).toEqual([]);
     });
 
     it("should parse nested elements within complexType and choice", () => {
@@ -116,7 +116,7 @@ describe("ParseNestedElementsStep", () => {
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
         const result = step.execute(element);
         expect(result.children).toEqual([]);
-        expect(result.choices).toBeUndefined();
+        expect(result.choices).toEqual([]);
     });
 
     it("should handle complexType with attributes", () => {

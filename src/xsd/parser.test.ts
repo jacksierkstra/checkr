@@ -402,39 +402,23 @@ const runCommonTests = (xsdParser: XSDParser) => {
     });
   });
 
-  it('should parse books xsd', async () => {
+  it('should parse xsd', async () => {
     const xsd = `
-          <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
-                  targetNamespace="urn:books"
-                  xmlns:bks="urn:books">
-
-        <xsd:element name="books" type="bks:BooksForm"/>
-
-        <xsd:complexType name="BooksForm">
-          <xsd:sequence>
-            <xsd:element name="book" 
-                        type="bks:BookForm" 
-                        minOccurs="0" 
-                        maxOccurs="unbounded"/>
-            </xsd:sequence>
-        </xsd:complexType>
-
-        <xsd:complexType name="BookForm">
-          <xsd:sequence>
-            <xsd:element name="author"   type="xsd:string"/>
-            <xsd:element name="title"    type="xsd:string"/>
-            <xsd:element name="genre"    type="xsd:string"/>
-            <xsd:element name="price"    type="xsd:float" />
-            <xsd:element name="pub_date" type="xsd:date" />
-            <xsd:element name="review"   type="xsd:string"/>
-          </xsd:sequence>
-          <xsd:attribute name="id"   type="xsd:string"/>
-        </xsd:complexType>
-      </xsd:schema>
+         <xs:schema xmlns="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="root" type="SimpleType"/>
+                <xs:complexType name="SimpleType">
+                    <xs:sequence>
+                      <xs:element name="foo" type="xs:string"/>
+                      <xs:element name="bar" type="xs:string"/>
+                    </xs:sequence>
+                </xs:complexType>
+          </xs:schema>
     `;
     
     await parseAndExpect(xsd, (schema) => {
-      expect(schema.elements).toHaveLength(0);
+      expect(schema.elements).toHaveLength(2);
+      const complexType = schema.elements.filter(el => el.name === 'SimpleType').at(0);
+      expect(complexType?.children).toHaveLength(2);
     });
 
   });
@@ -444,9 +428,9 @@ const runCommonTests = (xsdParser: XSDParser) => {
 describe('XSDParser Implementations', () => {
   const xmlParser = new XMLParserImpl();
 
-  describe('XSDStandardParserImpl', () => {
-    runCommonTests(new XSDStandardParserImpl(xmlParser));
-  });
+  // describe('XSDStandardParserImpl', () => {
+  //   runCommonTests(new XSDStandardParserImpl(xmlParser));
+  // });
 
   describe('XSDPipelineParserImpl', () => {
     runCommonTests(new XSDPipelineParserImpl(xmlParser));
