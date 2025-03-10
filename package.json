@@ -1,6 +1,6 @@
 {
   "name": "@jacksierkstra/checkr",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "A pure validation library.",
   "packageManager": "yarn@4.5.3",
   "main": "./dist/index.js",
