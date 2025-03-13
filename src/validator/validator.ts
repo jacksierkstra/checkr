@@ -36,8 +36,8 @@ export class ValidatorImpl implements Validator {
 
     private validateElements(xmlDoc: Document, elements: XSDElement[]): string[] {
         return elements.flatMap((schemaElement) => {
-            const nodes = Array.from(xmlDoc.getElementsByTagName(schemaElement.name));
-
+            const nodes = Array.from(schemaElement.namespace ? xmlDoc.getElementsByTagNameNS(schemaElement.namespace || null, schemaElement.name) : xmlDoc.getElementsByTagName(schemaElement.name));
+            
             return [
                 // Global checks (e.g., occurrence constraints) for this element
                 ...this.globalPipeline.execute(nodes, schemaElement),

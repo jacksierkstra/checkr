@@ -25,7 +25,7 @@ describe("ParseNestedElementsStep", () => {
 
         expect(result.children).toEqual([
             { name: "child1", minOccurs: 0, maxOccurs: 1 },
-            { name: "child2", minOccurs: 1, maxOccurs: NaN },
+            { name: "child2", minOccurs: 1, maxOccurs: "unbounded" },
         ]);
 
         expect(result.choices).toEqual([]);
@@ -159,7 +159,7 @@ describe("ParseNestedElementsStep", () => {
         const result = step.execute(element);
         expect(result.children).toEqual([
             { name: "child1", minOccurs: 1, maxOccurs: 5 },
-            { name: "child2", minOccurs: 0, maxOccurs: NaN },
+            { name: "child2", minOccurs: 0, maxOccurs: "unbounded" },
         ]);
     });
 

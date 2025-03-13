@@ -5,6 +5,7 @@ export interface XSDSchema {
 
 export interface XSDElement {
     name: string;
+    namespace?: string;
     type?: string;
     minOccurs?: number;
     maxOccurs?: number | "unbounded";

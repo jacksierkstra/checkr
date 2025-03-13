@@ -2,15 +2,13 @@ import { XSDSchema } from "@lib/types/xsd";
 import { XMLParserImpl } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
-import { XSDStandardParserImpl } from "@lib/xsd/standard";
 
+describe('XSDParser', () => {
 
-
-const runCommonTests = (xsdParser: XSDParser) => {
   let parser: XSDParser;
 
   beforeAll(() => {
-    parser = xsdParser;
+    parser = new XSDPipelineParserImpl(new XMLParserImpl());
   });
 
   const parseAndExpect = async (xsd: string, expectations: (schema: XSDSchema) => void) => {
@@ -136,7 +134,7 @@ const runCommonTests = (xsdParser: XSDParser) => {
       const itemElement = orderElement?.children?.find((el) => el.name === "Item");
       expect(itemElement).toBeDefined();
       expect(itemElement?.minOccurs).toBe(1);
-      expect(itemElement?.maxOccurs).toBeNaN(); // "unbounded" is parsed as NaN
+      expect(itemElement?.maxOccurs).toEqual("unbounded");
     });
   });
 
@@ -314,7 +312,7 @@ const runCommonTests = (xsdParser: XSDParser) => {
     await parseAndExpect(xsd, (schema) => {
       const orderElement = schema.elements.find((el) => el.name === "Order");
       const itemElement = orderElement?.children?.find((el) => el.name === "Item");
-      expect(itemElement?.maxOccurs).toBeNaN();
+      expect(itemElement?.maxOccurs).toEqual("unbounded");
     });
   });
 
@@ -404,7 +402,7 @@ const runCommonTests = (xsdParser: XSDParser) => {
 
   it('should parse xsd', async () => {
     const xsd = `
-         <xs:schema xmlns="http://www.w3.org/2001/XMLSchema">
+         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
                 <xs:element name="root" type="SimpleType"/>
                 <xs:complexType name="SimpleType">
                     <xs:sequence>
@@ -414,7 +412,7 @@ const runCommonTests = (xsdParser: XSDParser) => {
                 </xs:complexType>
           </xs:schema>
     `;
-    
+
     await parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(2);
       const complexType = schema.elements.filter(el => el.name === 'SimpleType').at(0);
@@ -423,17 +421,5 @@ const runCommonTests = (xsdParser: XSDParser) => {
 
   });
 
-};
-
-describe('XSDParser Implementations', () => {
-  const xmlParser = new XMLParserImpl();
-
-  // describe('XSDStandardParserImpl', () => {
-  //   runCommonTests(new XSDStandardParserImpl(xmlParser));
-  // });
-
-  describe('XSDPipelineParserImpl', () => {
-    runCommonTests(new XSDPipelineParserImpl(xmlParser));
-  });
 
 });
