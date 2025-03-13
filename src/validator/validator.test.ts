@@ -1,20 +1,19 @@
 import { Validator, ValidatorImpl } from "@lib/validator/validator";
 import { XMLParserImpl } from "@lib/xml/parser";
-import { XSDStandardParserImpl } from "@lib/xsd/standard";
+import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
 
 describe("Validator", () => {
   let validator: Validator;
 
   beforeAll(() => {
     const xmlParser = new XMLParserImpl();
-    const xsdParser = new XSDStandardParserImpl(xmlParser);
+    const xsdParser = new XSDPipelineParserImpl(xmlParser);
     validator = new ValidatorImpl(xmlParser, xsdParser);
   });
 
-  // --- Basic Tests ---
   it("should validate XML according to XSD schema - success case", async () => {
     const xsd = `
-      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/schema">
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Person" type="xs:string" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
@@ -26,7 +25,7 @@ describe("Validator", () => {
 
   it("should fail validation when required element is missing", async () => {
     const xsd = `
-      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/schema">
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Person" type="xs:string" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
@@ -36,10 +35,9 @@ describe("Validator", () => {
     expect(result.errors[0]).toMatch(/Person/);
   });
 
-  // --- Type Tests ---
   it("should validate xs:integer type correctly", async () => {
     const xsd = `
-      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/schema">
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Age" type="xs:integer" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
@@ -55,7 +53,7 @@ describe("Validator", () => {
 
   it("should validate xs:date type correctly", async () => {
     const xsd = `
-      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/schema">
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="BirthDate" type="xs:date" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
@@ -69,7 +67,6 @@ describe("Validator", () => {
     expect(resultInvalid.errors[0]).toMatch(/must be a valid date/);
   });
 
-  // --- Enumeration Tests ---
   it("should validate enumerated values correctly", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
@@ -94,7 +91,6 @@ describe("Validator", () => {
     expect(resultInvalid.errors[0]).toMatch(/must be one of/);
   });
 
-  // --- Attribute Tests ---
   it("should validate fixed attribute values", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
@@ -109,7 +105,6 @@ describe("Validator", () => {
     expect(resultInvalid.errors[0]).toMatch(/must be fixed to 'electronics'/);
   });
 
-  // --- Choice Tests ---
   it("should validate choice elements (Email only)", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
@@ -209,7 +204,6 @@ describe("Validator", () => {
     expect(result.errors[0]).toMatch(/Choice error:/);
   });
 
-  // --- Constraint Tests (Pattern, minLength, maxLength) ---
   it("should validate string pattern/length constraints successfully", async () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">

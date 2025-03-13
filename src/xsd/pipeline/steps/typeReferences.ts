@@ -11,15 +11,27 @@ export class ParseTypeReferencesStep implements PipelineStep<XSDElement, XSDElem
             return el;
         }
 
-        // Find matching type definition in schema.elements
-        const typeDef = this.schema.elements.find(e => e.name === el.type);
+        // Split the type attribute if it contains a colon.
+        const parts = el.type.split(":");
+        const localTypeName = parts.length > 1 ? parts[1] : parts[0];
+
+        // Optionally, if el.namespace is set, try to match both name and namespace.
+        // Otherwise, fall back to just comparing the local name.
+        let typeDef = this.schema.elements.find(e => 
+            e.name === localTypeName && (el.namespace ? e.namespace === el.namespace : true)
+        );
+
+        // If not found using namespace, try to find it by local name only.
+        if (!typeDef) {
+            typeDef = this.schema.elements.find(e => e.name === localTypeName);
+        }
 
         if (!typeDef) {
-            return el; // Or throw an error for strict behavior
+            // Optionally, you might want to throw an error or handle this case differently.
+            return el;
         }
 
         // Merge the type definition's children and choices into the element.
-        // If the type definition provides children or choices, use them.
         return {
             ...el,
             children: typeDef.children && typeDef.children.length > 0

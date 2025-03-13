@@ -31,15 +31,16 @@ export class XSDPipelineParserImpl implements XSDParser {
         const partialObjects = this.mapElementNodesToPartialXSDElementObjects(schemaNodes);
         const xsdElements = this.mergePartialXSDElementObjects(partialObjects);
         const filteredElements = this.filterValidXSDElementObjects(xsdElements);
-    
         const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
-    
-        const schema: XSDSchema = { targetNamespace, elements: filteredElements };
+        const namespacedElements = targetNamespace
+            ? this.applyNamespaceToElements(filteredElements, targetNamespace)
+            : filteredElements;
+
+        const schema: XSDSchema = { targetNamespace, elements: namespacedElements };
         const resolvedElements = this.resolveTypeReferences(schema);
     
         return { targetNamespace, elements: resolvedElements };
     }
-
 
     private mapElementNodesToPartialXSDElementObjects(elementNodes: Element[]): Partial<XSDElement>[][] {
         return elementNodes.map((el) => this.pipeline.execute(el));
@@ -62,16 +63,21 @@ export class XSDPipelineParserImpl implements XSDParser {
     }
 
     private extractTopLevelSchemaNodes(documentElement: Element): Element[] {
+        const xsdNamespace = "http://www.w3.org/2001/XMLSchema";
         return Array.from(documentElement.childNodes)
-            .filter((node) => 
-                node.nodeType === 1 && 
-                (this.isElement(node, "element") || this.isElement(node, "complexType"))
-            ) as Element[];
+            .filter((node) => {
+                if (node.nodeType !== 1) return false;
+                const el = node as Element;
+                return el.namespaceURI === xsdNamespace &&
+                       (el.localName === "element" || el.localName === "complexType");
+            }) as Element[];
     }
     
-    private isElement(node: Node, localName: string): boolean {
-        return node.nodeType === 1 && (node as Element).localName === localName;
+    private applyNamespaceToElements(elements: XSDElement[], namespace: string): XSDElement[] {
+        return elements.map(element => ({
+            ...element,
+            namespace,
+            children: element.children ? this.applyNamespaceToElements(element.children, namespace) : undefined
+        }));
     }
-    
-    
 }
