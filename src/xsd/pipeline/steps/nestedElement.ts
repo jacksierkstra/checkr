@@ -80,19 +80,24 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
 
     const xsdElement: XSDElement = { name, minOccurs: effectiveMinOccurs, maxOccurs };
 
-    // Handle inline complexType
+    // Capture the type attribute if present.
+    const typeAttr = el.getAttribute("type");
+    if (typeAttr) {
+      xsdElement.type = typeAttr;
+    }
+
+    // Handle inline complexType (if present)
     const inlineComplexType = Array.from(el.childNodes)
       .filter(n => this.isXsdElement(n as Element, "complexType"))
       .map(n => n as Element)[0];
-
     if (inlineComplexType) {
       const res = this.parseContainer(inlineComplexType, false);
       if (res.children.length > 0) xsdElement.children = res.children;
       if (res.choices.length > 0) xsdElement.choices = res.choices;
     }
-
     return xsdElement;
   }
+
 
   /**
    * Helper to check if an element belongs to the XSD namespace.

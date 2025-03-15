@@ -1,4 +1,4 @@
-import { XSDSchema } from "@lib/types/xsd";
+import { XSDElement, XSDSchema } from "@lib/types/xsd";
 import { XMLParserImpl } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
@@ -400,26 +400,57 @@ describe('XSDParser', () => {
     });
   });
 
-  it('should parse xsd', async () => {
+  it('should correctly parse the BookForm complex type', async () => {
     const xsd = `
-         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
-                <xs:element name="root" type="SimpleType"/>
-                <xs:complexType name="SimpleType">
-                    <xs:sequence>
-                      <xs:element name="foo" type="xs:string"/>
-                      <xs:element name="bar" type="xs:string"/>
-                    </xs:sequence>
-                </xs:complexType>
-          </xs:schema>
+      <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                  targetNamespace="urn:books"
+                  xmlns:bks="urn:books">
+          <xsd:element name="books" type="bks:BooksForm"/>
+          <xsd:complexType name="BooksForm">
+              <xsd:sequence>
+                  <xsd:element name="book" 
+                              type="bks:BookForm" 
+                              minOccurs="0" 
+                              maxOccurs="unbounded"/>
+              </xsd:sequence>
+          </xsd:complexType>
+          <xsd:complexType name="BookForm">
+              <xsd:sequence>
+                  <xsd:element name="author"   type="xsd:string"/>
+                  <xsd:element name="title"    type="xsd:string"/>
+                  <xsd:element name="genre"    type="xsd:string"/>
+                  <xsd:element name="price"    type="xsd:float" />
+                  <xsd:element name="pub_date" type="xsd:date" />
+                  <xsd:element name="review"   type="xsd:string"/>
+              </xsd:sequence>
+              <xsd:attribute name="id"   type="xsd:string"/>
+          </xsd:complexType>
+      </xsd:schema>
     `;
 
     await parseAndExpect(xsd, (schema) => {
-      expect(schema.elements).toHaveLength(2);
-      const complexType = schema.elements.filter(el => el.name === 'SimpleType').at(0);
-      expect(complexType?.children).toHaveLength(2);
+      // The global element is "books"
+      const booksElement = schema.elements.find(el => el.name === "books");
+      expect(booksElement).toBeDefined();
+
+      // The "books" element should have children, which include the "book" element.
+      expect(booksElement!.children).toBeDefined();
+      const bookElement = booksElement!.children?.find(el => el.name === "book");
+      expect(bookElement).toBeDefined();
+
+      // At this point, the type reference "bks:BookForm" on the <book> element should have been resolved
+      // using the global complexType definition for "BookForm". This means that the "book" element's children
+      // should be replaced by those defined in BookForm.
+      expect(bookElement!.children).toBeDefined();
+      expect(bookElement!.children).toEqual([
+        { name: "author", type: "xsd:string", minOccurs: 1, maxOccurs: 1 },
+        { name: "title", type: "xsd:string", minOccurs: 1, maxOccurs: 1 },
+        { name: "genre", type: "xsd:string", minOccurs: 1, maxOccurs: 1 },
+        { name: "price", type: "xsd:float", minOccurs: 1, maxOccurs: 1 },
+        { name: "pub_date", type: "xsd:date", minOccurs: 1, maxOccurs: 1 },
+        { name: "review", type: "xsd:string", minOccurs: 1, maxOccurs: 1 }
+      ]);
     });
-
   });
-
 
 });
