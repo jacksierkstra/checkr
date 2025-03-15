@@ -225,5 +225,4 @@ describe('Checkr validation', () => {
 
     });
 
-
 });

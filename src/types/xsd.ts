@@ -1,6 +1,7 @@
 export interface XSDSchema {
     targetNamespace?: string;
     elements: XSDElement[];
+    types: { [typeName: string]: XSDElement }; // Global complexType definitions
 }
 
 export interface XSDElement {
