@@ -1,6 +1,6 @@
 import { XSDElement } from "@lib/types/xsd";
 import { validateType } from "@lib/validator/pipeline/steps/type";
-import { DOMParser } from "xmldom";
+import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("validateType step", () => {
     let parser: DOMParser;
@@ -11,7 +11,7 @@ describe("validateType step", () => {
 
     function createElementWithText(tagName: string, text: string): Element {
         const xml = `<${tagName}>${text}</${tagName}>`;
-        return parser.parseFromString(xml, "application/xml").documentElement;
+        return parser.parseFromString(xml, "application/xml").documentElement!;
     }
 
     it("should skip validation if no type is specified", () => {

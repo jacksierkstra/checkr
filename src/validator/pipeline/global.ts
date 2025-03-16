@@ -1,6 +1,7 @@
 import { GlobalValidationStep } from '@lib/types/validation';
 import { XSDElement } from '@lib/types/xsd';
 import { AbstractPipeline } from '@lib/validator/pipeline/pipeline';
+import { Element } from "@xmldom/xmldom";
 
 export interface GlobalValidationPipeline {
     addStep(step: GlobalValidationStep): GlobalValidationPipeline;

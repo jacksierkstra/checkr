@@ -1,3 +1,4 @@
+import { DOMParser } from "@xmldom/xmldom";
 import { ParseAttributesStep } from "./attributes";
 
 describe("ParseAttributesStep", () => {
@@ -16,8 +17,8 @@ describe("ParseAttributesStep", () => {
                 </xs:complexType>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({
             attributes: [
                 { name: "attr1", type: "xs:integer", use: "required", fixed: undefined },
@@ -34,8 +35,8 @@ describe("ParseAttributesStep", () => {
                 </xs:complexType>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({
             attributes: [{ name: "attr1", type: "xs:string", use: "optional", fixed: "fixedValue" }],
         });
@@ -49,8 +50,8 @@ describe("ParseAttributesStep", () => {
                 </xs:complexType>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({
             attributes: [{ name: "attr1", type: "xs:string", use: "optional", fixed: undefined }],
         });
@@ -62,8 +63,8 @@ describe("ParseAttributesStep", () => {
                 <xs:complexType />
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ attributes: [] });
     });
 
@@ -75,8 +76,8 @@ describe("ParseAttributesStep", () => {
                 </xs:complexType>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({
             attributes: [{ name: " attr1 ", type: " xs:integer ", use: " required ", fixed: " fixed value " }],
         });
@@ -91,8 +92,8 @@ describe("ParseAttributesStep", () => {
                 </xs:complexType>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({
             attributes: [
                 { name: "attr1", type: "xs:string", use: "required", fixed: undefined },
@@ -109,8 +110,8 @@ describe("ParseAttributesStep", () => {
                 </xs:complexType>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:complexType")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml")?.documentElement?.getElementsByTagName("xs:complexType")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({
             attributes: [
                 { name: "", type: "xs:string", use: "required", fixed: undefined },

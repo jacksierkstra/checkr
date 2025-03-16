@@ -9,6 +9,7 @@ import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
 import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
 import { TypeReferenceResolver } from "@lib/xsd/resolvers/typeReferenceResolver";
 import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
+import { Element } from "@xmldom/xmldom";
 
 export interface XSDParser {
     parse(xsd: string): Promise<XSDSchema>;
@@ -31,6 +32,11 @@ export class XSDPipelineParserImpl implements XSDParser {
     async parse(xsd: string): Promise<XSDSchema> {
         const extractor = new DocumentExtractor(this.xmlParser);
         const doc = extractor.parseDocument(xsd);
+
+        if(!doc.documentElement) {
+            throw new Error('Invalid XML: No document element found.');
+        }
+
         const schemaNodes = extractor.extractTopLevelSchemaNodes(doc.documentElement);
 
         // Separate global elements and global complexTypes.

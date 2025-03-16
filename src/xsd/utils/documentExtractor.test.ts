@@ -1,5 +1,6 @@
 import { DocumentExtractor } from "./documentExtractor";
 import { XMLParser } from "@lib/xml/parser";
+import { DOMParser } from "@xmldom/xmldom";
 
 // Sample XSD string with two valid top-level nodes (an element and a complexType),
 // and one invalid node (otherElement) that should be filtered out.
@@ -38,7 +39,7 @@ describe("DocumentExtractor", () => {
     expect(xmlParserMock.parse).toHaveBeenCalledWith(sampleXSD);
     expect(doc.documentElement).toBeDefined();
     // The document element's tagName might be prefixed (e.g., "xs:schema")
-    expect(doc.documentElement.localName).toBe("schema");
+    expect(doc.documentElement?.localName).toBe("schema");
   });
 
   test("extractTopLevelSchemaNodes should return only valid XSD nodes", () => {

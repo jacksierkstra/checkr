@@ -1,6 +1,6 @@
-import { DOMParser } from "xmldom";
 import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
 import { XSDElement } from "@lib/types/xsd";
+import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("validateConstraints step", () => {
   let parser: DOMParser;
@@ -9,7 +9,7 @@ describe("validateConstraints step", () => {
     parser = new DOMParser();
   });
 
-  function createElementWithText(tagName: string, text: string): Element {
+  function createElementWithText(tagName: string, text: string): Element | null {
     const xml = `<${tagName}>${text}</${tagName}>`;
     return parser.parseFromString(xml, "application/xml").documentElement;
   }
@@ -21,7 +21,7 @@ describe("validateConstraints step", () => {
       type: "xs:string",
       // no pattern, no minLength, no maxLength
     };
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toEqual([]);
   });
 
@@ -35,7 +35,7 @@ describe("validateConstraints step", () => {
       maxLength: 5
     };
     // Because it's xs:integer, no string checks apply
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(0);
   });
 
@@ -46,7 +46,7 @@ describe("validateConstraints step", () => {
       type: "xs:string",
       pattern: "^[A-Za-z0-9_]+$"
     };
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toEqual([]);
   });
 
@@ -57,7 +57,7 @@ describe("validateConstraints step", () => {
       type: "xs:string",
       pattern: "^[A-Za-z0-9_]+$"
     };
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/does not match the pattern/);
   });
@@ -70,7 +70,7 @@ describe("validateConstraints step", () => {
       minLength: 3
     };
     // length = 4 => OK
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(0);
   });
 
@@ -82,7 +82,7 @@ describe("validateConstraints step", () => {
       minLength: 3
     };
     // length = 2 => fail
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/must be at least length 3/);
   });
@@ -95,7 +95,7 @@ describe("validateConstraints step", () => {
       maxLength: 5
     };
     // length = 4 => OK
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(0);
   });
 
@@ -107,7 +107,7 @@ describe("validateConstraints step", () => {
       maxLength: 5
     };
     // length = 6 => fail
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toMatch(/must be at most length 5/);
   });
@@ -123,7 +123,7 @@ describe("validateConstraints step", () => {
     };
     // There's a dash => fails pattern
     // length is 24 => fails maxLength
-    const errors = validateConstraints(node, schema);
+    const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(2);
     expect(errors[0]).toMatch(/does not match the pattern/);
     expect(errors[1]).toMatch(/must be at most length 10/);

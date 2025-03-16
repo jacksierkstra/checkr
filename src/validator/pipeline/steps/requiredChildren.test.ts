@@ -1,7 +1,7 @@
 
 import { XSDElement } from "@lib/types/xsd";
 import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
-import { DOMParser } from "xmldom";
+import { DOMParser } from "@xmldom/xmldom";
 
 describe("validateRequiredChildren", () => {
   const parser = new DOMParser();
@@ -24,7 +24,7 @@ describe("validateRequiredChildren", () => {
     `;
 
     const doc = parser.parseFromString(xml, "application/xml");
-    const errors = validateRequiredChildren(doc.documentElement, parentElement);
+    const errors = validateRequiredChildren(doc.documentElement!, parentElement);
 
     expect(errors).toHaveLength(0);
   });
@@ -37,7 +37,7 @@ describe("validateRequiredChildren", () => {
     `;
 
     const doc = parser.parseFromString(xml, "application/xml");
-    const errors = validateRequiredChildren(doc.documentElement, parentElement);
+    const errors = validateRequiredChildren(doc.documentElement!, parentElement);
 
     expect(errors).toContain(
       "Element <Child2> is required inside <Parent> but is missing."
@@ -53,7 +53,7 @@ describe("validateRequiredChildren", () => {
     `;
 
     const doc = parser.parseFromString(xml, "application/xml");
-    const errors = validateRequiredChildren(doc.documentElement, parentElement);
+    const errors = validateRequiredChildren(doc.documentElement!, parentElement);
 
     expect(errors).toHaveLength(0);
   });
@@ -62,7 +62,7 @@ describe("validateRequiredChildren", () => {
     const xml = `<Parent></Parent>`;
 
     const doc = parser.parseFromString(xml, "application/xml");
-    const errors = validateRequiredChildren(doc.documentElement, parentElement);
+    const errors = validateRequiredChildren(doc.documentElement!, parentElement);
 
     expect(errors).toContain(
       "Element <Child1> is required inside <Parent> but is missing."
