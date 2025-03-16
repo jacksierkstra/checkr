@@ -103,7 +103,7 @@
     "skipLibCheck": false, /* Skip type checking all .d.ts files. */
     "paths": {
       "@lib/*": [
-        "./src/*"
+        "./src/lib/*"
       ]
     },
     "plugins": [
