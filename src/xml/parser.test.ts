@@ -6,7 +6,7 @@ describe('XML parsing', () => {
         const parser = new XMLParserImpl();
         const result = parser['parse'](xml);
         expect(result).toBeDefined();
-        expect(result.documentElement.localName).toBe('root');
+        expect(result.documentElement?.localName).toBe('root');
     });
 
     it('should throw an error for an invalid XML string.', async () => {

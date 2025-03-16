@@ -1,4 +1,5 @@
 import { ValidationResult } from "@lib/types/validation";
+import { XMLDocument } from "@lib/types/xml";
 import { XSDChoice, XSDElement, XSDSchema } from "@lib/types/xsd";
 import { GlobalValidationPipeline, GlobalValidationPipelineImpl } from "@lib/validator/pipeline/global";
 import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validator/pipeline/node";
@@ -9,6 +10,7 @@ import { validateRequiredChildren } from "@lib/validator/pipeline/steps/required
 import { validateType } from "@lib/validator/pipeline/steps/type";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
+import { Element } from "@xmldom/xmldom";
 
 export interface Validator {
     validate(xml: string, xsd: string): Promise<ValidationResult>;
@@ -34,7 +36,7 @@ export class ValidatorImpl implements Validator {
             .addStep(validateOccurrence);
     }
 
-    private validateElements(xmlDoc: Document, elements: XSDElement[]): string[] {
+    private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): string[] {
         return elements.flatMap((schemaElement) => {
             const nodes = Array.from(schemaElement.namespace ? xmlDoc.getElementsByTagNameNS(schemaElement.namespace || null, schemaElement.name) : xmlDoc.getElementsByTagName(schemaElement.name));
             
@@ -63,23 +65,21 @@ export class ValidatorImpl implements Validator {
     
         // Recursively validate direct children only
         const childrenErrors = (schemaElement.children || []).flatMap((childSchema) => {
-            const childNodes = (
-                node.children 
-                  ? Array.from(node.children)
-                  : Array.from(node.childNodes).filter((child): child is Element => child.nodeType === 1)
-              ).filter(child => child.tagName === childSchema.name);
+
+            const childNodes = node.hasChildNodes() ? Array.from(node.childNodes) : [];
+            const filtered = childNodes
+                .filter((child): child is Element => child.nodeType === 1)
+                .filter((child) => child.tagName === childSchema.name);
         
             return [
-                ...this.globalPipeline.execute(childNodes, childSchema), // This throws an error: Argument of type 'ChildNode[]' is not assignable to parameter of type 'Element[]'.
-                ...childNodes.flatMap((childNode) => this.validateNode(childNode, childSchema)), // This throws an error: Argument of type 'ChildNode' is not assignable to parameter of type 'Element'.
+                ...this.globalPipeline.execute(filtered, childSchema), // This throws an error: Argument of type 'ChildNode[]' is not assignable to parameter of type 'Element[]'.
+                ...filtered.flatMap((childNode) => this.validateNode(childNode, childSchema)), // This throws an error: Argument of type 'ChildNode' is not assignable to parameter of type 'Element'.
             ];
         });
     
         return [...errors, ...childrenErrors];
     }
     
-    
-
 
     private validateChoice(node: Element, choice: XSDChoice): string[] {
         // Sum how many total child elements from the choice are present

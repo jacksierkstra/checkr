@@ -1,4 +1,5 @@
 import { ParseRestrictionsStep } from "./restriction";
+import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("ParseRestrictionsStep", () => {
     let step: ParseRestrictionsStep;
@@ -17,8 +18,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string" });
     });
 
@@ -35,8 +36,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string", enumeration: ["value1", "value2"] });
     });
 
@@ -52,8 +53,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string", pattern: "[a-zA-Z]+" });
     });
 
@@ -70,8 +71,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string", minLength: 5, maxLength: 10 });
     });
 
@@ -91,8 +92,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string", enumeration: ["value1", "value2"], pattern: "[a-zA-Z]+", minLength: 5, maxLength: 10 });
     });
 
@@ -106,8 +107,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string" });
     });
 
@@ -117,8 +118,8 @@ describe("ParseRestrictionsStep", () => {
                 <xs:element name="test" />
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({});
     });
 
@@ -130,8 +131,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({});
     });
 
@@ -148,8 +149,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string" });
     });
 
@@ -166,8 +167,8 @@ describe("ParseRestrictionsStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ type: "xs:string", enumeration: ["value 1", " value2 "] });
     });
 

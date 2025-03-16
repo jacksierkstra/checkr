@@ -1,5 +1,6 @@
 import { XSDElement, XSDChoice } from "@lib/types/xsd";
 import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
+import { Element } from "@xmldom/xmldom";
 
 export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XSDElement>> {
   // Use the official XSD namespace (fixed by standard)

@@ -1,4 +1,5 @@
 import { ParseNestedElementsStep } from "./nestedElement";
+import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("ParseNestedElementsStep", () => {
     let step: ParseNestedElementsStep;
@@ -21,7 +22,7 @@ describe("ParseNestedElementsStep", () => {
 
         const parser = new DOMParser();
         const element = parser.parseFromString(xsdElement, "text/xml");
-        const result = step.execute(element.documentElement);
+        const result = step.execute(element.documentElement!);
 
         expect(result.children).toEqual([
             { name: "child1", minOccurs: 0, maxOccurs: 1 },
@@ -46,7 +47,7 @@ describe("ParseNestedElementsStep", () => {
         const parser = new DOMParser();
         const element = parser.parseFromString(xsdElement, "text/xml");
 
-        const result = step.execute(element.documentElement);
+        const result = step.execute(element.documentElement!);
 
         expect(result.choices).toEqual([
             { elements: [{ name: "choice1", minOccurs: 0, maxOccurs: 1 }, { name: "choice2", minOccurs: 0, maxOccurs: 1 }] },
@@ -67,7 +68,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.children).toEqual([{ name: "nestedChild", minOccurs: 1, maxOccurs: 1 }]);
     });
 
@@ -84,7 +85,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.choices).toEqual([{ elements: [{ name: "nestedChoice", minOccurs: 0, maxOccurs: 1 }] }]);
     });
 
@@ -102,7 +103,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.children).toEqual([{ name: "seqChild", minOccurs: 1, maxOccurs: 1 }]);
         expect(result.choices).toEqual([{ elements: [{ name: "choiceChild", minOccurs: 0, maxOccurs: 1 }] }]);
     });
@@ -114,7 +115,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.children).toEqual([]);
         expect(result.choices).toEqual([]);
     });
@@ -128,7 +129,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.children).toEqual([{ name: "child", minOccurs: 1, maxOccurs: 1 }]);
     });
 
@@ -142,7 +143,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.children).toEqual([{ name: "child", minOccurs: 1, maxOccurs: 1 }]);
     });
 
@@ -156,7 +157,7 @@ describe("ParseNestedElementsStep", () => {
             </xs:schema>
         `;
         const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
-        const result = step.execute(element);
+        const result = step.execute(element!);
         expect(result.children).toEqual([
             { name: "child1", minOccurs: 1, maxOccurs: 5 },
             { name: "child2", minOccurs: 0, maxOccurs: "unbounded" },

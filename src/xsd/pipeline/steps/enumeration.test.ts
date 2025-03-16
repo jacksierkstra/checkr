@@ -1,4 +1,5 @@
 import { ParseEnumerationStep } from "./enumeration";
+import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("ParseEnumerationStep", () => {
     let step: ParseEnumerationStep;
@@ -21,8 +22,8 @@ describe("ParseEnumerationStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ enumeration: ["value1", "value2", "value3"] });
     });
 
@@ -40,8 +41,8 @@ describe("ParseEnumerationStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ enumeration: [" value1 ", "value 2", "value3  "] });
     });
 
@@ -59,8 +60,8 @@ describe("ParseEnumerationStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ enumeration: ["value1", "", "value3"] });
     });
 
@@ -70,8 +71,8 @@ describe("ParseEnumerationStep", () => {
                 <xs:element name="test" />
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({});
     });
 
@@ -83,8 +84,8 @@ describe("ParseEnumerationStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({});
     });
 
@@ -98,8 +99,8 @@ describe("ParseEnumerationStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({});
     });
 
@@ -115,8 +116,8 @@ describe("ParseEnumerationStep", () => {
                 </xs:element>
             </xs:schema>
         `;
-        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement.getElementsByTagName("xs:element")[0];
-        const result = step.execute(element);
+        const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement?.getElementsByTagName("xs:element")[0];
+        const result = step.execute(element!);
         expect(result).toEqual({ enumeration: ["value1"] });
     });
 });

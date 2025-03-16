@@ -1,5 +1,6 @@
 import { XSDAttribute, XSDElement } from "@lib/types/xsd";
 import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
+import { Element } from "@xmldom/xmldom";
 
 export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDElement>> {
     execute(el: Element): Partial<XSDElement> {

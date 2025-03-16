@@ -1,6 +1,6 @@
-import { DOMParser } from "xmldom";
 import { XSDElement } from "@lib/types/xsd";
 import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
+import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("validateAttributes", () => {
     let parser: DOMParser;
@@ -14,7 +14,7 @@ describe("validateAttributes", () => {
             .map(([key, value]) => `${key}="${value}"`)
             .join(" ");
         const xml = `<${tag} ${attrString}></${tag}>`;
-        return parser.parseFromString(xml, "application/xml").documentElement;
+        return parser.parseFromString(xml, "application/xml").documentElement!;
     }
 
     it("should pass when all required attributes are present", () => {
