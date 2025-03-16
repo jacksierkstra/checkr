@@ -104,6 +104,9 @@
     "paths": {
       "@lib/*": [
         "./src/lib/*"
+      ],
+      "@benchmark/*": [
+        "./src/benchmark/*"
       ]
     },
     "plugins": [
