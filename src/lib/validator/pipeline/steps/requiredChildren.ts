@@ -11,15 +11,16 @@ export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElem
     ? Array.from(xmlNode.childNodes).filter((child): child is Element => child.nodeType === 1) : [];
 
   for (const childDef of schemaElement.children) {
-    const minOccurs = childDef.minOccurs ?? 1;
-    // Compare names in a case-insensitive manner (or use localName as is if you prefer)
+    const minOccurs = childDef.minOccurs ?? 1; // Default to 1 if not specified
+    // Compare names in a case-insensitive manner
     const matchingChildren = childrenElements.filter(
-      child => child?.localName?.toLowerCase() === childDef.name.toLowerCase()
+      child => child?.localName?.toLowerCase() === childDef.name.toLowerCase() ||
+              child?.tagName?.toLowerCase() === childDef.name.toLowerCase()
     );
 
     if (matchingChildren.length < minOccurs) {
       errors.push(
-        `Element <${childDef.name}> is required inside <${schemaElement.name}> but is missing.`
+        `Element <${childDef.name}> is required inside <${schemaElement.name}> but ${matchingChildren.length === 0 ? "is missing" : "has insufficient occurrences"}.`
       );
     }
   }

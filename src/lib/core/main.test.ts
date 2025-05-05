@@ -52,9 +52,8 @@ describe('Checkr validation', () => {
             `;
             const { valid, errors } = await checkr.validate(xml, xsd);
             expect(valid).toEqual(false);
-            expect(errors).toHaveLength(2);
+            expect(errors).toHaveLength(1);
             expect(errors.at(0)).toEqual('Element <bar> is required inside <root> but is missing.');
-            expect(errors.at(1)).toEqual('Element bar occurs 0 times, but should occur at least 1 times.');
         });
 
         it('a simple XSD structure with a valid namespaced XML should be valid.', async () => {
@@ -104,9 +103,8 @@ describe('Checkr validation', () => {
                 `;
             const { valid, errors } = await checkr.validate(xml, xsd);
             expect(valid).toEqual(false);
-            expect(errors).toHaveLength(2);
+            expect(errors).toHaveLength(1);
             expect(errors.at(0)).toEqual('Element <bar> is required inside <root> but is missing.');
-            expect(errors.at(1)).toEqual('Element bar occurs 0 times, but should occur at least 1 times.');
         });
 
     });
@@ -217,10 +215,8 @@ describe('Checkr validation', () => {
             `;
             const { valid, errors } = await checkr.validate(xml, xsd);
             expect(valid).toEqual(false);
-            expect(errors).toHaveLength(2);
+            expect(errors).toHaveLength(1);
             expect(errors.at(0)).toEqual('Element <pub_date> is required inside <book> but is missing.');
-            expect(errors.at(1)).toEqual('Element pub_date occurs 0 times, but should occur at least 1 times.');
-
         });
 
     });

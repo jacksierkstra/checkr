@@ -227,18 +227,18 @@ describe("Validator", () => {
     const xmlPatternFail = `<Username>abc-123</Username>`;
     const resultPatternFail = await validator.validate(xmlPatternFail, xsd);
     expect(resultPatternFail.valid).toBe(false);
-    expect(resultPatternFail.errors[0]).toMatch(/does not match the pattern/);
+    expect(resultPatternFail.errors[0]).toMatch("Element <Username> must match pattern \"^[A-Za-z0-9_]+$\", but found \"abc-123\".");
 
     // minLength fail: only 2
     const xmlMinFail = `<Username>ab</Username>`;
     const resultMinFail = await validator.validate(xmlMinFail, xsd);
     expect(resultMinFail.valid).toBe(false);
-    expect(resultMinFail.errors[0]).toMatch(/must be at least length 3/);
+    expect(resultMinFail.errors[0]).toMatch(/Element <Username> must have a minimum length of 3, but found length 2./);
 
     // maxLength fail: length 9
     const xmlMaxFail = `<Username>abc_12345</Username>`;
     const resultMaxFail = await validator.validate(xmlMaxFail, xsd);
     expect(resultMaxFail.valid).toBe(false);
-    expect(resultMaxFail.errors[0]).toMatch(/must be at most length 8/);
+    expect(resultMaxFail.errors[0]).toMatch(/Element <Username> must have a maximum length of 8, but found length 9./);
   });
 });

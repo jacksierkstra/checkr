@@ -10,7 +10,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     let result = { children: [] as XSDElement[], choices: [] as XSDChoice[] };
 
     // If it's a complexType, parse its children
-    if (this.isXsdElement(el, "complexType")) {
+    if (this.isXsdElement(el, "complexType") || el.tagName === "xs:complexType") {
       const res = this.parseContainer(el, false);
       result.children.push(...res.children);
       if (res.choices.length > 0) {
@@ -19,7 +19,10 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     } else {
       // Else look for complexType children inside (for root/schema element cases)
       const complexTypes = Array.from(el.childNodes)
-        .filter(node => this.isXsdElement(node as Element, "complexType"))
+        .filter(node => {
+          const element = node as Element;
+          return element.nodeType === 1 && (this.isXsdElement(element, "complexType") || element.tagName === "xs:complexType");
+        })
         .map(node => node as Element);
 
       complexTypes.forEach(ct => {
@@ -45,17 +48,25 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       if (node.nodeType !== 1) return; // skip non-elements
       const child = node as Element;
 
-      if (this.isXsdElement(child, "element")) {
-        children.push(this.parseElement(child, isInChoice) as XSDElement);
-      } else if (this.isXsdElement(child, "sequence")) {
+      if (this.isXsdElement(child, "element") || child.tagName === "xs:element") {
+        const element = this.parseElement(child, isInChoice);
+        if (element) {
+          children.push(element);
+        }
+      } else if (this.isXsdElement(child, "sequence") || child.tagName === "xs:sequence") {
         const res = this.parseContainer(child, false);
         children.push(...res.children);
         choices.push(...res.choices);
-      } else if (this.isXsdElement(child, "choice")) {
+      } else if (this.isXsdElement(child, "choice") || child.tagName === "xs:choice") {
         const res = this.parseContainer(child, true);
         if (res.children.length > 0) {
           choices.push({ elements: res.children });
         }
+        choices.push(...res.choices);
+      } else if (this.isXsdElement(child, "all") || child.tagName === "xs:all") {
+        // Handle all element - similar to sequence but with different semantics
+        const res = this.parseContainer(child, false);
+        children.push(...res.children);
         choices.push(...res.choices);
       }
     });

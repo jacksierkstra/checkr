@@ -4,10 +4,11 @@ import { ElementAssembler } from "@lib/xsd/pipeline/elementAssembler";
 import { Pipeline, PipelineImpl } from "@lib/xsd/pipeline/pipeline";
 import { ParseAttributesStep } from "@lib/xsd/pipeline/steps/attributes";
 import { ParseEnumerationStep } from "@lib/xsd/pipeline/steps/enumeration";
+import { ParseExtensionStep } from "@lib/xsd/pipeline/steps/extension";
 import { ParseNestedElementsStep } from "@lib/xsd/pipeline/steps/nestedElement";
 import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
 import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
-import { TypeReferenceResolver } from "@lib/xsd/resolvers/typeReferenceResolver";
+import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
 import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
 import { Element } from "@xmldom/xmldom";
 
@@ -25,7 +26,8 @@ export class XSDPipelineParserImpl implements XSDParser {
             .addStep(new ParseEnumerationStep())
             .addStep(new ParseAttributesStep())
             .addStep(new ParseNestedElementsStep())
-            .addStep(new ParseRestrictionsStep());
+            .addStep(new ParseRestrictionsStep())
+            .addStep(new ParseExtensionStep());
         this.assembler = new ElementAssembler();
     }
 
@@ -69,8 +71,8 @@ export class XSDPipelineParserImpl implements XSDParser {
         const schema: XSDSchema = { targetNamespace, elements: namespacedElements, types: typesMap };
 
         // Resolve type references now that we have global types available.
-        const resolver = new TypeReferenceResolver(schema);
-        const resolvedElements = schema.elements.map(el => resolver.execute(el));
+        const resolver = new ModularTypeReferenceResolver(schema);
+        const resolvedElements = resolver.resolve();
 
         return { targetNamespace, elements: resolvedElements, types: typesMap };
     }

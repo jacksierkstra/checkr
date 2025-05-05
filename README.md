@@ -11,7 +11,9 @@ Checkr is a **TypeScript-based XML validation library** for validating XML docum
 - **Pure TypeScript**: No native dependencies, works in Node.js and browsers.
 - **Extensible Architecture**: Supports plugin-like extensibility.
 - **Comprehensive Validation**: Handles global elements, complex types, attributes, constraints, and more.
-- **XSD 1.0 Support**: Covers basic to intermediate features like `xs:sequence`, `xs:choice`, enumerations, and type restrictions.
+- **XSD 1.0 Support**: Covers basic to advanced features like `xs:sequence`, `xs:choice`, `xs:extension`, `xs:restriction`, enumerations, and pattern constraints.
+- **Type Inheritance**: Full support for type extension and restriction mechanisms.
+- **Performance Optimized**: Includes caching for type resolution and efficient validation pipelines.
 
 ## Installation
 
@@ -71,11 +73,14 @@ The validation process consists of multiple pipeline stages:
 - ✅ `xs:enumeration`, `xs:pattern`
 - ✅ `xs:minLength`, `xs:maxLength`
 - ✅ Attribute validation (`xs:attribute`)
+- ✅ Type inheritance (`xs:extension`, `xs:restriction`)
+- ✅ Numeric constraints (`minInclusive`, `maxInclusive`, etc.)
+- ✅ Namespace support and resolution
 - 🚧 **Planned**:
   - `xs:all`
-  - `xs:extension` and `xs:restriction`
   - `xs:key`, `xs:unique`, `xs:keyref`
   - Namespaced imports (`xs:import`, `xs:include`)
+  - `xs:group` and `xs:attributeGroup`
 
 ## Running Tests
 

@@ -5,7 +5,10 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
   if (!schema.attributes || schema.attributes.length === 0) return [];
 
   return schema.attributes.flatMap((attr: XSDAttribute) => {
-    const value = node.getAttribute(attr.name);
+    // Handle both namespaced and non-namespaced attributes
+    const value = attr.namespace 
+      ? node.getAttributeNS(attr.namespace, attr.name)
+      : node.getAttribute(attr.name);
     const errors: string[] = [];
 
     // Required attribute check (treat empty string as missing)

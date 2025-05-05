@@ -8,6 +8,8 @@ import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
 import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
 import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
 import { validateType } from "@lib/validator/pipeline/steps/type";
+import { validateAbstract } from "@lib/validator/pipeline/steps/abstract";
+import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 import { Element } from "@xmldom/xmldom";
@@ -26,6 +28,7 @@ export class ValidatorImpl implements Validator {
     ) {
         // Node-level pipeline (type checks, attribute checks, etc.)
         this.nodePipeline = new NodeValidationPipelineImpl()
+            .addStep(validateAbstract)  // Check for abstract elements first
             .addStep(validateType)
             .addStep(validateAttributes)
             .addStep(validateConstraints)
@@ -37,23 +40,35 @@ export class ValidatorImpl implements Validator {
     }
 
     private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): string[] {
-        return elements.flatMap((schemaElement) => {
-            const nodes = Array.from(schemaElement.namespace ? xmlDoc.getElementsByTagNameNS(schemaElement.namespace || null, schemaElement.name) : xmlDoc.getElementsByTagName(schemaElement.name));
+        const errors: string[] = [];
+        
+        for (const schemaElement of elements) {
+            // Find all nodes matching this element
+            const nodes = Array.from(
+                schemaElement.namespace 
+                    ? xmlDoc.getElementsByTagNameNS(schemaElement.namespace || null, schemaElement.name) 
+                    : xmlDoc.getElementsByTagName(schemaElement.name)
+            );
             
-            return [
-                // Global checks (e.g., occurrence constraints) for this element
-                ...this.globalPipeline.execute(nodes, schemaElement),
+            // Global checks (e.g., occurrence constraints) for this element
+            const globalErrors = this.globalPipeline.execute(nodes, schemaElement);
+            errors.push(...globalErrors);
 
-                // Node-level checks for each instance of this element
-                ...nodes.flatMap((node) => this.validateNode(node, schemaElement)),
-            ];
-        });
+            // Node-level checks for each instance of this element
+            for (const node of nodes) {
+                const nodeErrors = this.validateNode(node, schemaElement);
+                errors.push(...nodeErrors);
+            }
+        }
+        
+        return errors;
     }
+
 
     private validateNode(node: Element, schemaElement: XSDElement): string[] {
         const errors: string[] = [];
     
-        // Node-level checks
+        // Node-level validation pipeline
         errors.push(...this.nodePipeline.execute(node, schemaElement));
     
         // If choices exist, validate them
@@ -63,21 +78,31 @@ export class ValidatorImpl implements Validator {
             errors.push(...this.validateChoice(node, choiceDef));
         }
     
-        // Recursively validate direct children only
-        const childrenErrors = (schemaElement.children || []).flatMap((childSchema) => {
-
-            const childNodes = node.hasChildNodes() ? Array.from(node.childNodes) : [];
-            const filtered = childNodes
-                .filter((child): child is Element => child.nodeType === 1)
-                .filter((child) => child.tagName === childSchema.name);
-        
-            return [
-                ...this.globalPipeline.execute(filtered, childSchema), // This throws an error: Argument of type 'ChildNode[]' is not assignable to parameter of type 'Element[]'.
-                ...filtered.flatMap((childNode) => this.validateNode(childNode, childSchema)), // This throws an error: Argument of type 'ChildNode' is not assignable to parameter of type 'Element'.
-            ];
-        });
+        // Recursively validate direct children only if they exist in the XML
+        // The requiredChildren validation step already handles missing required children
+        if (schemaElement.children && schemaElement.children.length > 0) {
+            const childrenErrors = schemaElement.children.flatMap((childSchema) => {
+                const childNodes = node.hasChildNodes() ? Array.from(node.childNodes) : [];
+                const filtered = childNodes
+                    .filter((child): child is Element => child.nodeType === 1)
+                    .filter((child) => {
+                        // Match by tagName or localName (case-insensitive)
+                        const childName = child.tagName || child.localName;
+                        return childName && childName.toLowerCase() === childSchema.name.toLowerCase();
+                    });
+            
+                // Only validate children that exist in the document
+                // Missing required children are handled by validateRequiredChildren
+                return filtered.length > 0 ? [
+                    ...this.globalPipeline.execute(filtered, childSchema),
+                    ...filtered.flatMap((childNode) => this.validateNode(childNode, childSchema)),
+                ] : [];
+            });
+            
+            errors.push(...childrenErrors);
+        }
     
-        return [...errors, ...childrenErrors];
+        return errors;
     }
     
 
@@ -99,10 +124,30 @@ export class ValidatorImpl implements Validator {
     }
 
     async validate(xml: string, xsd: string): Promise<ValidationResult> {
-        const schema: XSDSchema = await this.xsdParser.parse(xsd);
-        const xmlDoc = this.xmlParser.parse(xml);
+        try {
+            const schema: XSDSchema = await this.xsdParser.parse(xsd);
+            const xmlDoc = this.xmlParser.parse(xml);
 
-        const errors = this.validateElements(xmlDoc, schema.elements);
-        return { valid: errors.length === 0, errors };
+            // First check if all required root elements are present
+            const rootElementErrors = validateRootElements(xmlDoc, schema);
+            
+            // Then validate the elements that are present
+            const elementErrors = this.validateElements(xmlDoc, schema.elements);
+            
+            // Combine all errors
+            const errors = [...rootElementErrors, ...elementErrors];
+            
+            // Always report validation status correctly based on errors
+            return { 
+                valid: errors.length === 0, 
+                errors 
+            };
+        } catch (error) {
+            // Handle any parsing errors or other exceptions
+            return { 
+                valid: false, 
+                errors: [`Validation error: ${error instanceof Error ? error.message : String(error)}`] 
+            };
+        }
     }
 }

@@ -17,12 +17,42 @@ export interface XSDElement {
     pattern?: string;
     minLength?: number;
     maxLength?: number;
+    extension?: XSDExtension;
+    restriction?: XSDRestriction;
+    abstract?: boolean;
+    mixed?: boolean;
+    // Numeric constraints that can be applied directly to elements
+    minInclusive?: number;
+    maxInclusive?: number;
+    minExclusive?: number;
+    maxExclusive?: number;
+}
+
+export interface XSDExtension {
+    base: string;
+    children?: XSDElement[];
+    choices?: XSDChoice[];
+    attributes?: XSDAttribute[];
+}
+
+export interface XSDRestriction {
+    base: string;
+    enumeration?: string[];
+    pattern?: string;
+    minLength?: number;
+    maxLength?: number;
+    minInclusive?: number;
+    maxInclusive?: number;
+    minExclusive?: number;
+    maxExclusive?: number;
 }
 export interface XSDAttribute {
     name: string;
+    namespace?: string;
     type?: string;
     use?: 'required' | 'optional';
     fixed?: string;
+    default?: string;
 }
 
 export interface XSDChoice {
