@@ -1,10 +1,5 @@
 import { XSDElement, XSDChoice } from "@lib/types/xsd";
-import { 
-  IElementResolver, 
-  ITypeResolver, 
-  ITypeExtender, 
-  ITypeRestrictor
-} from "./interfaces";
+import { IElementResolver, ITypeResolver, ITypeExtender, ITypeRestrictor } from "./interfaces";
 
 /**
  * Core resolver that orchestrates the complete element resolution process
@@ -19,7 +14,7 @@ export class ElementResolver implements IElementResolver {
   constructor(
     private typeResolver: ITypeResolver,
     private typeExtender: ITypeExtender,
-    private typeRestrictor: ITypeRestrictor
+    private typeRestrictor: ITypeRestrictor,
   ) {}
 
   /**
@@ -33,7 +28,7 @@ export class ElementResolver implements IElementResolver {
 
     // Store original children (needed for a special edge case)
     const originalChildren = resolvedElement.children ? [...resolvedElement.children] : [];
-    
+
     // Process type reference first (only if no extension/restriction)
     if (resolvedElement.type && !resolvedElement.extension && !resolvedElement.restriction) {
       resolvedElement = this.typeResolver.resolveTypeReference(resolvedElement);
@@ -42,7 +37,7 @@ export class ElementResolver implements IElementResolver {
     // Then process extension or restriction
     if (resolvedElement.extension) {
       resolvedElement = this.typeExtender.resolveExtension(resolvedElement);
-      
+
       // SPECIAL HANDLING: If the extension replaced children and the original had children with type references,
       // we need to process those type references even though they won't be in the final result
       if (originalChildren.length > 0) {
@@ -61,7 +56,7 @@ export class ElementResolver implements IElementResolver {
     if (resolvedElement.children && resolvedElement.children.length > 0) {
       resolvedElement = {
         ...resolvedElement,
-        children: resolvedElement.children.map(child => this.resolveElement({ ...child }))
+        children: resolvedElement.children.map((child) => this.resolveElement({ ...child })),
       };
     }
 
@@ -71,8 +66,8 @@ export class ElementResolver implements IElementResolver {
         ...resolvedElement,
         choices: resolvedElement.choices.map((choice: XSDChoice) => ({
           ...choice,
-          elements: choice.elements.map(element => this.resolveElement({ ...element }))
-        }))
+          elements: choice.elements.map((element) => this.resolveElement({ ...element })),
+        })),
       };
     }
 
@@ -92,7 +87,7 @@ export class ElementResolver implements IElementResolver {
    * @param el The element to resolve
    * @returns The fully resolved element
    */
-  execute(el: XSDElement): XSDElement {
+  execute(_el: XSDElement): XSDElement {
     throw new Error("Method not implemented in base class.");
   }
 }

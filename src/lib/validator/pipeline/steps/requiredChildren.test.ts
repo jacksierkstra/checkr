@@ -1,4 +1,3 @@
-
 import { XSDElement } from "@lib/types/xsd";
 import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
 import { DOMParser } from "@xmldom/xmldom";
@@ -39,9 +38,7 @@ describe("validateRequiredChildren", () => {
     const doc = parser.parseFromString(xml, "application/xml");
     const errors = validateRequiredChildren(doc.documentElement!, parentElement);
 
-    expect(errors).toContain(
-      "Element <Child2> is required inside <Parent> but is missing."
-    );
+    expect(errors).toContain("Element <Child2> is required inside <Parent> but is missing.");
   });
 
   it("should pass when optional children are missing", () => {
@@ -64,11 +61,7 @@ describe("validateRequiredChildren", () => {
     const doc = parser.parseFromString(xml, "application/xml");
     const errors = validateRequiredChildren(doc.documentElement!, parentElement);
 
-    expect(errors).toContain(
-      "Element <Child1> is required inside <Parent> but is missing."
-    );
-    expect(errors).toContain(
-      "Element <Child2> is required inside <Parent> but is missing."
-    );
+    expect(errors).toContain("Element <Child1> is required inside <Parent> but is missing.");
+    expect(errors).toContain("Element <Child2> is required inside <Parent> but is missing.");
   });
 });

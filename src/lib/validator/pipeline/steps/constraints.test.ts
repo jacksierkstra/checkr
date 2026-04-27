@@ -32,7 +32,7 @@ describe("validateConstraints step", () => {
       type: "xs:integer",
       pattern: "^\\d+$",
       minLength: 2,
-      maxLength: 5
+      maxLength: 5,
     };
     // Because it's xs:integer, no string checks apply
     const errors = validateConstraints(node!, schema);
@@ -44,7 +44,7 @@ describe("validateConstraints step", () => {
     const schema: XSDElement = {
       name: "Username",
       type: "xs:string",
-      pattern: "^[A-Za-z0-9_]+$"
+      pattern: "^[A-Za-z0-9_]+$",
     };
     const errors = validateConstraints(node!, schema);
     expect(errors).toEqual([]);
@@ -55,7 +55,7 @@ describe("validateConstraints step", () => {
     const schema: XSDElement = {
       name: "Username",
       type: "xs:string",
-      pattern: "^[A-Za-z0-9_]+$"
+      pattern: "^[A-Za-z0-9_]+$",
     };
     const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
@@ -67,7 +67,7 @@ describe("validateConstraints step", () => {
     const schema: XSDElement = {
       name: "Code",
       type: "xs:string",
-      minLength: 3
+      minLength: 3,
     };
     // length = 4 => OK
     const errors = validateConstraints(node!, schema);
@@ -79,7 +79,7 @@ describe("validateConstraints step", () => {
     const schema: XSDElement = {
       name: "Code",
       type: "xs:string",
-      minLength: 3
+      minLength: 3,
     };
     // length = 2 => fail
     const errors = validateConstraints(node!, schema);
@@ -92,7 +92,7 @@ describe("validateConstraints step", () => {
     const schema: XSDElement = {
       name: "Password",
       type: "xs:string",
-      maxLength: 5
+      maxLength: 5,
     };
     // length = 4 => OK
     const errors = validateConstraints(node!, schema);
@@ -104,7 +104,7 @@ describe("validateConstraints step", () => {
     const schema: XSDElement = {
       name: "Password",
       type: "xs:string",
-      maxLength: 5
+      maxLength: 5,
     };
     // length = 6 => fail
     const errors = validateConstraints(node!, schema);
@@ -119,7 +119,7 @@ describe("validateConstraints step", () => {
       type: "xs:string",
       pattern: "^[A-Za-z0-9]+$",
       minLength: 5,
-      maxLength: 10
+      maxLength: 10,
     };
     // There's a dash => fails pattern
     // length is 24 => fails maxLength

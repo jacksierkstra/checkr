@@ -1,4 +1,4 @@
-import { XSDElement } from '@lib/types/xsd';
+import { XSDElement } from "@lib/types/xsd";
 
 export abstract class AbstractPipeline<TInput, TStep> {
   protected steps: TStep[] = [];

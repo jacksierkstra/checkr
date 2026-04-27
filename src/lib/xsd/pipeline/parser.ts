@@ -13,68 +13,66 @@ import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
 import { Element } from "@xmldom/xmldom";
 
 export interface XSDParser {
-    parse(xsd: string): Promise<XSDSchema>;
+  parse(xsd: string): Promise<XSDSchema>;
 }
 
 export class XSDPipelineParserImpl implements XSDParser {
-    private pipeline: Pipeline<Element, Partial<XSDElement>>;
-    private assembler: ElementAssembler;
+  private pipeline: Pipeline<Element, Partial<XSDElement>>;
+  private assembler: ElementAssembler;
 
-    constructor(private xmlParser: XMLParser) {
-        this.pipeline = new PipelineImpl<Element, Partial<XSDElement>>()
-            .addStep(new ParseRootElementStep())
-            .addStep(new ParseEnumerationStep())
-            .addStep(new ParseAttributesStep())
-            .addStep(new ParseNestedElementsStep())
-            .addStep(new ParseRestrictionsStep())
-            .addStep(new ParseExtensionStep());
-        this.assembler = new ElementAssembler();
+  constructor(private xmlParser: XMLParser) {
+    this.pipeline = new PipelineImpl<Element, Partial<XSDElement>>()
+      .addStep(new ParseRootElementStep())
+      .addStep(new ParseEnumerationStep())
+      .addStep(new ParseAttributesStep())
+      .addStep(new ParseNestedElementsStep())
+      .addStep(new ParseRestrictionsStep())
+      .addStep(new ParseExtensionStep());
+    this.assembler = new ElementAssembler();
+  }
+
+  async parse(xsd: string): Promise<XSDSchema> {
+    const extractor = new DocumentExtractor(this.xmlParser);
+    const doc = extractor.parseDocument(xsd);
+
+    if (!doc.documentElement) {
+      throw new Error("Invalid XML: No document element found.");
     }
 
-    async parse(xsd: string): Promise<XSDSchema> {
-        const extractor = new DocumentExtractor(this.xmlParser);
-        const doc = extractor.parseDocument(xsd);
+    const schemaNodes = extractor.extractTopLevelSchemaNodes(doc.documentElement);
 
-        if(!doc.documentElement) {
-            throw new Error('Invalid XML: No document element found.');
-        }
+    // Separate global elements and global complexTypes.
+    const elementNodes = schemaNodes.filter((node) => node.localName === "element");
+    const complexTypeNodes = schemaNodes.filter((node) => node.localName === "complexType");
 
-        const schemaNodes = extractor.extractTopLevelSchemaNodes(doc.documentElement);
+    // Process global elements via your pipeline.
+    const elementPartials = elementNodes.map((el) => this.pipeline.execute(el));
+    const elementsMerged = this.assembler.mergePartialElements(elementPartials);
+    const validElements = this.assembler.filterValidElements(elementsMerged);
 
-        // Separate global elements and global complexTypes.
-        const elementNodes = schemaNodes.filter(node => node.localName === "element");
-        const complexTypeNodes = schemaNodes.filter(node => node.localName === "complexType");
+    // Process global complexTypes using the same pipeline (or a similar one)
+    // so that we capture the definitions. Assume they share similar structure.
+    const typePartials = complexTypeNodes.map((el) => this.pipeline.execute(el));
+    const typesMerged = this.assembler.mergePartialElements(typePartials);
+    // Create a map keyed by name (if available)
+    const typesMap: { [key: string]: XSDElement } = {};
+    typesMerged
+      .filter((t): t is XSDElement => t.name !== undefined)
+      .forEach((typeDef) => {
+        typesMap[typeDef.name] = typeDef;
+      });
 
-        // Process global elements via your pipeline.
-        const elementPartials = elementNodes.map(el => this.pipeline.execute(el));
-        const elementsMerged = this.assembler.mergePartialElements(elementPartials);
-        const validElements = this.assembler.filterValidElements(elementsMerged);
+    const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
+    const namespacedElements = targetNamespace
+      ? this.assembler.applyNamespace(validElements, targetNamespace)
+      : validElements;
 
-        // Process global complexTypes using the same pipeline (or a similar one) 
-        // so that we capture the definitions. Assume they share similar structure.
-        const typePartials = complexTypeNodes.map(el => this.pipeline.execute(el));
-        const typesMerged = this.assembler.mergePartialElements(typePartials);
-        // Create a map keyed by name (if available)
-        const typesMap: { [key: string]: XSDElement } = {};
-        typesMerged
-            .filter((t): t is XSDElement => t.name !== undefined)
-            .forEach(typeDef => {
-                typesMap[typeDef.name] = typeDef;
-            });
+    const schema: XSDSchema = { targetNamespace, elements: namespacedElements, types: typesMap };
 
+    // Resolve type references now that we have global types available.
+    const resolver = new ModularTypeReferenceResolver(schema);
+    const resolvedElements = resolver.resolve();
 
-        const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
-        const namespacedElements = targetNamespace
-            ? this.assembler.applyNamespace(validElements, targetNamespace)
-            : validElements;
-
-        const schema: XSDSchema = { targetNamespace, elements: namespacedElements, types: typesMap };
-
-        // Resolve type references now that we have global types available.
-        const resolver = new ModularTypeReferenceResolver(schema);
-        const resolvedElements = resolver.resolve();
-
-        return { targetNamespace, elements: resolvedElements, types: typesMap };
-    }
-
+    return { targetNamespace, elements: resolvedElements, types: typesMap };
+  }
 }

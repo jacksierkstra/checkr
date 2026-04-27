@@ -1,13 +1,10 @@
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
+import { XSDSchema } from "@lib/types/xsd";
 import { XMLDocument } from "@lib/types/xml";
 
 /**
  * Validates that all required root elements are present in the document
  */
-export const validateRootElements = (
-  xmlDoc: XMLDocument, 
-  schema: XSDSchema
-): string[] => {
+export const validateRootElements = (xmlDoc: XMLDocument, schema: XSDSchema): string[] => {
   const errors: string[] = [];
 
   // Check each root element definition from the schema
@@ -28,7 +25,7 @@ export const validateRootElements = (
       errors.push(
         `Root element <${element.name}> is required in the document but ${
           matchingNodes.length === 0 ? "is missing" : "has insufficient occurrences"
-        }.`
+        }.`,
       );
     }
   }

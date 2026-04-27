@@ -1,10 +1,10 @@
 import { XSDElement } from "@lib/types/xsd";
-import { 
-  ITypeResolver, 
-  ITypeRegistry, 
-  IResolutionCache, 
+import {
+  ITypeResolver,
+  ITypeRegistry,
+  IResolutionCache,
   IPropertyMerger,
-  IElementResolver
+  IElementResolver,
 } from "./interfaces";
 
 /**
@@ -22,7 +22,7 @@ export class TypeResolver implements ITypeResolver {
     private registry: ITypeRegistry,
     private cache: IResolutionCache,
     private merger: IPropertyMerger,
-    private elementResolver: IElementResolver
+    private elementResolver: IElementResolver,
   ) {}
 
   /**
@@ -36,9 +36,9 @@ export class TypeResolver implements ITypeResolver {
     }
 
     const typeQName = element.type;
-    
+
     // Skip resolution for built-in types (like xsd:string)
-    if (this.registry.parseQName(typeQName).prefix === 'xsd') {
+    if (this.registry.parseQName(typeQName).prefix === "xsd") {
       return element;
     }
 
@@ -62,7 +62,7 @@ export class TypeResolver implements ITypeResolver {
 
     // Fully resolve the type definition (including nested types)
     const resolvedTypeDef = this.elementResolver.resolveElement({ ...typeDef });
-    
+
     // Update cache with fully resolved definition
     this.cache.set(cacheKey, resolvedTypeDef);
 

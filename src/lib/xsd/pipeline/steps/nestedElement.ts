@@ -19,13 +19,16 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     } else {
       // Else look for complexType children inside (for root/schema element cases)
       const complexTypes = Array.from(el.childNodes)
-        .filter(node => {
+        .filter((node) => {
           const element = node as Element;
-          return element.nodeType === 1 && (this.isXsdElement(element, "complexType") || element.tagName === "xs:complexType");
+          return (
+            element.nodeType === 1 &&
+            (this.isXsdElement(element, "complexType") || element.tagName === "xs:complexType")
+          );
         })
-        .map(node => node as Element);
+        .map((node) => node as Element);
 
-      complexTypes.forEach(ct => {
+      complexTypes.forEach((ct) => {
         const res = this.parseContainer(ct, false);
         result.children.push(...res.children);
         if (res.choices.length > 0) {
@@ -40,11 +43,14 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
   /**
    * Recursively parse a container node (complexType, sequence, or choice).
    */
-  private parseContainer(el: Element, isInChoice: boolean = false): { children: XSDElement[], choices: XSDChoice[] } {
+  private parseContainer(
+    el: Element,
+    isInChoice: boolean = false,
+  ): { children: XSDElement[]; choices: XSDChoice[] } {
     let children: XSDElement[] = [];
     let choices: XSDChoice[] = [];
 
-    Array.from(el.childNodes).forEach(node => {
+    Array.from(el.childNodes).forEach((node) => {
       if (node.nodeType !== 1) return; // skip non-elements
       const child = node as Element;
 
@@ -82,13 +88,18 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     if (!name) return null;
 
     const minOccursAttr = el.getAttribute("minOccurs");
-    const minOccurs = parseInt(minOccursAttr && minOccursAttr.trim() !== "" ? minOccursAttr : "1", 10);
-    const effectiveMinOccurs = isInChoice && (!minOccursAttr || minOccursAttr.trim() === "") ? 0 : minOccurs;
+    const minOccurs = parseInt(
+      minOccursAttr && minOccursAttr.trim() !== "" ? minOccursAttr : "1",
+      10,
+    );
+    const effectiveMinOccurs =
+      isInChoice && (!minOccursAttr || minOccursAttr.trim() === "") ? 0 : minOccurs;
 
     const maxOccursAttr = el.getAttribute("maxOccurs");
-    const maxOccurs = maxOccursAttr === "unbounded"
-      ? "unbounded"
-      : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
+    const maxOccurs =
+      maxOccursAttr === "unbounded"
+        ? "unbounded"
+        : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
 
     const xsdElement: XSDElement = { name, minOccurs: effectiveMinOccurs, maxOccurs };
 
@@ -100,8 +111,8 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
 
     // Handle inline complexType (if present)
     const inlineComplexType = Array.from(el.childNodes)
-      .filter(n => this.isXsdElement(n as Element, "complexType"))
-      .map(n => n as Element)[0];
+      .filter((n) => this.isXsdElement(n as Element, "complexType"))
+      .map((n) => n as Element)[0];
     if (inlineComplexType) {
       const res = this.parseContainer(inlineComplexType, false);
       if (res.children.length > 0) xsdElement.children = res.children;
@@ -109,7 +120,6 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     }
     return xsdElement;
   }
-
 
   /**
    * Helper to check if an element belongs to the XSD namespace.

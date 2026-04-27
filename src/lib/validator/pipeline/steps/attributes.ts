@@ -6,22 +6,20 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
 
   return schema.attributes.flatMap((attr: XSDAttribute) => {
     // Handle both namespaced and non-namespaced attributes
-    const value = attr.namespace 
+    const value = attr.namespace
       ? node.getAttributeNS(attr.namespace, attr.name)
       : node.getAttribute(attr.name);
     const errors: string[] = [];
 
     // Required attribute check (treat empty string as missing)
     if (attr.use === "required" && (!value || value.trim() === "")) {
-      errors.push(
-        `Missing required attribute '${attr.name}' in element <${schema.name}>.`
-      );
+      errors.push(`Missing required attribute '${attr.name}' in element <${schema.name}>.`);
     }
 
     // Fixed value enforcement
     if (attr.fixed !== undefined && value !== null && value !== attr.fixed) {
       errors.push(
-        `Attribute '${attr.name}' in element <${schema.name}> must be fixed to '${attr.fixed}', but found '${value}'.`
+        `Attribute '${attr.name}' in element <${schema.name}> must be fixed to '${attr.fixed}', but found '${value}'.`,
       );
     }
 
@@ -29,15 +27,12 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
     if (value !== null && value.trim() !== "") {
       if (attr.type === "xs:integer" && !/^-?\d+$/.test(value)) {
         errors.push(
-          `Attribute '${attr.name}' in element <${schema.name}> must be an integer, but found '${value}'.`
+          `Attribute '${attr.name}' in element <${schema.name}> must be an integer, but found '${value}'.`,
         );
       }
-      if (
-        attr.type === "xs:boolean" &&
-        !["true", "false", "1", "0"].includes(value)
-      ) {
+      if (attr.type === "xs:boolean" && !["true", "false", "1", "0"].includes(value)) {
         errors.push(
-          `Attribute '${attr.name}' in element <${schema.name}> must be a boolean (true/false/1/0), but found '${value}'.`
+          `Attribute '${attr.name}' in element <${schema.name}> must be a boolean (true/false/1/0), but found '${value}'.`,
         );
       }
     }

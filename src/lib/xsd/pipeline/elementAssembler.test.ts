@@ -18,10 +18,7 @@ describe("ElementAssembler", () => {
           { namespace: "http://example.com" },
           { children: [{ name: "child1" }] },
         ],
-        [
-          { name: "element2" },
-          { namespace: "http://example.org" },
-        ],
+        [{ name: "element2" }, { namespace: "http://example.org" }],
       ];
 
       // Since mergePartialElements now returns Partial<XSDElement>[],

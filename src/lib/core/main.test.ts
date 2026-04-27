@@ -1,17 +1,15 @@
 import { Checkr } from "@lib/core/main";
 
-describe('Checkr validation', () => {
+describe("Checkr validation", () => {
+  let checkr: Checkr;
 
-    let checkr: Checkr;
+  beforeEach(() => {
+    checkr = new Checkr();
+  });
 
-    beforeEach(() => {
-        checkr = new Checkr();
-    });
-
-    describe('Simple', () => {
-
-        it('a simple XSD structure with a valid XML should be valid.', async () => {
-            let xsd = `
+  describe("Simple", () => {
+    it("a simple XSD structure with a valid XML should be valid.", async () => {
+      let xsd = `
             <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
                 <xsd:element name="root" type="SimpleType"/>
                 <xsd:complexType name="SimpleType">
@@ -22,19 +20,19 @@ describe('Checkr validation', () => {
                 </xsd:complexType>
             </xsd:schema>
             `;
-            let xml = `
+      let xml = `
                 <root>
                     <foo></foo>
                     <bar></bar>
                 </root>
             `;
-            const { valid, errors } = await checkr.validate(xml, xsd);
-            expect(valid).toEqual(true);
-            expect(errors).toHaveLength(0);
-        });
+      const { valid, errors } = await checkr.validate(xml, xsd);
+      expect(valid).toEqual(true);
+      expect(errors).toHaveLength(0);
+    });
 
-        it('a simple XSD structure with an invalid XML should be invalid.', async () => {
-            let xsd = `
+    it("a simple XSD structure with an invalid XML should be invalid.", async () => {
+      let xsd = `
             <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
                 <xsd:element name="root" type="SimpleType"/>
                 <xsd:complexType name="SimpleType">
@@ -45,19 +43,19 @@ describe('Checkr validation', () => {
                 </xsd:complexType>
             </xsd:schema>
             `;
-            let xml = `
+      let xml = `
                 <root>
                     <foo></foo>
                 </root>
             `;
-            const { valid, errors } = await checkr.validate(xml, xsd);
-            expect(valid).toEqual(false);
-            expect(errors).toHaveLength(1);
-            expect(errors.at(0)).toEqual('Element <bar> is required inside <root> but is missing.');
-        });
+      const { valid, errors } = await checkr.validate(xml, xsd);
+      expect(valid).toEqual(false);
+      expect(errors).toHaveLength(1);
+      expect(errors.at(0)).toEqual("Element <bar> is required inside <root> but is missing.");
+    });
 
-        it('a simple XSD structure with a valid namespaced XML should be valid.', async () => {
-            let xsd = `
+    it("a simple XSD structure with a valid namespaced XML should be valid.", async () => {
+      let xsd = `
                 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                             targetNamespace="urn:foo"
                             xmlns:x="urn:foo">
@@ -70,20 +68,19 @@ describe('Checkr validation', () => {
                     </xsd:complexType>
                 </xsd:schema>
                 `;
-            let xml = `
+      let xml = `
                     <x:root xmlns:x="urn:foo">
                         <foo></foo>
                         <bar></bar>
                     </x:root>
                 `;
-            const { valid, errors } = await checkr.validate(xml, xsd);
-            expect(valid).toEqual(true);
-            expect(errors).toHaveLength(0);
-        });
+      const { valid, errors } = await checkr.validate(xml, xsd);
+      expect(valid).toEqual(true);
+      expect(errors).toHaveLength(0);
+    });
 
-
-        it('a simple XSD structure with an invalid namespaced XML should be invalid.', async () => {
-            let xsd = `
+    it("a simple XSD structure with an invalid namespaced XML should be invalid.", async () => {
+      let xsd = `
                 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                             targetNamespace="urn:foo"
                             xmlns:x="urn:foo">
@@ -96,23 +93,21 @@ describe('Checkr validation', () => {
                     </xsd:complexType>
                 </xsd:schema>
                 `;
-            let xml = `
+      let xml = `
                     <x:root xmlns:x="urn:foo">
                         <foo></foo>
                     </x:root>
                 `;
-            const { valid, errors } = await checkr.validate(xml, xsd);
-            expect(valid).toEqual(false);
-            expect(errors).toHaveLength(1);
-            expect(errors.at(0)).toEqual('Element <bar> is required inside <root> but is missing.');
-        });
-
+      const { valid, errors } = await checkr.validate(xml, xsd);
+      expect(valid).toEqual(false);
+      expect(errors).toHaveLength(1);
+      expect(errors.at(0)).toEqual("Element <bar> is required inside <root> but is missing.");
     });
+  });
 
-    describe('Books', () => {
-
-        it('a books XSD structure with a valid XML should be valid.', async () => {
-            const xsd = `
+  describe("Books", () => {
+    it("a books XSD structure with a valid XML should be valid.", async () => {
+      const xsd = `
                 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                 targetNamespace="urn:books"
                 xmlns:bks="urn:books">
@@ -139,7 +134,7 @@ describe('Checkr validation', () => {
                 </xsd:schema>
             `;
 
-            const xml = `
+      const xml = `
                 <?xml version="1.0"?>
                 <x:books xmlns:x="urn:books">
                     <book id="bk001">
@@ -160,13 +155,13 @@ describe('Checkr validation', () => {
                     </book>
                 </x:books>
             `;
-            const { valid, errors } = await checkr.validate(xml, xsd);
-            expect(valid).toEqual(true);
-            expect(errors).toHaveLength(0);
-        });
+      const { valid, errors } = await checkr.validate(xml, xsd);
+      expect(valid).toEqual(true);
+      expect(errors).toHaveLength(0);
+    });
 
-        it('a books XSD structure with an invalid XML should be invalid.', async () => {
-            const xsd = `
+    it("a books XSD structure with an invalid XML should be invalid.", async () => {
+      const xsd = `
                 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                 targetNamespace="urn:books"
                 xmlns:bks="urn:books">
@@ -193,7 +188,7 @@ describe('Checkr validation', () => {
                 </xsd:schema>
             `;
 
-            const xml = `
+      const xml = `
                 <?xml version="1.0"?>
                 <x:books xmlns:x="urn:books">
                     <book id="bk001">
@@ -213,12 +208,10 @@ describe('Checkr validation', () => {
                     </book>
                 </x:books>
             `;
-            const { valid, errors } = await checkr.validate(xml, xsd);
-            expect(valid).toEqual(false);
-            expect(errors).toHaveLength(1);
-            expect(errors.at(0)).toEqual('Element <pub_date> is required inside <book> but is missing.');
-        });
-
+      const { valid, errors } = await checkr.validate(xml, xsd);
+      expect(valid).toEqual(false);
+      expect(errors).toHaveLength(1);
+      expect(errors.at(0)).toEqual("Element <pub_date> is required inside <book> but is missing.");
     });
-
+  });
 });

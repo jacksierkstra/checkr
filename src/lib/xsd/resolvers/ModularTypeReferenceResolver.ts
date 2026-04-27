@@ -6,14 +6,14 @@ import { TypeExtender } from "./modules/TypeExtender";
 import { TypeRestrictor } from "./modules/TypeRestrictor";
 import { TypeResolver } from "./modules/TypeResolver";
 import { ElementResolver } from "./modules/ElementResolver";
-import { 
-  ITypeRegistry, 
-  IResolutionCache, 
+import {
+  ITypeRegistry,
+  IResolutionCache,
   IPropertyMerger,
   ITypeResolver,
   ITypeExtender,
   ITypeRestrictor,
-  IElementResolver
+  IElementResolver,
 } from "./modules/interfaces";
 
 /**
@@ -39,38 +39,37 @@ export class ModularTypeReferenceResolver implements IElementResolver {
     this.registry = new TypeRegistry(schema);
     this.cache = new ResolutionCache(this.registry);
     this.merger = new PropertyMerger();
-    
-    // To handle circular dependencies, we need to create the element resolver with 
+
+    // To handle circular dependencies, we need to create the element resolver with
     // placeholder components that we'll assign properly after initialization
-    this.elementResolver = new ElementResolver({} as any, {} as any, {} as any);
-    
+    this.elementResolver = new ElementResolver(
+      {} as ITypeResolver,
+      {} as ITypeExtender,
+      {} as ITypeRestrictor,
+    );
+
     // Now create the specialized components with access to the element resolver
     this.typeResolver = new TypeResolver(
-      this.registry, 
-      this.cache, 
-      this.merger, 
-      this.elementResolver
+      this.registry,
+      this.cache,
+      this.merger,
+      this.elementResolver,
     );
-    
+
     this.typeExtender = new TypeExtender(
-      this.registry, 
-      this.cache, 
-      this.merger, 
-      this.elementResolver
+      this.registry,
+      this.cache,
+      this.merger,
+      this.elementResolver,
     );
-    
-    this.typeRestrictor = new TypeRestrictor(
-      this.registry, 
-      this.cache, 
-      this.elementResolver
-    );
-    
+
+    this.typeRestrictor = new TypeRestrictor(this.registry, this.cache, this.elementResolver);
+
     // Update the element resolver with the actual components
-    Object.assign(this.elementResolver, new ElementResolver(
-      this.typeResolver,
-      this.typeExtender,
-      this.typeRestrictor
-    ));
+    Object.assign(
+      this.elementResolver,
+      new ElementResolver(this.typeResolver, this.typeExtender, this.typeRestrictor),
+    );
   }
 
   /**

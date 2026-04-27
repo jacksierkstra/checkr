@@ -1,10 +1,10 @@
 import { XSDElement } from "@lib/types/xsd";
-import { 
-  ITypeExtender, 
-  ITypeRegistry, 
-  IResolutionCache, 
+import {
+  ITypeExtender,
+  ITypeRegistry,
+  IResolutionCache,
   IPropertyMerger,
-  IElementResolver
+  IElementResolver,
 } from "./interfaces";
 
 /**
@@ -14,7 +14,7 @@ export class TypeExtender implements ITypeExtender {
   /**
    * Creates a new type extender
    * @param registry The type registry for type lookups
-   * @param cache The resolution cache 
+   * @param cache The resolution cache
    * @param merger The property merger
    * @param elementResolver The element resolver for nested resolution
    */
@@ -22,7 +22,7 @@ export class TypeExtender implements ITypeExtender {
     private registry: ITypeRegistry,
     private cache: IResolutionCache,
     private merger: IPropertyMerger,
-    private elementResolver: IElementResolver
+    private elementResolver: IElementResolver,
   ) {}
 
   /**
@@ -53,7 +53,7 @@ export class TypeExtender implements ITypeExtender {
     // Check if this base type is already in the cache
     const cacheKey = this.cache.generateKey(baseTypeName);
     let resolvedBaseElement: XSDElement;
-    
+
     const cachedDef = this.cache.get(cacheKey);
     if (cachedDef) {
       resolvedBaseElement = cachedDef;
@@ -69,17 +69,11 @@ export class TypeExtender implements ITypeExtender {
       ...resolvedBaseElement,
       name: element.name,
       namespace: element.namespace,
-      children: [
-        ...(resolvedBaseElement.children || []),
-        ...(element.extension.children || [])
-      ],
-      choices: [
-        ...(resolvedBaseElement.choices || []),
-        ...(element.extension.choices || [])
-      ],
+      children: [...(resolvedBaseElement.children || []), ...(element.extension.children || [])],
+      choices: [...(resolvedBaseElement.choices || []), ...(element.extension.choices || [])],
       attributes: this.merger.mergeAttributes(
-        resolvedBaseElement.attributes, 
-        element.extension.attributes
+        resolvedBaseElement.attributes,
+        element.extension.attributes,
       ),
       minOccurs: element.minOccurs,
       maxOccurs: element.maxOccurs,

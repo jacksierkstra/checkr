@@ -1,10 +1,9 @@
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
+import { XSDSchema } from "@lib/types/xsd";
 import { XMLParserImpl } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
 
-describe('XSDParser', () => {
-
+describe("XSDParser", () => {
   let parser: XSDParser;
 
   beforeAll(() => {
@@ -74,7 +73,9 @@ describe('XSDParser', () => {
       expect(categoryAttribute?.type).toBe("xs:string");
       expect(categoryAttribute?.use).toBe("optional");
 
-      const fixedValueAttribute = itemElement?.attributes?.find((attr) => attr.name === "fixedValue");
+      const fixedValueAttribute = itemElement?.attributes?.find(
+        (attr) => attr.name === "fixedValue",
+      );
       expect(fixedValueAttribute).toBeDefined();
       expect(fixedValueAttribute?.fixed).toBe("fixedString");
     });
@@ -400,7 +401,7 @@ describe('XSDParser', () => {
     });
   });
 
-  it('should correctly parse the BookForm complex type', async () => {
+  it("should correctly parse the BookForm complex type", async () => {
     const xsd = `
       <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                   targetNamespace="urn:books"
@@ -430,12 +431,12 @@ describe('XSDParser', () => {
 
     await parseAndExpect(xsd, (schema) => {
       // The global element is "books"
-      const booksElement = schema.elements.find(el => el.name === "books");
+      const booksElement = schema.elements.find((el) => el.name === "books");
       expect(booksElement).toBeDefined();
 
       // The "books" element should have children, which include the "book" element.
       expect(booksElement!.children).toBeDefined();
-      const bookElement = booksElement!.children?.find(el => el.name === "book");
+      const bookElement = booksElement!.children?.find((el) => el.name === "book");
       expect(bookElement).toBeDefined();
 
       // At this point, the type reference "bks:BookForm" on the <book> element should have been resolved
@@ -448,9 +449,8 @@ describe('XSDParser', () => {
         { name: "genre", type: "xsd:string", minOccurs: 1, maxOccurs: 1 },
         { name: "price", type: "xsd:float", minOccurs: 1, maxOccurs: 1 },
         { name: "pub_date", type: "xsd:date", minOccurs: 1, maxOccurs: 1 },
-        { name: "review", type: "xsd:string", minOccurs: 1, maxOccurs: 1 }
+        { name: "review", type: "xsd:string", minOccurs: 1, maxOccurs: 1 },
       ]);
     });
   });
-
 });

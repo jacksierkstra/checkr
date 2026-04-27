@@ -1,10 +1,4 @@
-import {
-  XSDElement,
-  XSDSchema,
-  XSDAttribute,
-  XSDExtension,
-  XSDRestriction
-} from "@lib/types/xsd";
+import { XSDElement, XSDAttribute } from "@lib/types/xsd";
 
 /**
  * Interface for type registries that manage schema type definitions
@@ -17,14 +11,14 @@ export interface ITypeRegistry {
    * @returns The found type definition or undefined if not found
    */
   getTypeDefinition(typeName: string, contextNamespace?: string): XSDElement | undefined;
-  
+
   /**
    * Parses a qualified name into its prefix and local parts
    * @param qname The qualified name to parse
    * @returns Object containing the prefix (if any) and local name
    */
   parseQName(qname: string): { prefix: string | undefined; localName: string };
-  
+
   /**
    * Resolves a namespace prefix to its full URI
    * @param prefix The prefix to resolve
@@ -43,19 +37,19 @@ export interface IResolutionCache {
    * @returns The cached type definition or undefined if not in cache
    */
   get(key: string): XSDElement | undefined;
-  
+
   /**
    * Stores a type definition in the cache
    * @param key The cache key
    * @param value The type definition to cache
    */
   set(key: string, value: XSDElement): void;
-  
+
   /**
    * Clears all cached entries
    */
   clear(): void;
-  
+
   /**
    * Generates a normalized cache key for a type reference
    * @param typeQName The type qualified name
@@ -111,14 +105,17 @@ export interface IPropertyMerger {
    * @returns The element with merged properties
    */
   mergeTypeDefinition(element: XSDElement, typeDef: XSDElement): XSDElement;
-  
+
   /**
    * Merges attribute collections with proper precedence
    * @param baseAttrs The base attributes
    * @param overridingAttrs The overriding attributes
    * @returns The merged attribute collection
    */
-  mergeAttributes(baseAttrs?: XSDAttribute[], overridingAttrs?: XSDAttribute[]): XSDAttribute[] | undefined;
+  mergeAttributes(
+    baseAttrs?: XSDAttribute[],
+    overridingAttrs?: XSDAttribute[],
+  ): XSDAttribute[] | undefined;
 }
 
 /**
@@ -131,13 +128,13 @@ export interface IElementResolver {
    * @returns The fully resolved element
    */
   resolveElement(element: XSDElement): XSDElement;
-  
+
   /**
    * Resolves all elements in a schema and returns the result
    * @returns Array of resolved top-level elements
    */
   resolve(): XSDElement[];
-  
+
   /**
    * Resolves a single element provided by the caller
    * @param el The element to resolve
