@@ -30,8 +30,9 @@
   "engines": {
     "node": ">=18"
   },
-  "dependencies": {},
   "devDependencies": {
+    "@commitlint/cli": "^20.5.2",
+    "@commitlint/config-conventional": "^20.5.0",
     "@jest/globals": "^29.7.0",
     "@types/jest": "^29.5.14",
     "@typescript-eslint/eslint-plugin": "^8.59.1",
