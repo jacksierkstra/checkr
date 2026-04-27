@@ -1,4 +1,4 @@
-import { ValidationResult } from "@lib/types/validation";
+import { ValidationError, ValidationResult } from "@lib/types/validation";
 import { XMLDocument } from "@lib/types/xml";
 import { XSDChoice, XSDElement, XSDSchema } from "@lib/types/xsd";
 import {
@@ -41,8 +41,8 @@ export class ValidatorImpl implements Validator {
     this.globalPipeline = new GlobalValidationPipelineImpl().addStep(validateOccurrence);
   }
 
-  private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): string[] {
-    const errors: string[] = [];
+  private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): ValidationError[] {
+    const errors: ValidationError[] = [];
 
     for (const schemaElement of elements) {
       // Find all nodes matching this element
@@ -66,8 +66,8 @@ export class ValidatorImpl implements Validator {
     return errors;
   }
 
-  private validateNode(node: Element, schemaElement: XSDElement): string[] {
-    const errors: string[] = [];
+  private validateNode(node: Element, schemaElement: XSDElement): ValidationError[] {
+    const errors: ValidationError[] = [];
 
     // Node-level validation pipeline
     errors.push(...this.nodePipeline.execute(node, schemaElement));
@@ -108,7 +108,7 @@ export class ValidatorImpl implements Validator {
     return errors;
   }
 
-  private validateChoice(node: Element, choice: XSDChoice): string[] {
+  private validateChoice(node: Element, choice: XSDChoice): ValidationError[] {
     // Sum how many total child elements from the choice are present
     const matches = choice.elements.reduce((count, el) => {
       return count + node.getElementsByTagName(el.name).length;
@@ -119,31 +119,52 @@ export class ValidatorImpl implements Validator {
 
     // Otherwise, produce an error
     return [
-      `Choice error: Expected exactly one of [${choice.elements
-        .map((x) => x.name)
-        .join(", ")}], but found ${matches}.`,
+      {
+        code: "CHOICE_VIOLATION",
+        message: `Choice error: Expected exactly one of [${choice.elements.map((x) => x.name).join(", ")}], but found ${matches}.`,
+      },
     ];
   }
 
   validate(xml: string, xsd: string): ValidationResult {
+    let schema: XSDSchema;
+    let xmlDoc: XMLDocument;
+
+    // Parse errors are returned as ValidationResult values
     try {
-      const schema: XSDSchema = this.xsdParser.parse(xsd);
-      const xmlDoc = this.xmlParser.parse(xml);
-
-      const rootElementErrors = validateRootElements(xmlDoc, schema);
-      const elementErrors = this.validateElements(xmlDoc, schema.elements);
-      const errors = [...rootElementErrors, ...elementErrors];
-
-      return {
-        valid: errors.length === 0,
-        errors,
-      };
+      schema = this.xsdParser.parse(xsd);
     } catch (error) {
       return {
         valid: false,
-        errors: [`Validation error: ${error instanceof Error ? error.message : String(error)}`],
+        errors: [
+          {
+            code: "PARSE_ERROR",
+            message: `XSD parse error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
       };
     }
+
+    try {
+      xmlDoc = this.xmlParser.parse(xml);
+    } catch (error) {
+      return {
+        valid: false,
+        errors: [
+          {
+            code: "PARSE_ERROR",
+            message: `XML parse error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+      };
+    }
+
+    // Programmer errors (bugs in pipeline steps) propagate — do NOT catch
+    const rootElementErrors = validateRootElements(xmlDoc, schema);
+    const elementErrors = this.validateElements(xmlDoc, schema.elements);
+    const errors = [...rootElementErrors, ...elementErrors];
+
+    return { valid: errors.length === 0, errors };
   }
 
   validateAsync(xml: string, xsd: string): Promise<ValidationResult> {

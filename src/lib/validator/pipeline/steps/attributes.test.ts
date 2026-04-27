@@ -35,7 +35,7 @@ describe("validateAttributes", () => {
 
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/Missing required attribute 'id'/);
+    expect(errors[0].message).toMatch(/Missing required attribute 'id'/);
   });
 
   it("should validate fixed attributes correctly", () => {
@@ -47,7 +47,7 @@ describe("validateAttributes", () => {
 
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/must be fixed to 'books'/);
+    expect(errors[0].message).toMatch(/must be fixed to 'books'/);
   });
 
   it("should validate integer attributes", () => {
@@ -59,6 +59,6 @@ describe("validateAttributes", () => {
 
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/must be an integer/);
+    expect(errors[0].message).toMatch(/must be an integer/);
   });
 });

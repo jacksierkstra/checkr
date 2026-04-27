@@ -1,7 +1,7 @@
-import { NodeValidationStep } from "@lib/types/validation";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 
 export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElement) => {
-  const errors: string[] = [];
+  const errors: ValidationError[] = [];
 
   if (!schemaElement.children) return errors;
 
@@ -20,9 +20,11 @@ export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElem
     );
 
     if (matchingChildren.length < minOccurs) {
-      errors.push(
-        `Element <${childDef.name}> is required inside <${schemaElement.name}> but ${matchingChildren.length === 0 ? "is missing" : "has insufficient occurrences"}.`,
-      );
+      errors.push({
+        code: "MISSING_REQUIRED_ELEMENT",
+        message: `Element <${childDef.name}> is required inside <${schemaElement.name}> but ${matchingChildren.length === 0 ? "is missing" : "has insufficient occurrences"}.`,
+        element: childDef.name,
+      });
     }
   }
 

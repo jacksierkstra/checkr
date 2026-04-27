@@ -1,13 +1,15 @@
-import { GlobalValidationStep } from "@lib/types/validation";
+import { GlobalValidationStep, ValidationError } from "@lib/types/validation";
 
 export const validateOccurrence: GlobalValidationStep = (nodes, schema) => {
-  const errors: string[] = [];
+  const errors: ValidationError[] = [];
   const count = nodes.length;
 
   if (schema.minOccurs !== undefined && count < schema.minOccurs) {
-    errors.push(
-      `Element ${schema.name} occurs ${count} times, but should occur at least ${schema.minOccurs} times.`,
-    );
+    errors.push({
+      code: "OCCURRENCE_VIOLATION",
+      message: `Element ${schema.name} occurs ${count} times, but should occur at least ${schema.minOccurs} times.`,
+      element: schema.name,
+    });
   }
 
   if (
@@ -15,9 +17,11 @@ export const validateOccurrence: GlobalValidationStep = (nodes, schema) => {
     schema.maxOccurs !== "unbounded" &&
     count > schema.maxOccurs
   ) {
-    errors.push(
-      `Element ${schema.name} occurs ${count} times, but should occur at most ${schema.maxOccurs} times.`,
-    );
+    errors.push({
+      code: "OCCURRENCE_VIOLATION",
+      message: `Element ${schema.name} occurs ${count} times, but should occur at most ${schema.maxOccurs} times.`,
+      element: schema.name,
+    });
   }
 
   return errors;

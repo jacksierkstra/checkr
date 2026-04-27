@@ -37,7 +37,7 @@ describe("validateType step", () => {
     // Invalid enumeration
     const invalidErrors = validateType(nodeInvalid, schemaElement);
     expect(invalidErrors).toHaveLength(1);
-    expect(invalidErrors[0]).toMatch(/must be one of \[Pending, Approved, Rejected\]/);
+    expect(invalidErrors[0].message).toMatch(/must be one of \[Pending, Approved, Rejected\]/);
   });
 
   it("should validate xs:string (accept everything)", () => {
@@ -59,7 +59,7 @@ describe("validateType step", () => {
     const schemaElement: XSDElement = { name: "Age", type: "xs:integer" };
     const errors = validateType(node, schemaElement);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/must be an integer/);
+    expect(errors[0].message).toMatch(/must be an integer/);
   });
 
   it("should validate xs:decimal - success", () => {
@@ -74,7 +74,7 @@ describe("validateType step", () => {
     const schemaElement: XSDElement = { name: "Price", type: "xs:decimal" };
     const errors = validateType(node, schemaElement);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/must be a decimal/);
+    expect(errors[0].message).toMatch(/must be a decimal/);
   });
 
   it("should validate xs:boolean - success (true)", () => {
@@ -89,7 +89,7 @@ describe("validateType step", () => {
     const schemaElement: XSDElement = { name: "Flag", type: "xs:boolean" };
     const errors = validateType(node, schemaElement);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/must be a boolean/);
+    expect(errors[0].message).toMatch(/must be a boolean/);
   });
 
   it("should validate xs:date - success", () => {
@@ -104,6 +104,6 @@ describe("validateType step", () => {
     const schemaElement: XSDElement = { name: "BirthDate", type: "xs:date" };
     const errors = validateType(node, schemaElement);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/must be a valid date/);
+    expect(errors[0].message).toMatch(/must be a valid date/);
   });
 });

@@ -32,7 +32,7 @@ describe("Validator", () => {
     const xml = `<NotPerson>Jane Doe</NotPerson>`;
     const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/Person/);
+    expect(result.errors[0].message).toMatch(/Person/);
   });
 
   it("should validate xs:integer type correctly", () => {
@@ -48,7 +48,7 @@ describe("Validator", () => {
     const xmlInvalid = `<Age>thirty</Age>`;
     const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
-    expect(resultInvalid.errors[0]).toMatch(/must be an integer|not a valid integer/);
+    expect(resultInvalid.errors[0].message).toMatch(/must be an integer|not a valid integer/);
   });
 
   it("should validate xs:date type correctly", () => {
@@ -64,7 +64,7 @@ describe("Validator", () => {
     const xmlInvalid = `<BirthDate>May 20, 1990</BirthDate>`;
     const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
-    expect(resultInvalid.errors[0]).toMatch(/must be a valid date/);
+    expect(resultInvalid.errors[0].message).toMatch(/must be a valid date/);
   });
 
   it("should validate enumerated values correctly", () => {
@@ -88,7 +88,7 @@ describe("Validator", () => {
     const xmlInvalid = `<Status>InvalidValue</Status>`;
     const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
-    expect(resultInvalid.errors[0]).toMatch(/must be one of/);
+    expect(resultInvalid.errors[0].message).toMatch(/must be one of/);
   });
 
   it("should validate fixed attribute values", () => {
@@ -102,7 +102,7 @@ describe("Validator", () => {
     const xmlInvalid = `<Item category="books"/>`;
     const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
-    expect(resultInvalid.errors[0]).toMatch(/must be fixed to 'electronics'/);
+    expect(resultInvalid.errors[0].message).toMatch(/must be fixed to 'electronics'/);
   });
 
   it("should validate choice elements (Email only)", () => {
@@ -178,7 +178,7 @@ describe("Validator", () => {
     `;
     const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/Choice error:/);
+    expect(result.errors[0].message).toMatch(/Choice error:/);
   });
 
   it("should fail when no choices are present", () => {
@@ -201,7 +201,7 @@ describe("Validator", () => {
     `;
     const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(false);
-    expect(result.errors[0]).toMatch(/Choice error:/);
+    expect(result.errors[0].message).toMatch(/Choice error:/);
   });
 
   it("validateAsync returns a Promise resolving to the same result as validate", async () => {
@@ -235,7 +235,7 @@ describe("Validator", () => {
     const xmlPatternFail = `<Username>abc-123</Username>`;
     const resultPatternFail = validator.validate(xmlPatternFail, xsd);
     expect(resultPatternFail.valid).toBe(false);
-    expect(resultPatternFail.errors[0]).toMatch(
+    expect(resultPatternFail.errors[0].message).toMatch(
       'Element <Username> must match pattern "^[A-Za-z0-9_]+$", but found "abc-123".',
     );
 
@@ -243,7 +243,7 @@ describe("Validator", () => {
     const xmlMinFail = `<Username>ab</Username>`;
     const resultMinFail = validator.validate(xmlMinFail, xsd);
     expect(resultMinFail.valid).toBe(false);
-    expect(resultMinFail.errors[0]).toMatch(
+    expect(resultMinFail.errors[0].message).toMatch(
       /Element <Username> must have a minimum length of 3, but found length 2./,
     );
 
@@ -251,7 +251,7 @@ describe("Validator", () => {
     const xmlMaxFail = `<Username>abc_12345</Username>`;
     const resultMaxFail = validator.validate(xmlMaxFail, xsd);
     expect(resultMaxFail.valid).toBe(false);
-    expect(resultMaxFail.errors[0]).toMatch(
+    expect(resultMaxFail.errors[0].message).toMatch(
       /Element <Username> must have a maximum length of 8, but found length 9./,
     );
   });

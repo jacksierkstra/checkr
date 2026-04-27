@@ -1,4 +1,4 @@
-import { NodeValidationStep } from "@lib/types/validation";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 import { XSDAttribute } from "@lib/types/xsd";
 
 export const validateAttributes: NodeValidationStep = (node, schema) => {
@@ -9,31 +9,41 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
     const value = attr.namespace
       ? node.getAttributeNS(attr.namespace, attr.name)
       : node.getAttribute(attr.name);
-    const errors: string[] = [];
+    const errors: ValidationError[] = [];
 
     // Required attribute check (treat empty string as missing)
     if (attr.use === "required" && (!value || value.trim() === "")) {
-      errors.push(`Missing required attribute '${attr.name}' in element <${schema.name}>.`);
+      errors.push({
+        code: "ATTRIBUTE_MISSING",
+        message: `Missing required attribute '${attr.name}' in element <${schema.name}>.`,
+        element: schema.name,
+      });
     }
 
     // Fixed value enforcement
     if (attr.fixed !== undefined && value !== null && value !== attr.fixed) {
-      errors.push(
-        `Attribute '${attr.name}' in element <${schema.name}> must be fixed to '${attr.fixed}', but found '${value}'.`,
-      );
+      errors.push({
+        code: "ATTRIBUTE_INVALID",
+        message: `Attribute '${attr.name}' in element <${schema.name}> must be fixed to '${attr.fixed}', but found '${value}'.`,
+        element: schema.name,
+      });
     }
 
     // Basic type validation
     if (value !== null && value.trim() !== "") {
       if (attr.type === "xs:integer" && !/^-?\d+$/.test(value)) {
-        errors.push(
-          `Attribute '${attr.name}' in element <${schema.name}> must be an integer, but found '${value}'.`,
-        );
+        errors.push({
+          code: "ATTRIBUTE_INVALID",
+          message: `Attribute '${attr.name}' in element <${schema.name}> must be an integer, but found '${value}'.`,
+          element: schema.name,
+        });
       }
       if (attr.type === "xs:boolean" && !["true", "false", "1", "0"].includes(value)) {
-        errors.push(
-          `Attribute '${attr.name}' in element <${schema.name}> must be a boolean (true/false/1/0), but found '${value}'.`,
-        );
+        errors.push({
+          code: "ATTRIBUTE_INVALID",
+          message: `Attribute '${attr.name}' in element <${schema.name}> must be a boolean (true/false/1/0), but found '${value}'.`,
+          element: schema.name,
+        });
       }
     }
 

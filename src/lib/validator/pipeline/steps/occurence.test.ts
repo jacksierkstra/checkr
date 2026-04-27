@@ -26,7 +26,7 @@ describe("validateOccurrence", () => {
     const elements: Element[] = [createDummyElement("Test", "a")!];
     const errors = validateOccurrence(elements, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/at least 2 times/);
+    expect(errors[0].message).toMatch(/at least 2 times/);
   });
 
   it("should return an error when count is above maxOccurs", () => {
@@ -38,7 +38,7 @@ describe("validateOccurrence", () => {
     ];
     const errors = validateOccurrence(elements, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0]).toMatch(/at most 2 times/);
+    expect(errors[0].message).toMatch(/at most 2 times/);
   });
 
   it("should not validate maxOccurs when set to unbounded", () => {

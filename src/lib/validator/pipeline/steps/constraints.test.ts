@@ -58,7 +58,7 @@ describe("validateConstraints step", () => {
     };
     const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/does not match the pattern/);
+    expect(errors[0].message).toMatch(/does not match the pattern/);
   });
 
   it("should enforce minLength - success case", () => {
@@ -83,7 +83,7 @@ describe("validateConstraints step", () => {
     // length = 2 => fail
     const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/must be at least length 3/);
+    expect(errors[0].message).toMatch(/must be at least length 3/);
   });
 
   it("should enforce maxLength - success case", () => {
@@ -108,7 +108,7 @@ describe("validateConstraints step", () => {
     // length = 6 => fail
     const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(1);
-    expect(errors[0]).toMatch(/must be at most length 5/);
+    expect(errors[0].message).toMatch(/must be at most length 5/);
   });
 
   it("should combine pattern and length checks - multiple failures", () => {
@@ -124,7 +124,7 @@ describe("validateConstraints step", () => {
     // length is 24 => fails maxLength
     const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(2);
-    expect(errors[0]).toMatch(/does not match the pattern/);
-    expect(errors[1]).toMatch(/must be at most length 10/);
+    expect(errors[0].message).toMatch(/does not match the pattern/);
+    expect(errors[1].message).toMatch(/must be at most length 10/);
   });
 });

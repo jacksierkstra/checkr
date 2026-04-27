@@ -1,3 +1,4 @@
+import { ValidationError } from "@lib/types/validation";
 import { XSDElement } from "@lib/types/xsd";
 
 export abstract class AbstractPipeline<TInput, TStep> {
@@ -13,5 +14,5 @@ export abstract class AbstractPipeline<TInput, TStep> {
     return this;
   }
 
-  abstract execute(input: TInput, schema: XSDElement): string[];
+  abstract execute(input: TInput, schema: XSDElement): ValidationError[];
 }

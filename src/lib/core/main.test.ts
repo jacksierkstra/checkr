@@ -51,7 +51,9 @@ describe("Checkr validation", () => {
       const { valid, errors } = checkr.validate(xml, xsd);
       expect(valid).toEqual(false);
       expect(errors).toHaveLength(1);
-      expect(errors.at(0)).toEqual("Element <bar> is required inside <root> but is missing.");
+      expect(errors.at(0)?.message).toEqual(
+        "Element <bar> is required inside <root> but is missing.",
+      );
     });
 
     it("a simple XSD structure with a valid namespaced XML should be valid.", () => {
@@ -101,7 +103,9 @@ describe("Checkr validation", () => {
       const { valid, errors } = checkr.validate(xml, xsd);
       expect(valid).toEqual(false);
       expect(errors).toHaveLength(1);
-      expect(errors.at(0)).toEqual("Element <bar> is required inside <root> but is missing.");
+      expect(errors.at(0)?.message).toEqual(
+        "Element <bar> is required inside <root> but is missing.",
+      );
     });
   });
 
@@ -211,7 +215,9 @@ describe("Checkr validation", () => {
       const { valid, errors } = checkr.validate(xml, xsd);
       expect(valid).toEqual(false);
       expect(errors).toHaveLength(1);
-      expect(errors.at(0)).toEqual("Element <pub_date> is required inside <book> but is missing.");
+      expect(errors.at(0)?.message).toEqual(
+        "Element <pub_date> is required inside <book> but is missing.",
+      );
     });
   });
 
