@@ -1,84 +1,97 @@
 # Checkr – Agent Instructions
 
+Checkr is a TypeScript library that validates XML documents against XSD schemas. It targets both Node.js and browser environments and has `@xmldom/xmldom` as its only runtime dependency.
+
 ## Commands
 
 ```sh
-npm test                          # run full test suite (with coverage)
-npm run build                     # compile with tspc → dist/
-npm run clean                     # delete dist/
+npm test                                         # full test suite + coverage
+npm run build                                    # compile → dist/ (use tspc, not tsc)
+npm run clean                                    # delete dist/
 
-# Run a single test file
-npx jest src/lib/xsd/parser.test.ts
-
-# Run tests matching a name pattern
-npx jest --testNamePattern="validates attributes"
+npx jest src/lib/xsd/parser.test.ts             # single test file
+npx jest --testNamePattern="validates type"     # tests matching a name pattern
 ```
 
-> Build uses `tspc` (ts-patch) instead of plain `tsc` because of the `typescript-transform-paths` plugin that rewrites `@lib/*` path aliases in emitted `.js` and `.d.ts` files.
+**Use `tspc`, not `tsc`, for builds.** The project uses `ts-patch` with the `typescript-transform-paths` plugin to rewrite `@lib/*` path aliases in emitted `.js` and `.d.ts` files. Running plain `tsc` will produce broken output.
 
-## Architecture
+## Out-of-scope XSD features — do not implement
 
-`Checkr` (public API) wires three collaborators together:
+The following XSD features are explicitly deferred. Do not implement them unless asked:
 
+- `xs:all`
+- `xs:key`, `xs:unique`, `xs:keyref`
+- `xs:import`, `xs:include`
+- `xs:group`, `xs:attributeGroup`
+
+Attempting partial support for any of these will silently produce wrong validation results.
+
+## Architecture decisions (settled — do not revisit)
+
+The library is split into three responsibilities wired together in `Checkr`:
+
+1. **`XMLParserImpl`** — parses raw XML strings into a `@xmldom/xmldom` DOM  
+2. **`XSDPipelineParserImpl`** — parses XSD strings into an `XSDSchema` object tree  
+3. **`ValidatorImpl`** — walks the XML DOM against the parsed schema and collects errors
+
+The split is intentional and stable. Do not merge these responsibilities.
+
+### Error handling contract
+
+`ValidatorImpl.validate` **never throws**. All exceptions — including XML/XSD parse failures — are caught and returned as `{ valid: false, errors: ["Validation error: ..."] }`. Validation steps must return `string[]` (empty = no errors). Do not throw from any validation step, pipeline, or resolver. Do not add retry logic or Promise rejection handling around the public `validate` method.
+
+### Test environment
+
+The test environment is `jest-environment-jsdom`. Do not change it. The library targets both Node.js and browsers, and tests must exercise the browser DOM path that `@xmldom/xmldom` exposes.
+
+## How to add support for a new XSD feature
+
+This is the most common change to this codebase. Follow these steps in order:
+
+**1. Add fields to the schema types** (`src/lib/types/xsd.ts`)  
+Add any new properties to `XSDElement`, `XSDRestriction`, `XSDExtension`, or introduce a new interface if needed. This is the source of truth for what the library understands.
+
+**2. Add an XSD parsing step** (`src/lib/xsd/pipeline/steps/`)  
+Create a new class implementing `PipelineStep<Element, Partial<XSDElement>>`. The `execute` method receives a raw DOM `Element` and must return **only the fields it is responsible for** as a `Partial<XSDElement>`. Do not return a full object. Register it in `XSDPipelineParserImpl` by calling `.addStep(new YourStep())`.
+
+**3. Add a validation step if needed** (`src/lib/validator/pipeline/steps/`)  
+If the new feature requires runtime validation, create a function matching `NodeValidationStep = (node: Element, schema: XSDElement) => string[]` or `GlobalValidationStep = (nodes: Element[], schema: XSDElement) => string[]`. Register node-level steps in `ValidatorImpl`'s `nodePipeline`, occurrence-style steps in `globalPipeline`.
+
+**4. Update the resolver if the feature involves type references**  
+If the new feature introduces a new form of type inheritance or reference, update the relevant module in `src/lib/xsd/resolvers/modules/` behind its existing interface, or add a new module + interface pair following the pattern in `interfaces.ts`.
+
+**5. Write a co-located test file**  
+Place `yourFeature.test.ts` next to `yourFeature.ts`. Use inline XML/XSD strings — no fixture files.
+
+## Critical conventions
+
+### DOM querying — always use the dual-lookup pattern
+
+XSD documents may or may not declare the `xs:` namespace correctly depending on the source. Always query with namespace first, then fall back:
+
+```ts
+const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
+
+let el = parent.getElementsByTagNameNS(XSD_NAMESPACE, "sequence")[0] as Element;
+if (!el) {
+    el = parent.getElementsByTagName("xs:sequence")[0] as Element;
+}
 ```
-Checkr
-  ├── XMLParserImpl          — parses raw XML strings into a DOM (via @xmldom/xmldom)
-  ├── XSDPipelineParserImpl  — parses XSD strings into XSDSchema
-  └── ValidatorImpl          — runs the schema against the XML DOM
-```
 
-### XSD Parsing pipeline (`src/lib/xsd/`)
-
-`XSDPipelineParserImpl` processes each top-level `xs:element` and `xs:complexType` DOM node through a chain of `PipelineStep<Element, Partial<XSDElement>>` steps:
-
-| Step | What it extracts |
-|---|---|
-| `ParseRootElementStep` | name, type, minOccurs/maxOccurs |
-| `ParseEnumerationStep` | `xs:enumeration` values |
-| `ParseAttributesStep` | `xs:attribute` definitions |
-| `ParseNestedElementsStep` | sequence / choice / all children |
-| `ParseRestrictionsStep` | `xs:restriction` constraints |
-| `ParseExtensionStep` | `xs:extension` base + merged content |
-
-Each step returns a `Partial<XSDElement>`. The `ElementAssembler` merges the array of partials into a single `XSDElement`. After assembly, `ModularTypeReferenceResolver` walks the element tree and resolves `type="..."` references against the global types map.
-
-### Resolver subsystem (`src/lib/xsd/resolvers/modules/`)
-
-Each module implements one interface from `interfaces.ts`:
-
-- `TypeRegistry` → `ITypeRegistry` – looks up global types by name/namespace  
-- `ResolutionCache` → `IResolutionCache` – memoises resolved types  
-- `TypeResolver` → `ITypeResolver` – resolves a plain `type` reference  
-- `TypeExtender` → `ITypeExtender` – merges `xs:extension` base properties  
-- `TypeRestrictor` → `ITypeRestrictor` – applies `xs:restriction` constraints  
-- `PropertyMerger` → `IPropertyMerger` – merges attribute/child collections  
-- `ElementResolver` → `IElementResolver` – orchestrates the above for one element  
-
-### Validation pipeline (`src/lib/validator/`)
-
-`ValidatorImpl` holds two pipelines built from function-based steps:
-
-- **NodeValidationPipeline** – per XML node: `validateAbstract` → `validateType` → `validateAttributes` → `validateConstraints` → `validateRequiredChildren`  
-- **GlobalValidationPipeline** – per element group: `validateOccurrence`
-
-Validation is recursive: after running both pipelines on a node, `ValidatorImpl.validateNode` recurses into child elements that are present in the document.
-
-## Key Conventions
+Skipping the fallback causes silent failures on valid XSD documents. See `ParseExtensionStep` for the canonical example.
 
 ### Path alias
-`@lib/*` maps to `src/lib/*`. Use it for all cross-module imports. The alias is configured in both `tsconfig.json` and `jest.config.ts` (`moduleNameMapper`).
 
-### Test placement
-Test files live next to the source file they test: `foo.ts` / `foo.test.ts`. Test environment is `jest-environment-jsdom`.
+Use `@lib/*` for all imports within `src/`. It maps to `src/lib/*` and is configured in both `tsconfig.json` and `jest.config.ts`. Never use deep relative paths like `../../../lib/types/xsd`.
 
-### Type definitions
-All shared interfaces and types live in `src/lib/types/` (`xsd.ts`, `xml.ts`, `validation.ts`). Don't scatter type definitions into implementation files.
+### Type definitions belong in `src/lib/types/`
 
-### Pipeline steps return partials
-XSD pipeline steps return `Partial<XSDElement>`, not a full element. Merging is done centrally by `ElementAssembler`. Each step should only populate the fields it is responsible for.
+`xsd.ts`, `xml.ts`, and `validation.ts` are the only places shared interfaces and types live. Do not define types inline in implementation files or duplicate them.
 
-### Interface-first resolver modules
-Every resolver module in `src/lib/xsd/resolvers/modules/` implements a named interface from `interfaces.ts`. New resolver modules should follow this pattern.
+### XSD pipeline steps return partials — not full elements
 
-### DOM handling
-`@xmldom/xmldom` is the only runtime dependency. When querying XSD nodes, always try `getElementsByTagNameNS(XSD_NAMESPACE, localName)` first and fall back to `getElementsByTagName("xs:localName")` for environments where namespace resolution may differ (see `ParseExtensionStep` for the established pattern).
+Each `PipelineStep` must only populate the fields it owns. `ElementAssembler.mergePartialElements` does a shallow merge of all step results using `Object.assign`. If your step returns a full object with default values, it will silently overwrite fields set by other steps.
+
+### Resolver modules are interface-backed
+
+Every module in `src/lib/xsd/resolvers/modules/` implements a named interface from `interfaces.ts`. When adding a new resolver module, define its interface in `interfaces.ts` first, then implement it. This keeps the orchestrator (`ModularTypeReferenceResolver`) decoupled from concrete implementations.
