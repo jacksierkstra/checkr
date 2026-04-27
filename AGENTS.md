@@ -2,6 +2,8 @@
 
 Checkr is a TypeScript library that validates XML documents against XSD schemas. It targets both Node.js and browser environments and has `@xmldom/xmldom` as its only runtime dependency.
 
+The public API returns `ValidationResult: { valid: boolean; errors: string[] }`. This is the only output contract — errors are always strings, never thrown exceptions.
+
 ## Commands
 
 ```sh
@@ -12,8 +14,6 @@ npm run clean                                    # delete dist/
 npx jest src/lib/xsd/parser.test.ts             # single test file
 npx jest --testNamePattern="validates type"     # tests matching a name pattern
 ```
-
-**Use `tspc`, not `tsc`, for builds.** The project uses `ts-patch` with the `typescript-transform-paths` plugin to rewrite `@lib/*` path aliases in emitted `.js` and `.d.ts` files. Running plain `tsc` will produce broken output.
 
 ## Out-of-scope XSD features — do not implement
 
@@ -26,7 +26,7 @@ The following XSD features are explicitly deferred. Do not implement them unless
 
 Attempting partial support for any of these will silently produce wrong validation results.
 
-## Architecture decisions (settled — do not revisit)
+## Architecture overview
 
 The library is split into three responsibilities wired together in `Checkr`:
 
@@ -34,11 +34,17 @@ The library is split into three responsibilities wired together in `Checkr`:
 2. **`XSDPipelineParserImpl`** — parses XSD strings into an `XSDSchema` object tree  
 3. **`ValidatorImpl`** — walks the XML DOM against the parsed schema and collects errors
 
-The split is intentional and stable. Do not merge these responsibilities.
+Do not merge these responsibilities.
 
 ### Error handling contract
 
-`ValidatorImpl.validate` **never throws**. All exceptions — including XML/XSD parse failures — are caught and returned as `{ valid: false, errors: ["Validation error: ..."] }`. Validation steps must return `string[]` (empty = no errors). Do not throw from any validation step, pipeline, or resolver. Do not add retry logic or Promise rejection handling around the public `validate` method.
+`ValidatorImpl.validate` **never throws**. All exceptions — including XML/XSD parse failures — are caught and returned as `{ valid: false, errors: ["Validation error: ..."] }`.
+
+Validation steps and resolvers must follow the same rule:
+- Return `string[]` (empty = no errors). Never throw.
+- If a step encounters an unexpected node type, a null reference, or a malformed attribute it cannot handle: return `[]` and skip it silently, or return a descriptive error string. Do not invent a separate error handling strategy.
+
+Do not add retry logic or Promise rejection handling around the public `validate` method.
 
 ### Test environment
 
@@ -58,10 +64,12 @@ Create a new class implementing `PipelineStep<Element, Partial<XSDElement>>`. Th
 If the new feature requires runtime validation, create a function matching `NodeValidationStep = (node: Element, schema: XSDElement) => string[]` or `GlobalValidationStep = (nodes: Element[], schema: XSDElement) => string[]`. Register node-level steps in `ValidatorImpl`'s `nodePipeline`, occurrence-style steps in `globalPipeline`.
 
 **4. Update the resolver if the feature involves type references**  
-If the new feature introduces a new form of type inheritance or reference, update the relevant module in `src/lib/xsd/resolvers/modules/` behind its existing interface, or add a new module + interface pair following the pattern in `interfaces.ts`.
+Use this rule to decide:
+- If the feature is a **new form of type inheritance** (e.g., `xs:union`): add a new module + interface pair in `src/lib/xsd/resolvers/modules/`, following the pattern in `interfaces.ts`.
+- If the feature **extends existing inheritance behaviour** (e.g., a new property on `xs:extension`): update the relevant existing module behind its existing interface.
 
 **5. Write a co-located test file**  
-Place `yourFeature.test.ts` next to `yourFeature.ts`. Use inline XML/XSD strings — no fixture files.
+Place `yourFeature.test.ts` next to `yourFeature.ts`. Use inline XML/XSD strings — no fixture files. Tests must be self-contained and avoid file I/O so the test suite runs identically in Node.js and browser environments.
 
 ## Critical conventions
 
@@ -90,7 +98,10 @@ Use `@lib/*` for all imports within `src/`. It maps to `src/lib/*` and is config
 
 ### XSD pipeline steps return partials — not full elements
 
-Each `PipelineStep` must only populate the fields it owns. `ElementAssembler.mergePartialElements` does a shallow merge of all step results using `Object.assign`. If your step returns a full object with default values, it will silently overwrite fields set by other steps.
+Each `PipelineStep` must only populate the fields it owns. `ElementAssembler.mergePartialElements` merges step results with a spread (`{ ...acc, ...partial }`). Two consequences:
+
+- **Scalar fields**: the last step to write a field wins. Do not set fields you don't own.
+- **Array fields** (`children`, `attributes`, `enumeration`, etc.): spread does a full replacement, not a merge. If two steps both return `children`, the second one will silently discard the first. Each array field must be owned by exactly one step.
 
 ### Resolver modules are interface-backed
 
