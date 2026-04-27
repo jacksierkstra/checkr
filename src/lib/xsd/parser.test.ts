@@ -10,30 +10,30 @@ describe("XSDParser", () => {
     parser = new XSDPipelineParserImpl(new XMLParserImpl());
   });
 
-  const parseAndExpect = async (xsd: string, expectations: (schema: XSDSchema) => void) => {
-    const schema = await parser.parse(xsd);
+  const parseAndExpect = (xsd: string, expectations: (schema: XSDSchema) => void) => {
+    const schema = parser.parse(xsd);
     expectations(schema);
   };
 
-  it("should parse the targetNamespace and handle empty schema", async () => {
+  it("should parse the targetNamespace and handle empty schema", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="http://example.com/schema">
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.targetNamespace).toBe("http://example.com/schema");
       expect(schema.elements).toHaveLength(0);
     });
   });
 
-  it("should extract global xs:element declarations", async () => {
+  it("should extract global xs:element declarations", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Person" type="xs:string"/>
         <xs:element name="Address" type="xs:string"/>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(2);
 
       const personElement = schema.elements.find((el) => el.name === "Person");
@@ -46,7 +46,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should extract attributes from elements", async () => {
+  it("should extract attributes from elements", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Item">
@@ -56,7 +56,7 @@ describe("XSDParser", () => {
         </xs:element>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(1);
 
       const itemElement = schema.elements.find((el) => el.name === "Item");
@@ -81,13 +81,13 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should parse minOccurs and maxOccurs correctly", async () => {
+  it("should parse minOccurs and maxOccurs correctly", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Product" minOccurs="1" maxOccurs="5"/>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(1);
 
       const productElement = schema.elements.find((el) => el.name === "Product");
@@ -97,13 +97,13 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle default minOccurs and maxOccurs", async () => {
+  it("should handle default minOccurs and maxOccurs", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Product"/>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(1);
 
       const productElement = schema.elements.find((el) => el.name === "Product");
@@ -113,7 +113,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should parse nested elements inside complex types", async () => {
+  it("should parse nested elements inside complex types", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Order">
@@ -125,7 +125,7 @@ describe("XSDParser", () => {
         </xs:element>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(1);
 
       const orderElement = schema.elements.find((el) => el.name === "Order");
@@ -139,7 +139,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle multiple nested elements", async () => {
+  it("should handle multiple nested elements", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Company">
@@ -152,7 +152,7 @@ describe("XSDParser", () => {
         </xs:element>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(1);
 
       const companyElement = schema.elements.find((el) => el.name === "Company");
@@ -169,18 +169,18 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle missing element names gracefully", async () => {
+  it("should handle missing element names gracefully", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element type="xs:string"/>
       </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(0);
     });
   });
 
-  it("should parse enumeration restrictions", async () => {
+  it("should parse enumeration restrictions", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Status">
@@ -194,13 +194,13 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const statusElement = schema.elements.find((el) => el.name === "Status");
       expect(statusElement?.enumeration).toEqual(["Pending", "Approved", "Rejected"]);
     });
   });
 
-  it("should parse pattern restrictions", async () => {
+  it("should parse pattern restrictions", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Code">
@@ -212,13 +212,13 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const codeElement = schema.elements.find((el) => el.name === "Code");
       expect(codeElement?.pattern).toBe("[A-Z]{3}[0-9]{2}");
     });
   });
 
-  it("should parse minLength and maxLength restrictions", async () => {
+  it("should parse minLength and maxLength restrictions", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Comment">
@@ -231,14 +231,14 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const commentElement = schema.elements.find((el) => el.name === "Comment");
       expect(commentElement?.minLength).toBe(10);
       expect(commentElement?.maxLength).toBe(100);
     });
   });
 
-  it("should parse all restrictions combined", async () => {
+  it("should parse all restrictions combined", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="ComplexString">
@@ -254,7 +254,7 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const complexStringElement = schema.elements.find((el) => el.name === "ComplexString");
       expect(complexStringElement?.enumeration).toEqual(["Value1", "Value2"]);
       expect(complexStringElement?.pattern).toBe("[A-Z]+");
@@ -263,7 +263,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle whitespace in attribute values", async () => {
+  it("should handle whitespace in attribute values", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Item">
@@ -271,7 +271,7 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const itemElement = schema.elements.find((el) => el.name === "Item");
       const attr1 = itemElement?.attributes?.find((attr) => attr.name === " attr1 ");
       expect(attr1?.type).toBe(" xs:integer ");
@@ -279,7 +279,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle whitespace in enumeration values", async () => {
+  it("should handle whitespace in enumeration values", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Status">
@@ -292,13 +292,13 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const statusElement = schema.elements.find((el) => el.name === "Status");
       expect(statusElement?.enumeration).toEqual([" Value 1 ", "Value 2"]);
     });
   });
 
-  it("should handle maxOccurs='unbounded' in nested elements", async () => {
+  it("should handle maxOccurs='unbounded' in nested elements", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Order">
@@ -310,14 +310,14 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const orderElement = schema.elements.find((el) => el.name === "Order");
       const itemElement = orderElement?.children?.find((el) => el.name === "Item");
       expect(itemElement?.maxOccurs).toEqual("unbounded");
     });
   });
 
-  it("should parse nested complex types", async () => {
+  it("should parse nested complex types", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Root">
@@ -335,7 +335,7 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const rootElement = schema.elements.find((el) => el.name === "Root");
       const nestedElement = rootElement?.children?.find((el) => el.name === "Nested");
       const innerElement = nestedElement?.children?.find((el) => el.name === "Inner");
@@ -343,7 +343,7 @@ describe("XSDParser", () => {
     });
   });
 
-  it("should handle empty complex types", async () => {
+  it("should handle empty complex types", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Empty">
@@ -351,14 +351,14 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const emptyElement = schema.elements.find((el) => el.name === "Empty");
       expect(emptyElement?.children).toHaveLength(0);
       expect(emptyElement?.attributes).toHaveLength(0);
     });
   });
 
-  it("should handle empty enumeration values", async () => {
+  it("should handle empty enumeration values", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name="Status">
@@ -372,36 +372,36 @@ describe("XSDParser", () => {
             </xs:element>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const statusElement = schema.elements.find((el) => el.name === "Status");
       expect(statusElement?.enumeration).toEqual(["Value1", "", "Value3"]);
     });
   });
 
-  it("should handle elements with namespaces", async () => {
+  it("should handle elements with namespaces", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:ex="http://example.com">
             <xs:element name="ex:Data"/>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       const dataElement = schema.elements.find((el) => el.name === "ex:Data");
       expect(dataElement).toBeDefined();
     });
   });
 
-  it("should handle elements with empty names", async () => {
+  it("should handle elements with empty names", () => {
     const xsd = `
         <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             <xs:element name=""/>
         </xs:schema>
     `;
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       expect(schema.elements).toHaveLength(0);
     });
   });
 
-  it("should correctly parse the BookForm complex type", async () => {
+  it("should correctly parse the BookForm complex type", () => {
     const xsd = `
       <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
                   targetNamespace="urn:books"
@@ -429,7 +429,7 @@ describe("XSDParser", () => {
       </xsd:schema>
     `;
 
-    await parseAndExpect(xsd, (schema) => {
+    parseAndExpect(xsd, (schema) => {
       // The global element is "books"
       const booksElement = schema.elements.find((el) => el.name === "books");
       expect(booksElement).toBeDefined();

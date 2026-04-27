@@ -17,7 +17,8 @@ import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 
 export interface Validator {
-  validate(xml: string, xsd: string): Promise<ValidationResult>;
+  validate(xml: string, xsd: string): ValidationResult;
+  validateAsync(xml: string, xsd: string): Promise<ValidationResult>;
 }
 
 export class ValidatorImpl implements Validator {
@@ -124,31 +125,28 @@ export class ValidatorImpl implements Validator {
     ];
   }
 
-  async validate(xml: string, xsd: string): Promise<ValidationResult> {
+  validate(xml: string, xsd: string): ValidationResult {
     try {
-      const schema: XSDSchema = await this.xsdParser.parse(xsd);
+      const schema: XSDSchema = this.xsdParser.parse(xsd);
       const xmlDoc = this.xmlParser.parse(xml);
 
-      // First check if all required root elements are present
       const rootElementErrors = validateRootElements(xmlDoc, schema);
-
-      // Then validate the elements that are present
       const elementErrors = this.validateElements(xmlDoc, schema.elements);
-
-      // Combine all errors
       const errors = [...rootElementErrors, ...elementErrors];
 
-      // Always report validation status correctly based on errors
       return {
         valid: errors.length === 0,
         errors,
       };
     } catch (error) {
-      // Handle any parsing errors or other exceptions
       return {
         valid: false,
         errors: [`Validation error: ${error instanceof Error ? error.message : String(error)}`],
       };
     }
+  }
+
+  validateAsync(xml: string, xsd: string): Promise<ValidationResult> {
+    return Promise.resolve(this.validate(xml, xsd));
   }
 }

@@ -15,7 +15,11 @@ export class Checkr {
     this.validator = new ValidatorImpl(this.xmlParser, this.xsdParser);
   }
 
-  public validate(xml: string, xsd: string): Promise<ValidationResult> {
+  public validate(xml: string, xsd: string): ValidationResult {
     return this.validator.validate(xml, xsd);
+  }
+
+  public validateAsync(xml: string, xsd: string): Promise<ValidationResult> {
+    return this.validator.validateAsync(xml, xsd);
   }
 }

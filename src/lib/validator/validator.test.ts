@@ -11,63 +11,63 @@ describe("Validator", () => {
     validator = new ValidatorImpl(xmlParser, xsdParser);
   });
 
-  it("should validate XML according to XSD schema - success case", async () => {
+  it("should validate XML according to XSD schema - success case", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Person" type="xs:string" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
     const xml = `<Person>John Doe</Person>`;
-    const result = await validator.validate(xml, xsd);
+    const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("should fail validation when required element is missing", async () => {
+  it("should fail validation when required element is missing", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Person" type="xs:string" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
     const xml = `<NotPerson>Jane Doe</NotPerson>`;
-    const result = await validator.validate(xml, xsd);
+    const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toMatch(/Person/);
   });
 
-  it("should validate xs:integer type correctly", async () => {
+  it("should validate xs:integer type correctly", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Age" type="xs:integer" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
     const xmlValid = `<Age>30</Age>`;
-    const resultValid = await validator.validate(xmlValid, xsd);
+    const resultValid = validator.validate(xmlValid, xsd);
     expect(resultValid.valid).toBe(true);
 
     const xmlInvalid = `<Age>thirty</Age>`;
-    const resultInvalid = await validator.validate(xmlInvalid, xsd);
+    const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
     expect(resultInvalid.errors[0]).toMatch(/must be an integer|not a valid integer/);
   });
 
-  it("should validate xs:date type correctly", async () => {
+  it("should validate xs:date type correctly", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="BirthDate" type="xs:date" minOccurs="1" maxOccurs="1"/>
       </xs:schema>
     `;
     const xmlValid = `<BirthDate>1990-05-20</BirthDate>`;
-    const resultValid = await validator.validate(xmlValid, xsd);
+    const resultValid = validator.validate(xmlValid, xsd);
     expect(resultValid.valid).toBe(true);
 
     const xmlInvalid = `<BirthDate>May 20, 1990</BirthDate>`;
-    const resultInvalid = await validator.validate(xmlInvalid, xsd);
+    const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
     expect(resultInvalid.errors[0]).toMatch(/must be a valid date/);
   });
 
-  it("should validate enumerated values correctly", async () => {
+  it("should validate enumerated values correctly", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Status" type="xs:string">
@@ -82,16 +82,16 @@ describe("Validator", () => {
       </xs:schema>
     `;
     const xmlValid = `<Status>Approved</Status>`;
-    const resultValid = await validator.validate(xmlValid, xsd);
+    const resultValid = validator.validate(xmlValid, xsd);
     expect(resultValid.valid).toBe(true);
 
     const xmlInvalid = `<Status>InvalidValue</Status>`;
-    const resultInvalid = await validator.validate(xmlInvalid, xsd);
+    const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
     expect(resultInvalid.errors[0]).toMatch(/must be one of/);
   });
 
-  it("should validate fixed attribute values", async () => {
+  it("should validate fixed attribute values", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Item">
@@ -100,12 +100,12 @@ describe("Validator", () => {
       </xs:schema>
     `;
     const xmlInvalid = `<Item category="books"/>`;
-    const resultInvalid = await validator.validate(xmlInvalid, xsd);
+    const resultInvalid = validator.validate(xmlInvalid, xsd);
     expect(resultInvalid.valid).toBe(false);
     expect(resultInvalid.errors[0]).toMatch(/must be fixed to 'electronics'/);
   });
 
-  it("should validate choice elements (Email only)", async () => {
+  it("should validate choice elements (Email only)", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="ContactInfo">
@@ -125,12 +125,12 @@ describe("Validator", () => {
         <Email>user@example.com</Email>
       </ContactInfo>
     `;
-    const result = await validator.validate(xml, xsd);
+    const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("should validate choice elements (Phone only)", async () => {
+  it("should validate choice elements (Phone only)", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="ContactInfo">
@@ -150,12 +150,12 @@ describe("Validator", () => {
         <Phone>123-456-7890</Phone>
       </ContactInfo>
     `;
-    const result = await validator.validate(xml, xsd);
+    const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
 
-  it("should fail when both choices are present", async () => {
+  it("should fail when both choices are present", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="ContactInfo">
@@ -176,12 +176,12 @@ describe("Validator", () => {
         <Phone>123-456-7890</Phone>
       </ContactInfo>
     `;
-    const result = await validator.validate(xml, xsd);
+    const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toMatch(/Choice error:/);
   });
 
-  it("should fail when no choices are present", async () => {
+  it("should fail when no choices are present", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="ContactInfo">
@@ -199,12 +199,20 @@ describe("Validator", () => {
     const xml = `
       <ContactInfo></ContactInfo>
     `;
-    const result = await validator.validate(xml, xsd);
+    const result = validator.validate(xml, xsd);
     expect(result.valid).toBe(false);
     expect(result.errors[0]).toMatch(/Choice error:/);
   });
 
-  it("should validate string pattern/length constraints successfully", async () => {
+  it("validateAsync returns a Promise resolving to the same result as validate", async () => {
+    const xsd = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="Person" type="xs:string" minOccurs="1" maxOccurs="1"/></xs:schema>`;
+    const xml = `<Person>John Doe</Person>`;
+    const syncResult = validator.validate(xml, xsd);
+    const asyncResult = await validator.validateAsync(xml, xsd);
+    expect(asyncResult).toEqual(syncResult);
+  });
+
+  it("should validate string pattern/length constraints successfully", () => {
     const xsd = `
       <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
         <xs:element name="Username">
@@ -220,12 +228,12 @@ describe("Validator", () => {
     `;
     // This meets pattern /^[A-Za-z0-9_]+$/ and length is 7
     const xmlValid = `<Username>abc_123</Username>`;
-    const resultValid = await validator.validate(xmlValid, xsd);
+    const resultValid = validator.validate(xmlValid, xsd);
     expect(resultValid.valid).toBe(true);
 
     // Pattern fail: has a dash
     const xmlPatternFail = `<Username>abc-123</Username>`;
-    const resultPatternFail = await validator.validate(xmlPatternFail, xsd);
+    const resultPatternFail = validator.validate(xmlPatternFail, xsd);
     expect(resultPatternFail.valid).toBe(false);
     expect(resultPatternFail.errors[0]).toMatch(
       'Element <Username> must match pattern "^[A-Za-z0-9_]+$", but found "abc-123".',
@@ -233,7 +241,7 @@ describe("Validator", () => {
 
     // minLength fail: only 2
     const xmlMinFail = `<Username>ab</Username>`;
-    const resultMinFail = await validator.validate(xmlMinFail, xsd);
+    const resultMinFail = validator.validate(xmlMinFail, xsd);
     expect(resultMinFail.valid).toBe(false);
     expect(resultMinFail.errors[0]).toMatch(
       /Element <Username> must have a minimum length of 3, but found length 2./,
@@ -241,7 +249,7 @@ describe("Validator", () => {
 
     // maxLength fail: length 9
     const xmlMaxFail = `<Username>abc_12345</Username>`;
-    const resultMaxFail = await validator.validate(xmlMaxFail, xsd);
+    const resultMaxFail = validator.validate(xmlMaxFail, xsd);
     expect(resultMaxFail.valid).toBe(false);
     expect(resultMaxFail.errors[0]).toMatch(
       /Element <Username> must have a maximum length of 8, but found length 9./,
