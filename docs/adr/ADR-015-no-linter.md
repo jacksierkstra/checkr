@@ -1,6 +1,6 @@
 # ADR-015: No linting or formatting toolchain
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-023](./ADR-023-eslint-prettier.md)
 
 ---
 

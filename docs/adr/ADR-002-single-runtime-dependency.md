@@ -1,6 +1,6 @@
 # ADR-002: Use `@xmldom/xmldom` as the sole runtime dependency
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-017](./ADR-017-native-domparser.md)
 
 ---
 

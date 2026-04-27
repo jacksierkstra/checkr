@@ -1,6 +1,6 @@
 # ADR-011: `validate()` returns a `Promise` despite a synchronous pipeline
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-019](./ADR-019-sync-and-async-api.md)
 
 ---
 

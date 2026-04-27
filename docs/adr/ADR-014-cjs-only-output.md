@@ -1,6 +1,6 @@
 # ADR-014: CommonJS-only module output
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-022](./ADR-022-esm-only-output.md)
 
 ---
 

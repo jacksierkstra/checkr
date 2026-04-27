@@ -1,6 +1,6 @@
 # ADR-007: Dual namespace lookup pattern for DOM queries
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-017](./ADR-017-native-domparser.md)
 
 ---
 

@@ -1,6 +1,6 @@
 # ADR-012: Error messages are plain strings — no error codes
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-020](./ADR-020-structured-validation-errors.md)
 
 ---
 

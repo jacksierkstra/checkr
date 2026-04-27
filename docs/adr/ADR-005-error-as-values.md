@@ -1,6 +1,6 @@
 # ADR-005: `validate()` never throws — errors as values
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-018](./ADR-018-throw-on-programmer-errors.md)
 
 ---
 

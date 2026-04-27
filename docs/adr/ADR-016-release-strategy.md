@@ -1,6 +1,6 @@
 # ADR-016: GitHub release tag drives version bump and npm publish
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-024](./ADR-024-conventional-commits-release-please.md)
 
 ---
 

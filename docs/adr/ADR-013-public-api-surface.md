@@ -1,6 +1,6 @@
 # ADR-013: Implementation classes are part of the public API
 
-**Status:** Accepted
+**Status:** Superseded by [ADR-021](./ADR-021-narrow-public-api.md)
 
 ---
 
