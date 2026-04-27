@@ -1,7 +1,6 @@
 import { NodeValidationStep } from "@lib/types/validation";
 import { XSDElement } from "@lib/types/xsd";
 import { NodeValidationPipelineImpl } from "@lib/validator/pipeline/node";
-import { Element } from "@xmldom/xmldom";
 
 describe("ValidationPipeline", () => {
   let pipeline: NodeValidationPipelineImpl;

@@ -1,6 +1,5 @@
 import { XSDElement } from "@lib/types/xsd";
 import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
-import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("validateAttributes", () => {
   let parser: DOMParser;

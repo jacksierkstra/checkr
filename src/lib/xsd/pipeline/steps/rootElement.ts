@@ -1,6 +1,5 @@
 import { XSDElement } from "@lib/types/xsd";
 import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
-import { Element } from "@xmldom/xmldom";
 
 export class ParseRootElementStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {

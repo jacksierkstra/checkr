@@ -10,8 +10,6 @@ import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
 import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
 import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
 import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
-import { Element } from "@xmldom/xmldom";
-
 export interface XSDParser {
   parse(xsd: string): Promise<XSDSchema>;
 }

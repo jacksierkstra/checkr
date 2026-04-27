@@ -1,6 +1,5 @@
 import { XMLDocument } from "@lib/types/xml";
 import { XMLParser } from "@lib/xml/parser";
-import { Element } from "@xmldom/xmldom";
 
 export class DocumentExtractor {
   private readonly elementNode = 1;

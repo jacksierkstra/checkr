@@ -1,5 +1,4 @@
 import { ParseNestedElementsStep } from "./nestedElement";
-import { DOMParser } from "@xmldom/xmldom";
 
 describe("ParseNestedElementsStep", () => {
   let step: ParseNestedElementsStep;

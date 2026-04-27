@@ -1,16 +1,17 @@
 import { XSDElement } from "@lib/types/xsd";
 import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
-import { Element } from "@xmldom/xmldom";
+
+const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
 export class ParseEnumerationStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {
-    const simpleType = el.getElementsByTagName("xs:simpleType")[0];
+    const simpleType = el.getElementsByTagNameNS(XSD_NAMESPACE, "simpleType")[0];
     if (!simpleType) return {};
 
-    const restriction = simpleType.getElementsByTagName("xs:restriction")[0];
+    const restriction = simpleType.getElementsByTagNameNS(XSD_NAMESPACE, "restriction")[0];
     if (!restriction) return {};
 
-    const enumNodes = restriction.getElementsByTagName("xs:enumeration");
+    const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
     const enumeration = Array.from(enumNodes).map(
       (enumNode) => enumNode.getAttribute("value") || "",
     );

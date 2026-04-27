@@ -1,19 +1,18 @@
 import { XSDElement, XSDRestriction } from "@lib/types/xsd";
 import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
-import { Element } from "@xmldom/xmldom";
+
+const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
 export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {
-    // Check for restrictions in simpleType
-    const simpleType = el.getElementsByTagName("xs:simpleType")[0];
+    const simpleType = el.getElementsByTagNameNS(XSD_NAMESPACE, "simpleType")[0];
     if (simpleType) {
       return this.parseSimpleTypeRestriction(simpleType);
     }
 
-    // Check for complexType restrictions
-    const complexType = el.getElementsByTagName("xs:complexType")[0];
+    const complexType = el.getElementsByTagNameNS(XSD_NAMESPACE, "complexType")[0];
     if (complexType) {
-      const restriction = complexType.getElementsByTagName("xs:restriction")[0];
+      const restriction = complexType.getElementsByTagNameNS(XSD_NAMESPACE, "restriction")[0];
       if (restriction) {
         return this.parseComplexTypeRestriction(restriction);
       }
@@ -23,29 +22,25 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
   }
 
   private parseSimpleTypeRestriction(simpleType: Element): Partial<XSDElement> {
-    const restriction = simpleType.getElementsByTagName("xs:restriction")[0];
+    const restriction = simpleType.getElementsByTagNameNS(XSD_NAMESPACE, "restriction")[0];
     if (!restriction) return {};
 
     const result: Partial<XSDElement> = {};
     const baseType = restriction.getAttribute("base");
 
-    // Handle direct type assignment for built-in types
     if (baseType && baseType.startsWith("xs:")) {
       result.type = baseType;
     } else if (baseType) {
-      // Handle user-defined type restriction
       const restrictionDef: XSDRestriction = {
         base: baseType,
       };
 
-      // Add restriction facets
       this.parseRestrictionFacets(restriction, restrictionDef);
 
       result.restriction = restrictionDef;
       return result;
     }
 
-    // Parse facets for built-in type restrictions
     const restrictionFacets = this.parseBasicRestrictionFacets(restriction);
     return { ...result, ...restrictionFacets };
   }
@@ -58,9 +53,6 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       base: baseType,
     };
 
-    // Complex restrictions can contain additional elements, attributes, etc.
-    // Parse and add them to the restriction definition
-
     return {
       restriction: restrictionDef,
     };
@@ -69,7 +61,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
   private parseBasicRestrictionFacets(restriction: Element): Partial<XSDElement> {
     const result: Partial<XSDElement> = {};
 
-    const enumNodes = restriction.getElementsByTagName("xs:enumeration");
+    const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
     const enumeration = Array.from(enumNodes).map(
       (enumNode) => enumNode.getAttribute("value") || "",
     );
@@ -77,7 +69,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       result.enumeration = enumeration;
     }
 
-    const patternEl = restriction.getElementsByTagName("xs:pattern")[0];
+    const patternEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "pattern")[0];
     if (patternEl) {
       const regex = patternEl.getAttribute("value");
       if (regex) {
@@ -85,7 +77,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    const minLenEl = restriction.getElementsByTagName("xs:minLength")[0];
+    const minLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minLength")[0];
     if (minLenEl) {
       const val = parseInt(minLenEl.getAttribute("value") || "", 10);
       if (!isNaN(val)) {
@@ -93,7 +85,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    const maxLenEl = restriction.getElementsByTagName("xs:maxLength")[0];
+    const maxLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "maxLength")[0];
     if (maxLenEl) {
       const val = parseInt(maxLenEl.getAttribute("value") || "", 10);
       if (!isNaN(val)) {
@@ -101,23 +93,20 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    // Add numeric constraints
     this.parseNumericConstraints(restriction, result);
 
     return result;
   }
 
   private parseRestrictionFacets(restriction: Element, restrictionDef: XSDRestriction): void {
-    // Add enumeration facets
-    const enumNodes = restriction.getElementsByTagName("xs:enumeration");
+    const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
     if (enumNodes.length > 0) {
       restrictionDef.enumeration = Array.from(enumNodes).map(
         (enumNode) => enumNode.getAttribute("value") || "",
       );
     }
 
-    // Add pattern facet
-    const patternEl = restriction.getElementsByTagName("xs:pattern")[0];
+    const patternEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "pattern")[0];
     if (patternEl) {
       const regex = patternEl.getAttribute("value");
       if (regex) {
@@ -125,8 +114,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    // Add length facets
-    const minLenEl = restriction.getElementsByTagName("xs:minLength")[0];
+    const minLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minLength")[0];
     if (minLenEl) {
       const val = parseInt(minLenEl.getAttribute("value") || "", 10);
       if (!isNaN(val)) {
@@ -134,7 +122,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    const maxLenEl = restriction.getElementsByTagName("xs:maxLength")[0];
+    const maxLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "maxLength")[0];
     if (maxLenEl) {
       const val = parseInt(maxLenEl.getAttribute("value") || "", 10);
       if (!isNaN(val)) {
@@ -142,21 +130,18 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    // Add numeric constraints
     this.parseNumericRestrictionConstraints(restriction, restrictionDef);
   }
 
   private parseNumericConstraints(_restriction: Element, _result: Partial<XSDElement>): void {
     // No direct numeric constraints on XSDElement yet
-    // This would need to be added to the XSDElement interface if needed
   }
 
   private parseNumericRestrictionConstraints(
     restriction: Element,
     restrictionDef: XSDRestriction,
   ): void {
-    // minInclusive
-    const minInclusiveEl = restriction.getElementsByTagName("xs:minInclusive")[0];
+    const minInclusiveEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minInclusive")[0];
     if (minInclusiveEl) {
       const val = parseFloat(minInclusiveEl.getAttribute("value") || "");
       if (!isNaN(val)) {
@@ -164,8 +149,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    // maxInclusive
-    const maxInclusiveEl = restriction.getElementsByTagName("xs:maxInclusive")[0];
+    const maxInclusiveEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "maxInclusive")[0];
     if (maxInclusiveEl) {
       const val = parseFloat(maxInclusiveEl.getAttribute("value") || "");
       if (!isNaN(val)) {
@@ -173,8 +157,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    // minExclusive
-    const minExclusiveEl = restriction.getElementsByTagName("xs:minExclusive")[0];
+    const minExclusiveEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minExclusive")[0];
     if (minExclusiveEl) {
       const val = parseFloat(minExclusiveEl.getAttribute("value") || "");
       if (!isNaN(val)) {
@@ -182,8 +165,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       }
     }
 
-    // maxExclusive
-    const maxExclusiveEl = restriction.getElementsByTagName("xs:maxExclusive")[0];
+    const maxExclusiveEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "maxExclusive")[0];
     if (maxExclusiveEl) {
       const val = parseFloat(maxExclusiveEl.getAttribute("value") || "");
       if (!isNaN(val)) {

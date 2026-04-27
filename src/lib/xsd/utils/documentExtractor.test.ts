@@ -1,6 +1,5 @@
 import { DocumentExtractor } from "./documentExtractor";
 import { XMLParser } from "@lib/xml/parser";
-import { DOMParser } from "@xmldom/xmldom";
 
 // Sample XSD string with two valid top-level nodes (an element and a complexType),
 // and one invalid node (otherElement) that should be filtered out.

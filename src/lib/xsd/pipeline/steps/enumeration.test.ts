@@ -1,5 +1,4 @@
 import { ParseEnumerationStep } from "./enumeration";
-import { DOMParser } from "@xmldom/xmldom";
 
 describe("ParseEnumerationStep", () => {
   let step: ParseEnumerationStep;

@@ -1,5 +1,4 @@
 import { ParseExtensionStep } from "./extension";
-import { DOMParser } from "@xmldom/xmldom";
 
 describe("ParseExtensionStep", () => {
   let parser: ParseExtensionStep;

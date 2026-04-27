@@ -1,6 +1,5 @@
 import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
 import { XSDElement } from "@lib/types/xsd";
-import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("validateConstraints step", () => {
   let parser: DOMParser;

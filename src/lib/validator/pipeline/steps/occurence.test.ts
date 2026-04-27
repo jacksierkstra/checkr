@@ -1,7 +1,5 @@
 import { XSDElement } from "@lib/types/xsd";
 import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
-import { DOMParser } from "@xmldom/xmldom";
-import { Element } from "@xmldom/xmldom";
 
 describe("validateOccurrence", () => {
   let parser: DOMParser;

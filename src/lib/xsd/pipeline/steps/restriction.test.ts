@@ -1,5 +1,4 @@
 import { ParseRestrictionsStep } from "./restriction";
-import { DOMParser } from "@xmldom/xmldom";
 
 describe("ParseRestrictionsStep", () => {
   let step: ParseRestrictionsStep;

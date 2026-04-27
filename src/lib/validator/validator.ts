@@ -15,7 +15,6 @@ import { validateAbstract } from "@lib/validator/pipeline/steps/abstract";
 import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
-import { Element } from "@xmldom/xmldom";
 
 export interface Validator {
   validate(xml: string, xsd: string): Promise<ValidationResult>;

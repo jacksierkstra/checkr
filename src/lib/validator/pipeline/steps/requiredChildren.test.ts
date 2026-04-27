@@ -1,6 +1,5 @@
 import { XSDElement } from "@lib/types/xsd";
 import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
-import { DOMParser } from "@xmldom/xmldom";
 
 describe("validateRequiredChildren", () => {
   const parser = new DOMParser();

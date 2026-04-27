@@ -1,5 +1,4 @@
 import { XSDElement } from "@lib/types/xsd";
-import { Element } from "@xmldom/xmldom";
 
 export type ValidationResult = {
   valid: boolean;

@@ -1,4 +1,3 @@
-import { DOMParser } from "@xmldom/xmldom";
 import { ParseAttributesStep } from "./attributes";
 
 describe("ParseAttributesStep", () => {

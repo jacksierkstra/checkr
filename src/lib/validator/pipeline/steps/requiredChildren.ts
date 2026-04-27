@@ -1,5 +1,4 @@
 import { NodeValidationStep } from "@lib/types/validation";
-import { Element } from "@xmldom/xmldom";
 
 export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElement) => {
   const errors: string[] = [];

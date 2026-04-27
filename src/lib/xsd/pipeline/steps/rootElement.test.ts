@@ -1,5 +1,4 @@
 import { ParseRootElementStep } from "./rootElement";
-import { DOMParser, Element } from "@xmldom/xmldom";
 
 describe("ParseRootElementStep", () => {
   let step: ParseRootElementStep;
