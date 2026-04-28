@@ -235,6 +235,40 @@ describe("validateType step", () => {
     });
   });
 
+  describe("xs:union validation", () => {
+    it("should pass when value matches first member type", () => {
+      const node = createElementWithText("Value", "42");
+      const schema: XSDElement = { name: "Value", unionMemberTypes: ["xs:integer", "xs:string"] };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should pass when value matches second member type", () => {
+      const node = createElementWithText("Value", "hello");
+      const schema: XSDElement = { name: "Value", unionMemberTypes: ["xs:integer", "xs:string"] };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should fail when value matches no member type", () => {
+      const node = createElementWithText("Value", "not-a-date");
+      const schema: XSDElement = {
+        name: "Value",
+        unionMemberTypes: ["xs:integer", "xs:date"],
+      };
+      const errors = validateType(node, schema);
+      expect(errors.length).toBe(1);
+      expect(errors[0].code).toBe("TYPE_MISMATCH");
+    });
+
+    it("should pass when value is valid for one of multiple numeric types", () => {
+      const node = createElementWithText("Num", "2023-01-01");
+      const schema: XSDElement = {
+        name: "Num",
+        unionMemberTypes: ["xs:integer", "xs:date"],
+      };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+  });
+
   it("should fail when xs:length constraint is violated", () => {
     const node = createElementWithText("Code", "AB");
     const schema: XSDElement = { name: "Code", type: "xs:string", length: 5 };

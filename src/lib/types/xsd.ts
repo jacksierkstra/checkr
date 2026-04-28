@@ -23,6 +23,7 @@ export interface XSDElement {
   abstract?: boolean;
   mixed?: boolean;
   listItemType?: string;
+  unionMemberTypes?: string[];
   // Numeric constraints that can be applied directly to elements
   minInclusive?: number;
   maxInclusive?: number;

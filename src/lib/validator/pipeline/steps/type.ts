@@ -9,7 +9,7 @@ export const validateType: NodeValidationStep = (node, schema) => {
   const text = node.textContent?.trim() || "";
 
   // Skip validation if no type is specified
-  if (!schema.type && !schema.listItemType) return errors;
+  if (!schema.type && !schema.listItemType && !schema.unionMemberTypes) return errors;
 
   // Handle xs:list validation — split text into tokens and validate each
   if (schema.listItemType) {
@@ -30,7 +30,25 @@ export const validateType: NodeValidationStep = (node, schema) => {
     return errors;
   }
 
-  // Skip remaining validation if no type is specified (listItemType handled above)
+  // Handle xs:union validation — value is valid if it matches any member type
+  if (schema.unionMemberTypes && schema.unionMemberTypes.length > 0) {
+    const valid = schema.unionMemberTypes.some((memberType) => {
+      const fakeSchema: XSDElement = { name: schema.name, type: memberType };
+      const fakeNode = node.ownerDocument!.createElement("__union__");
+      fakeNode.textContent = text;
+      return validateType(fakeNode as unknown as Element, fakeSchema).length === 0;
+    });
+    if (!valid) {
+      errors.push({
+        code: "TYPE_MISMATCH",
+        message: `Element <${schema.name}> value "${text}" does not match any of the union member types [${schema.unionMemberTypes.join(", ")}].`,
+        element: schema.name,
+      });
+    }
+    return errors;
+  }
+
+  // Skip remaining validation if no type is specified (listItemType and unionMemberTypes handled above)
   if (!schema.type) return errors;
 
   // Handle enumeration validation
