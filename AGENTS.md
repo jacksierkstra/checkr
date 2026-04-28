@@ -4,6 +4,21 @@ Checkr is a TypeScript library that validates XML documents against XSD schemas.
 
 The public API returns `ValidationResult: { valid: boolean; errors: ValidationError[] }`. Errors are structured objects with a stable `code` field, never plain strings. Parse errors (malformed XML/XSD) are always returned as `ValidationResult` values. Programmer errors inside pipeline steps are **re-thrown** so they surface as stack traces rather than silent `valid: false` results.
 
+## Source of Truth
+
+1. This file (`AGENTS.md`)
+2. `/docs` — ADRs, backlog, type-system guide
+3. Existing code
+
+When in doubt: check docs → read code → ask. Do **not** guess or invent behaviour.
+
+## Operating Mode
+
+- Use minimum necessary context — do **not** read entire files unless required
+- Load sections only when relevant to the task
+- Prefer applying known rules over exploring the codebase
+- Run the smallest useful check first; expand only on failure
+
 ## Commands
 
 ```sh
@@ -11,7 +26,7 @@ npm test                                         # full test suite + coverage
 npm run build                                    # compile → dist/ (use tspc, not tsc)
 npm run clean                                    # delete dist/
 
-npx jest src/lib/xsd/parser.test.ts             # single test file
+npx jest src/lib/xsd/parser.test.ts             # single test file — fastest feedback
 npx jest --testNamePattern="validates type"     # tests matching a name pattern
 
 npm run lint                                     # ESLint (must pass with 0 warnings)
@@ -19,6 +34,8 @@ npm run lint:fix                                 # auto-fix lint violations
 npm run format:check                             # Prettier check (CI gate)
 npm run format                                   # reformat all source files
 ```
+
+**Verification order:** run targeted file/pattern tests first. Only run `npm test` when touching shared logic or before committing. Inspect full output only on failure — a passing summary is enough.
 
 ## Commit messages
 
@@ -49,6 +66,17 @@ All known bugs and planned features are tracked in [`docs/backlog/README.md`](do
 2. **After completing** an item, update its `Status` to `done` in both files.
 3. **When you discover a new gap** (a bug or missing feature not already listed), create a new `docs/backlog/<id>.md` file using the template in `docs/backlog/README.md` and add a row to the index table.
 4. Keep the index and individual files **in sync** — status must be consistent between them.
+
+---
+
+## Before Coding — Required Checklist
+
+Before writing any code, confirm:
+
+- Correct module/file location identified
+- Feature is **not** in the out-of-scope list below
+- Error handling contract will be preserved (return `ValidationError[]`; don't swallow programmer errors)
+- Co-located tests will be added alongside the implementation
 
 ---
 
@@ -208,3 +236,17 @@ Every module in `src/lib/xsd/resolvers/modules/` implements a named interface fr
 | Use `console.warn` / `console.log` in pipeline steps | Return a `ValidationError` or `[]`; no side-effects |
 | Assert on exact `error.message` text in tests | Assert on `error.code` — messages are not a stable API |
 
+## Task Execution Pattern
+
+For every task:
+
+1. **Identify** — find the relevant rules in this file and the affected files in the codebase
+2. **Implement** — make the minimal change; do not touch unrelated code
+3. **Test** — add a co-located test file; run targeted tests first
+4. **Verify** — confirm lint passes, full suite is green before committing
+
+## Final Rule
+
+Do not increase complexity. Do not reduce correctness.
+
+If a change makes behaviour less predictable or harder to understand, it is wrong.
