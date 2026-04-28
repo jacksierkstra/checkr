@@ -201,30 +201,98 @@ describe("TypeRestrictor", () => {
       expect(resolved.maxOccurs).toBe("unbounded");
     });
 
-    it("should preserve the type from the base type", () => {
+    it("should use restriction children instead of base type children when restriction defines content model", () => {
       const mockResolver = new MockElementResolver((element) => {
-        if (element.name === "BaseType") {
+        if (element.name === "BaseAddress") {
           return {
             ...element,
-            type: "xsd:integer", // Base type has a type
+            children: [
+              { name: "Street", type: "xs:string", minOccurs: 0, maxOccurs: 1 },
+              { name: "City", type: "xs:string", minOccurs: 0, maxOccurs: 1 },
+              { name: "Country", type: "xs:string", minOccurs: 0, maxOccurs: 1 },
+            ],
           };
         }
         return element;
       });
 
-      const restrictor = new TypeRestrictor(registry, cache, mockResolver);
-
-      // Clear the cache first
-      cache.clear();
+      const schemaWithBase: XSDSchema = {
+        elements: [],
+        types: {
+          BaseAddress: {
+            name: "BaseAddress",
+            children: [
+              { name: "Street", type: "xs:string", minOccurs: 0, maxOccurs: 1 },
+              { name: "City", type: "xs:string", minOccurs: 0, maxOccurs: 1 },
+              { name: "Country", type: "xs:string", minOccurs: 0, maxOccurs: 1 },
+            ],
+          },
+        },
+      };
+      const reg = new TypeRegistry(schemaWithBase);
+      const cch = new ResolutionCache(reg);
+      const restrictor = new TypeRestrictor(reg, cch, mockResolver);
+      cch.clear();
 
       const element: XSDElement = {
-        name: "WithRestriction",
-        restriction: { base: "BaseType" },
+        name: "RestrictedAddress",
+        restriction: {
+          base: "BaseAddress",
+          children: [{ name: "Street", type: "xs:string", minOccurs: 1, maxOccurs: 1 }],
+        },
       };
 
       const resolved = restrictor.resolveRestriction(element);
 
-      expect(resolved.type).toBe("xsd:integer");
+      expect(resolved.children).toHaveLength(1);
+      expect(resolved.children![0].name).toBe("Street");
+      expect(resolved.children![0].minOccurs).toBe(1);
+    });
+
+    it("should use restriction attributes instead of base type attributes", () => {
+      const mockResolver = new MockElementResolver((element) => {
+        if (element.name === "ItemBase") {
+          return {
+            ...element,
+            attributes: [
+              { name: "id", type: "xs:string" },
+              { name: "obsolete", type: "xs:string" },
+            ],
+          };
+        }
+        return element;
+      });
+
+      const schemaWithBase: XSDSchema = {
+        elements: [],
+        types: {
+          ItemBase: {
+            name: "ItemBase",
+            attributes: [
+              { name: "id", type: "xs:string" },
+              { name: "obsolete", type: "xs:string" },
+            ],
+          },
+        },
+      };
+      const reg = new TypeRegistry(schemaWithBase);
+      const cch = new ResolutionCache(reg);
+      const restrictor = new TypeRestrictor(reg, cch, mockResolver);
+      cch.clear();
+
+      const element: XSDElement = {
+        name: "RestrictedItem",
+        restriction: {
+          base: "ItemBase",
+          attributes: [{ name: "id", type: "xs:string", use: "required" }],
+        },
+      };
+
+      const resolved = restrictor.resolveRestriction(element);
+
+      expect(resolved.attributes).toHaveLength(1);
+      expect(resolved.attributes![0].name).toBe("id");
+      expect(resolved.attributes![0].use).toBe("required");
     });
   });
 });

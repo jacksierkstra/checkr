@@ -337,4 +337,76 @@ describe("ParseRestrictionsStep", () => {
     expect(result.totalDigits).toBe(6);
     expect(result.fractionDigits).toBe(2);
   });
+
+  it("should parse xs:complexContent/xs:restriction with xs:sequence children", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="Address">
+          <xs:complexType>
+            <xs:complexContent>
+              <xs:restriction base="AddressType">
+                <xs:sequence>
+                  <xs:element name="Street" type="xs:string" minOccurs="1"/>
+                  <xs:element name="City" type="xs:string" minOccurs="0"/>
+                </xs:sequence>
+              </xs:restriction>
+            </xs:complexContent>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    const element = new DOMParser()
+      .parseFromString(xsd, "application/xml")
+      .documentElement?.getElementsByTagNameNS("http://www.w3.org/2001/XMLSchema", "element")[0];
+    const result = step.execute(element!);
+    expect(result.restriction).toBeDefined();
+    expect(result.restriction!.base).toBe("AddressType");
+    expect(result.restriction!.children).toHaveLength(2);
+    expect(result.restriction!.children![0].name).toBe("Street");
+    expect(result.restriction!.children![0].minOccurs).toBe(1);
+    expect(result.restriction!.children![1].name).toBe("City");
+    expect(result.restriction!.children![1].minOccurs).toBe(0);
+  });
+
+  it("should parse xs:complexContent/xs:restriction with xs:attribute declarations", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="Item">
+          <xs:complexType>
+            <xs:complexContent>
+              <xs:restriction base="ItemBase">
+                <xs:attribute name="id" type="xs:string" use="required"/>
+              </xs:restriction>
+            </xs:complexContent>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    const element = new DOMParser()
+      .parseFromString(xsd, "application/xml")
+      .documentElement?.getElementsByTagNameNS("http://www.w3.org/2001/XMLSchema", "element")[0];
+    const result = step.execute(element!);
+    expect(result.restriction!.attributes).toHaveLength(1);
+    expect(result.restriction!.attributes![0].name).toBe("id");
+    expect(result.restriction!.attributes![0].use).toBe("required");
+  });
+
+  it("should parse xs:whiteSpace facet inside simple restriction", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="Name">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:whiteSpace value="collapse"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:schema>
+    `;
+    const element = new DOMParser()
+      .parseFromString(xsd, "application/xml")
+      .documentElement?.getElementsByTagNameNS("http://www.w3.org/2001/XMLSchema", "element")[0];
+    const result = step.execute(element!);
+    expect(result.whiteSpace).toBe("collapse");
+  });
 });

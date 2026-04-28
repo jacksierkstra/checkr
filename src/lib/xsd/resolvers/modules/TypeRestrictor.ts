@@ -56,6 +56,17 @@ export class TypeRestrictor implements ITypeRestrictor {
     const result = { ...resolvedBaseElement };
     this.applyRestrictionFacets(result, element);
 
+    // If the restriction defines its own content model, it replaces the base's
+    if (element.restriction!.children !== undefined) {
+      result.children = element.restriction!.children;
+    }
+    if (element.restriction!.choices !== undefined) {
+      result.choices = element.restriction!.choices;
+    }
+    if (element.restriction!.attributes !== undefined) {
+      result.attributes = element.restriction!.attributes;
+    }
+
     return {
       ...result,
       name: element.name,
@@ -79,5 +90,6 @@ export class TypeRestrictor implements ITypeRestrictor {
     if (r.maxInclusive !== undefined) target.maxInclusive = r.maxInclusive;
     if (r.minExclusive !== undefined) target.minExclusive = r.minExclusive;
     if (r.maxExclusive !== undefined) target.maxExclusive = r.maxExclusive;
+    if (r.whiteSpace !== undefined) target.whiteSpace = r.whiteSpace;
   }
 }

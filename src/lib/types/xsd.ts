@@ -62,6 +62,12 @@ export interface XSDRestriction {
   totalDigits?: number;
   fractionDigits?: number;
   whiteSpace?: "preserve" | "replace" | "collapse";
+  /** Children parsed from xs:complexContent > xs:restriction content model */
+  children?: XSDElement[];
+  /** Choices parsed from xs:complexContent > xs:restriction content model */
+  choices?: XSDChoice[];
+  /** Attributes declared inside xs:complexContent > xs:restriction */
+  attributes?: XSDAttribute[];
 }
 export interface XSDAttribute {
   name: string;
