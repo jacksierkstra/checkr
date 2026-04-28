@@ -47,7 +47,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 
 | ID | Priority | Status | Title |
 |----|----------|--------|-------|
-| [feat-simpleContent](./feat-simpleContent.md) | 🟠 high | backlog | xs:simpleContent parsing and validation |
+| [feat-simpleContent](./feat-simpleContent.md) | 🟠 high | in-progress | xs:simpleContent parsing and validation |
 | [feat-unexpected-elements](./feat-unexpected-elements.md) | 🟠 high | backlog | Validate unexpected elements in XML |
 | [feat-unexpected-attributes](./feat-unexpected-attributes.md) | 🟠 high | backlog | Validate unexpected attributes in XML |
 | [feat-attribute-constraints](./feat-attribute-constraints.md) | 🟠 high | backlog | Full attribute constraint validation |
