@@ -32,6 +32,10 @@ export interface XSDElement {
   /** True when the element's schema includes xs:anyAttribute (wildcard attributes allowed) */
   allowAnyAttribute?: boolean;
   whiteSpace?: "preserve" | "replace" | "collapse";
+  /** Default value for this element (used when element is absent) */
+  default?: string;
+  /** Fixed value constraint — element content must equal this if present */
+  fixed?: string;
   // Numeric constraints that can be applied directly to elements
   minInclusive?: number;
   maxInclusive?: number;

@@ -28,6 +28,8 @@ export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElem
     );
 
     if (matchingChildren.length < minOccurs) {
+      // If the element is absent but has a default, treat it as present
+      if (matchingChildren.length === 0 && childDef.default !== undefined) continue;
       errors.push({
         code: "MISSING_REQUIRED_ELEMENT",
         message: `Element <${childDef.name}> is required inside <${schemaElement.name}> but ${matchingChildren.length === 0 ? "is missing" : "has insufficient occurrences"}.`,

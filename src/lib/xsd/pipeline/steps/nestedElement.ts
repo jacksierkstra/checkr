@@ -105,6 +105,12 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       xsdElement.type = typeAttr;
     }
 
+    const defaultAttr = el.getAttribute("default");
+    if (defaultAttr !== null) xsdElement.default = defaultAttr;
+
+    const fixedAttr = el.getAttribute("fixed");
+    if (fixedAttr !== null) xsdElement.fixed = fixedAttr;
+
     const inlineComplexType = Array.from(el.childNodes)
       .filter((n) => this.isXsdElement(n as Element, "complexType"))
       .map((n) => n as Element)[0];
