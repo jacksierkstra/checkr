@@ -1,8 +1,8 @@
 # Checkr – Agent Instructions
 
-Checkr is a TypeScript library that validates XML documents against XSD schemas. It targets both Node.js and browser environments and has `@xmldom/xmldom` as its only runtime dependency.
+Checkr is a TypeScript library that validates XML documents against XSD schemas. It targets both Node.js 18+ and browser environments and has **zero runtime dependencies** — it uses the native `DOMParser` API available in Node.js 18+ and all modern browsers.
 
-The public API returns `ValidationResult: { valid: boolean; errors: string[] }`. This is the only output contract — errors are always strings, never thrown exceptions.
+The public API returns `ValidationResult: { valid: boolean; errors: ValidationError[] }`. Errors are structured objects with a stable `code` field, never plain strings. Parse errors (malformed XML/XSD) are always returned as `ValidationResult` values. Programmer errors inside pipeline steps are **re-thrown** so they surface as stack traces rather than silent `valid: false` results.
 
 ## Commands
 
@@ -13,6 +13,30 @@ npm run clean                                    # delete dist/
 
 npx jest src/lib/xsd/parser.test.ts             # single test file
 npx jest --testNamePattern="validates type"     # tests matching a name pattern
+
+npm run lint                                     # ESLint (must pass with 0 warnings)
+npm run lint:fix                                 # auto-fix lint violations
+npm run format:check                             # Prettier check (CI gate)
+npm run format                                   # reformat all source files
+```
+
+## Commit messages
+
+All commits must follow the **[Conventional Commits](https://www.conventionalcommits.org/)** format. CI blocks non-conforming messages via `commitlint`.
+
+```
+feat: add xs:sequence ordering validation
+fix: correct minOccurs default when attribute is absent
+chore: update dependencies
+docs: clarify dual-namespace lookup removal
+test: add coverage for xs:restriction pattern
+refactor: extract numeric facet logic into helper
+```
+
+Breaking changes require a `!` suffix or `BREAKING CHANGE:` footer:
+
+```
+feat!: replace string errors with structured ValidationError
 ```
 
 ## Backlog
@@ -43,25 +67,55 @@ Attempting partial support for any of these will silently produce wrong validati
 
 The library is split into three responsibilities wired together in `Checkr`:
 
-1. **`XMLParserImpl`** — parses raw XML strings into a `@xmldom/xmldom` DOM  
+1. **`XMLParserImpl`** — parses raw XML strings into a DOM via native `DOMParser`  
 2. **`XSDPipelineParserImpl`** — parses XSD strings into an `XSDSchema` object tree  
 3. **`ValidatorImpl`** — walks the XML DOM against the parsed schema and collects errors
 
 Do not merge these responsibilities.
 
+### Public API surface
+
+`src/index.ts` exports **only**:
+
+```ts
+export { Checkr } from "@lib/core/main";
+export type { ValidationResult, ValidationError, ValidationErrorCode } from "@lib/types/validation";
+```
+
+Implementation classes (`XMLParserImpl`, `XSDPipelineParserImpl`, `ValidatorImpl`) and their interfaces are **internal**. Never add a new export to `src/index.ts` without explicit architectural justification.
+
+### Module format
+
+The build output is **ESM-only** (`"type": "module"` in `package.json`). Do not add a `"require"` export condition or CJS output. The minimum supported Node.js version is **18**.
+
 ### Error handling contract
 
-`ValidatorImpl.validate` **never throws**. All exceptions — including XML/XSD parse failures — are caught and returned as `{ valid: false, errors: ["Validation error: ..."] }`.
+`ValidatorImpl.validate` splits errors into two categories:
+
+- **Parse errors** (malformed XML or XSD input) — caught and returned as `ValidationResult` with `code: "PARSE_ERROR"`. The caller never needs a `try/catch` for bad input.
+- **Programmer errors** (a `TypeError`, `RangeError`, or unexpected `null` inside a pipeline step or resolver) — **re-thrown**. These are bugs in the library. Swallowing them would hide them behind a silent `valid: false`.
 
 Validation steps and resolvers must follow the same rule:
-- Return `string[]` (empty = no errors). Never throw.
-- If a step encounters an unexpected node type, a null reference, or a malformed attribute it cannot handle: return `[]` and skip it silently, or return a descriptive error string. Do not invent a separate error handling strategy.
+- Return `ValidationError[]` (empty = no errors). Never throw.
+- If a step encounters an unexpected node type, a null reference, or a malformed attribute it cannot handle: return `[]` and skip it silently, or return a descriptive `ValidationError`. Do not invent a separate error handling strategy.
+
+A `ValidationError` has this shape (all fields except `code` and `message` are optional):
+
+```ts
+interface ValidationError {
+  code: ValidationErrorCode;  // stable, machine-readable — key on this in tests
+  message: string;            // human-readable English — NOT a stable API, may change
+  element?: string;           // local name of the XML element involved
+  expected?: unknown;         // schema expectation (type name, min/max, pattern, …)
+  actual?: unknown;           // value or count found in the document
+}
+```
 
 Do not add retry logic or Promise rejection handling around the public `validate` method.
 
 ### Test environment
 
-The test environment is `jest-environment-jsdom`. Do not change it. The library targets both Node.js and browsers, and tests must exercise the browser DOM path that `@xmldom/xmldom` exposes.
+The test environment is `jest-environment-jsdom`. Do not change it. The library targets both Node.js and browsers, and tests must exercise the browser `DOMParser` path that `jest-environment-jsdom` provides as a spec-compliant global.
 
 ## How to add support for a new XSD feature
 
@@ -74,7 +128,26 @@ Add any new properties to `XSDElement`, `XSDRestriction`, `XSDExtension`, or int
 Create a new class implementing `PipelineStep<Element, Partial<XSDElement>>`. The `execute` method receives a raw DOM `Element` and must return **only the fields it is responsible for** as a `Partial<XSDElement>`. Do not return a full object. Register it in `XSDPipelineParserImpl` by calling `.addStep(new YourStep())`.
 
 **3. Add a validation step if needed** (`src/lib/validator/pipeline/steps/`)  
-If the new feature requires runtime validation, create a function matching `NodeValidationStep = (node: Element, schema: XSDElement) => string[]` or `GlobalValidationStep = (nodes: Element[], schema: XSDElement) => string[]`. Register node-level steps in `ValidatorImpl`'s `nodePipeline`, occurrence-style steps in `globalPipeline`.
+If the new feature requires runtime validation, create a function matching `NodeValidationStep = (node: Element, schema: XSDElement) => ValidationError[]` or `GlobalValidationStep = (nodes: Element[], schema: XSDElement) => ValidationError[]`. Register node-level steps in `ValidatorImpl`'s `nodePipeline`, occurrence-style steps in `globalPipeline`.
+
+Each function must return `ValidationError[]` — never `string[]`, never `void`. Use a structured `code` from `ValidationErrorCode` and populate `element`, `expected`, and `actual` where applicable. Example:
+
+```ts
+import { NodeValidationStep, ValidationError } from "@lib/types/validation";
+
+export const validateMyFeature: NodeValidationStep = (node, schema) => {
+  const errors: ValidationError[] = [];
+  // ...
+  errors.push({
+    code: "TYPE_MISMATCH",
+    message: `Element <${schema.name}> must be X, but found "${node.textContent}".`,
+    element: schema.name,
+    expected: "X",
+    actual: node.textContent,
+  });
+  return errors;
+};
+```
 
 **4. Update the resolver if the feature involves type references**  
 Use this rule to decide:
@@ -86,20 +159,23 @@ Place `yourFeature.test.ts` next to `yourFeature.ts`. Use inline XML/XSD strings
 
 ## Critical conventions
 
-### DOM querying — always use the dual-lookup pattern
+### DOM querying — use `getElementsByTagNameNS` directly
 
-XSD documents may or may not declare the `xs:` namespace correctly depending on the source. Always query with namespace first, then fall back:
+The library uses the native `DOMParser` API, which handles XML namespaces correctly. Always query using the XSD namespace URI and the local tag name:
 
 ```ts
 const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
-let el = parent.getElementsByTagNameNS(XSD_NAMESPACE, "sequence")[0] as Element;
-if (!el) {
-    el = parent.getElementsByTagName("xs:sequence")[0] as Element;
-}
+const el = parent.getElementsByTagNameNS(XSD_NAMESPACE, "sequence")[0] as Element;
 ```
 
-Skipping the fallback causes silent failures on valid XSD documents. See `ParseExtensionStep` for the canonical example.
+Do **not** add a `getElementsByTagName("xs:sequence")` fallback — this was required by the old `@xmldom/xmldom` dependency but is no longer needed and can match unrelated elements. For checking a single element's identity, use a helper like `ParseExtensionStep.isXsdElement()` as the canonical pattern:
+
+```ts
+private isXsdElement(el: Element, name: string): boolean {
+  return el.localName === name && el.namespaceURI === this.XSD_NAMESPACE;
+}
+```
 
 ### Path alias
 
@@ -119,3 +195,16 @@ Each `PipelineStep` must only populate the fields it owns. `ElementAssembler.mer
 ### Resolver modules are interface-backed
 
 Every module in `src/lib/xsd/resolvers/modules/` implements a named interface from `interfaces.ts`. When adding a new resolver module, define its interface in `interfaces.ts` first, then implement it. This keeps the orchestrator (`ModularTypeReferenceResolver`) decoupled from concrete implementations.
+
+### Common mistakes — anti-patterns to avoid
+
+| ❌ Wrong | ✅ Right |
+|---|---|
+| Return `string[]` from a validation step | Return `ValidationError[]` with a `code` field |
+| `getElementsByTagName("xs:sequence")` lookup | `getElementsByTagNameNS(XSD_NAMESPACE, "sequence")` |
+| `import … from "@xmldom/xmldom"` | Use native DOM globals (`Element`, `Document`) — no import needed |
+| Catch all exceptions in `validate()` | Only catch parse errors; let programmer errors propagate |
+| Export implementation classes from `src/index.ts` | Export only `Checkr` and the public types |
+| Use `console.warn` / `console.log` in pipeline steps | Return a `ValidationError` or `[]`; no side-effects |
+| Assert on exact `error.message` text in tests | Assert on `error.code` — messages are not a stable API |
+

@@ -134,7 +134,10 @@ const xml = `
 `;
 
 const validator = new Checkr();
-const validation = await validator.validate(xml, xsd);
+const validation = validator.validate(xml, xsd);
+
+// Or, for async call chains:
+// const validation = await validator.validateAsync(xml, xsd);
 
 console.log(validation.valid); // true
 ```
