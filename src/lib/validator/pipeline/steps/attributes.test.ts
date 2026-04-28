@@ -135,4 +135,43 @@ describe("validateAttributes", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0].message).toMatch(/must be a boolean/);
   });
+
+  it("should treat absent optional attribute as present when schema provides a default", () => {
+    const element = createElement("Item");
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "status", type: "xs:string", default: "active" }],
+    };
+    expect(validateAttributes(element, schema)).toEqual([]);
+  });
+
+  it("should still require a required attribute even if a default is set", () => {
+    const element = createElement("Item");
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "id", type: "xs:string", use: "required", default: "auto" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.some((e) => e.code === "ATTRIBUTE_MISSING")).toBe(true);
+  });
+
+  it("should validate the default value against the declared type", () => {
+    const element = createElement("Item");
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "count", type: "xs:integer", default: "not-an-int" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.some((e) => e.code === "ATTRIBUTE_INVALID")).toBe(true);
+  });
+
+  it("should apply default value for fixed check when attribute is absent", () => {
+    const element = createElement("Item");
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "version", type: "xs:string", fixed: "1.0", default: "2.0" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.some((e) => e.code === "ATTRIBUTE_INVALID")).toBe(true);
+  });
 });

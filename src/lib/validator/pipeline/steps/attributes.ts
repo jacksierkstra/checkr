@@ -72,6 +72,12 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
       : node.getAttribute(attr.name);
     const attrErrors: ValidationError[] = [];
 
+    // Apply default value for absent optional attributes
+    const effectiveValue =
+      value === null && attr.use !== "required" && attr.default !== undefined
+        ? attr.default
+        : value;
+
     // Required attribute check (treat empty string as missing)
     if (attr.use === "required" && (!value || value.trim() === "")) {
       attrErrors.push({
@@ -82,17 +88,17 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
     }
 
     // Fixed value enforcement
-    if (attr.fixed !== undefined && value !== null && value !== attr.fixed) {
+    if (attr.fixed !== undefined && effectiveValue !== null && effectiveValue !== attr.fixed) {
       attrErrors.push({
         code: "ATTRIBUTE_INVALID",
-        message: `Attribute '${attr.name}' in element <${schema.name}> must be fixed to '${attr.fixed}', but found '${value}'.`,
+        message: `Attribute '${attr.name}' in element <${schema.name}> must be fixed to '${attr.fixed}', but found '${effectiveValue}'.`,
         element: schema.name,
       });
     }
 
     // Type validation for present, non-empty values
-    if (value !== null && value.trim() !== "") {
-      const typeError = validateAttrType(attr.name, schema.name, value, attr.type);
+    if (effectiveValue !== null && effectiveValue.trim() !== "") {
+      const typeError = validateAttrType(attr.name, schema.name, effectiveValue, attr.type);
       if (typeError) attrErrors.push(typeError);
     }
 
