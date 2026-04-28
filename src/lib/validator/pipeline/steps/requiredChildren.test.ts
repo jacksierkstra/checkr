@@ -69,4 +69,47 @@ describe("validateRequiredChildren", () => {
       "Element <Child2> is required inside <Parent> but is missing.",
     );
   });
+
+  it("should pass when a required child appears minOccurs times", () => {
+    const schema: XSDElement = {
+      name: "List",
+      children: [{ name: "Item", minOccurs: 2 }],
+    };
+    const xml = `<List><Item/><Item/></List>`;
+    const doc = parser.parseFromString(xml, "application/xml");
+    const errors = validateRequiredChildren(doc.documentElement!, schema);
+    expect(errors).toHaveLength(0);
+  });
+
+  it("should fail when a required child appears fewer than minOccurs times", () => {
+    const schema: XSDElement = {
+      name: "List",
+      children: [{ name: "Item", minOccurs: 3 }],
+    };
+    const xml = `<List><Item/><Item/></List>`;
+    const doc = parser.parseFromString(xml, "application/xml");
+    const errors = validateRequiredChildren(doc.documentElement!, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].message).toMatch(/insufficient occurrences/);
+  });
+
+  it("should default minOccurs to 1 when not specified", () => {
+    const schema: XSDElement = {
+      name: "Parent",
+      children: [{ name: "RequiredChild" }],
+    };
+    const xml = `<Parent/>`;
+    const doc = parser.parseFromString(xml, "application/xml");
+    const errors = validateRequiredChildren(doc.documentElement!, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("MISSING_REQUIRED_ELEMENT");
+  });
+
+  it("should return no errors when schema has no children", () => {
+    const schema: XSDElement = { name: "Leaf" };
+    const xml = `<Leaf/>`;
+    const doc = parser.parseFromString(xml, "application/xml");
+    const errors = validateRequiredChildren(doc.documentElement!, schema);
+    expect(errors).toEqual([]);
+  });
 });

@@ -58,50 +58,12 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
     };
   }
 
-  private parseBasicRestrictionFacets(restriction: Element): Partial<XSDElement> {
-    const result: Partial<XSDElement> = {};
+  private extractFacets(restriction: Element): Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength"> {
+    const facets: Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength"> = {};
 
-    const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
-    const enumeration = Array.from(enumNodes).map(
-      (enumNode) => enumNode.getAttribute("value") || "",
-    );
-    if (enumeration.length > 0) {
-      result.enumeration = enumeration;
-    }
-
-    const patternEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "pattern")[0];
-    if (patternEl) {
-      const regex = patternEl.getAttribute("value");
-      if (regex) {
-        result.pattern = regex;
-      }
-    }
-
-    const minLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minLength")[0];
-    if (minLenEl) {
-      const val = parseInt(minLenEl.getAttribute("value") || "", 10);
-      if (!isNaN(val)) {
-        result.minLength = val;
-      }
-    }
-
-    const maxLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "maxLength")[0];
-    if (maxLenEl) {
-      const val = parseInt(maxLenEl.getAttribute("value") || "", 10);
-      if (!isNaN(val)) {
-        result.maxLength = val;
-      }
-    }
-
-    this.parseNumericConstraints(restriction, result);
-
-    return result;
-  }
-
-  private parseRestrictionFacets(restriction: Element, restrictionDef: XSDRestriction): void {
     const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
     if (enumNodes.length > 0) {
-      restrictionDef.enumeration = Array.from(enumNodes).map(
+      facets.enumeration = Array.from(enumNodes).map(
         (enumNode) => enumNode.getAttribute("value") || "",
       );
     }
@@ -109,32 +71,31 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
     const patternEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "pattern")[0];
     if (patternEl) {
       const regex = patternEl.getAttribute("value");
-      if (regex) {
-        restrictionDef.pattern = regex;
-      }
+      if (regex) facets.pattern = regex;
     }
 
     const minLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minLength")[0];
     if (minLenEl) {
       const val = parseInt(minLenEl.getAttribute("value") || "", 10);
-      if (!isNaN(val)) {
-        restrictionDef.minLength = val;
-      }
+      if (!isNaN(val)) facets.minLength = val;
     }
 
     const maxLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "maxLength")[0];
     if (maxLenEl) {
       const val = parseInt(maxLenEl.getAttribute("value") || "", 10);
-      if (!isNaN(val)) {
-        restrictionDef.maxLength = val;
-      }
+      if (!isNaN(val)) facets.maxLength = val;
     }
 
-    this.parseNumericRestrictionConstraints(restriction, restrictionDef);
+    return facets;
   }
 
-  private parseNumericConstraints(_restriction: Element, _result: Partial<XSDElement>): void {
-    // No direct numeric constraints on XSDElement yet
+  private parseBasicRestrictionFacets(restriction: Element): Partial<XSDElement> {
+    return this.extractFacets(restriction);
+  }
+
+  private parseRestrictionFacets(restriction: Element, restrictionDef: XSDRestriction): void {
+    Object.assign(restrictionDef, this.extractFacets(restriction));
+    this.parseNumericRestrictionConstraints(restriction, restrictionDef);
   }
 
   private parseNumericRestrictionConstraints(

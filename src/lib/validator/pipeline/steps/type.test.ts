@@ -106,4 +106,102 @@ describe("validateType step", () => {
     expect(errors).toHaveLength(1);
     expect(errors[0].message).toMatch(/must be a valid date/);
   });
+
+  describe("numeric constraints", () => {
+    it("should pass when value satisfies minInclusive", () => {
+      const node = createElementWithText("Score", "5");
+      const schema: XSDElement = { name: "Score", type: "xs:integer", minInclusive: 5 };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should fail when value is below minInclusive", () => {
+      const node = createElementWithText("Score", "4");
+      const schema: XSDElement = { name: "Score", type: "xs:integer", minInclusive: 5 };
+      const errors = validateType(node, schema);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe("RANGE_VIOLATION");
+      expect(errors[0].message).toMatch(/greater than or equal to 5/);
+    });
+
+    it("should pass when value satisfies maxInclusive", () => {
+      const node = createElementWithText("Score", "10");
+      const schema: XSDElement = { name: "Score", type: "xs:integer", maxInclusive: 10 };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should fail when value exceeds maxInclusive", () => {
+      const node = createElementWithText("Score", "11");
+      const schema: XSDElement = { name: "Score", type: "xs:integer", maxInclusive: 10 };
+      const errors = validateType(node, schema);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe("RANGE_VIOLATION");
+      expect(errors[0].message).toMatch(/less than or equal to 10/);
+    });
+
+    it("should fail when value equals minExclusive boundary", () => {
+      const node = createElementWithText("Score", "0");
+      const schema: XSDElement = { name: "Score", type: "xs:integer", minExclusive: 0 };
+      const errors = validateType(node, schema);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe("RANGE_VIOLATION");
+      expect(errors[0].message).toMatch(/greater than 0/);
+    });
+
+    it("should fail when value equals maxExclusive boundary", () => {
+      const node = createElementWithText("Score", "100");
+      const schema: XSDElement = { name: "Score", type: "xs:integer", maxExclusive: 100 };
+      const errors = validateType(node, schema);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe("RANGE_VIOLATION");
+      expect(errors[0].message).toMatch(/less than 100/);
+    });
+
+    it("should accumulate multiple numeric constraint violations", () => {
+      const node = createElementWithText("Score", "-5");
+      const schema: XSDElement = {
+        name: "Score",
+        type: "xs:integer",
+        minInclusive: 0,
+        maxInclusive: 100,
+      };
+      const errors = validateType(node, schema);
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe("RANGE_VIOLATION");
+    });
+
+    it("should work with xs:decimal and minInclusive + maxExclusive together", () => {
+      const node = createElementWithText("Rate", "0.5");
+      const schema: XSDElement = {
+        name: "Rate",
+        type: "xs:decimal",
+        minInclusive: 0,
+        maxExclusive: 1,
+      };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should skip numeric constraints when the value fails type validation", () => {
+      // 'abc' fails xs:integer type check; numeric constraints should not add extra errors
+      const node = createElementWithText("Score", "abc");
+      const schema: XSDElement = {
+        name: "Score",
+        type: "xs:integer",
+        minInclusive: 0,
+        maxInclusive: 100,
+      };
+      const errors = validateType(node, schema);
+      // Only one type mismatch error, not additional range errors
+      expect(errors).toHaveLength(1);
+      expect(errors[0].code).toBe("TYPE_MISMATCH");
+    });
+  });
+
+  it("should surface an invalid regex pattern as an error", () => {
+    const node = createElementWithText("Code", "ABC");
+    const schema: XSDElement = { name: "Code", type: "xs:string", pattern: "[invalid(" };
+    const errors = validateType(node, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("PATTERN_MISMATCH");
+    expect(errors[0].message).toMatch(/invalid pattern/);
+  });
 });

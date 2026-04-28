@@ -33,26 +33,8 @@ export class TypeRestrictor implements ITypeRestrictor {
     if (!baseTypeDef) {
       // Base type not found, apply restriction facets directly
       const resultOnError = { ...element };
-
-      // Transfer restriction facets to element
-      if (element.restriction.enumeration)
-        resultOnError.enumeration = element.restriction.enumeration;
-      if (element.restriction.pattern !== undefined)
-        resultOnError.pattern = element.restriction.pattern;
-      if (element.restriction.minLength !== undefined)
-        resultOnError.minLength = element.restriction.minLength;
-      if (element.restriction.maxLength !== undefined)
-        resultOnError.maxLength = element.restriction.maxLength;
-      if (element.restriction.minInclusive !== undefined)
-        resultOnError.minInclusive = element.restriction.minInclusive;
-      if (element.restriction.maxInclusive !== undefined)
-        resultOnError.maxInclusive = element.restriction.maxInclusive;
-      if (element.restriction.minExclusive !== undefined)
-        resultOnError.minExclusive = element.restriction.minExclusive;
-      if (element.restriction.maxExclusive !== undefined)
-        resultOnError.maxExclusive = element.restriction.maxExclusive;
-
-      resultOnError.restriction = undefined; // Clear the restriction flag
+      this.applyRestrictionFacets(resultOnError, element);
+      resultOnError.restriction = undefined;
       return resultOnError;
     }
 
@@ -72,22 +54,7 @@ export class TypeRestrictor implements ITypeRestrictor {
 
     // Start with resolved base and apply restriction facets
     const result = { ...resolvedBaseElement };
-
-    // Override with restriction facets
-    if (element.restriction.enumeration) result.enumeration = element.restriction.enumeration;
-    if (element.restriction.pattern !== undefined) result.pattern = element.restriction.pattern;
-    if (element.restriction.minLength !== undefined)
-      result.minLength = element.restriction.minLength;
-    if (element.restriction.maxLength !== undefined)
-      result.maxLength = element.restriction.maxLength;
-    if (element.restriction.minInclusive !== undefined)
-      result.minInclusive = element.restriction.minInclusive;
-    if (element.restriction.maxInclusive !== undefined)
-      result.maxInclusive = element.restriction.maxInclusive;
-    if (element.restriction.minExclusive !== undefined)
-      result.minExclusive = element.restriction.minExclusive;
-    if (element.restriction.maxExclusive !== undefined)
-      result.maxExclusive = element.restriction.maxExclusive;
+    this.applyRestrictionFacets(result, element);
 
     return {
       ...result,
@@ -100,5 +67,17 @@ export class TypeRestrictor implements ITypeRestrictor {
       restriction: undefined,
       abstract: element.abstract !== undefined ? element.abstract : resolvedBaseElement.abstract,
     };
+  }
+
+  private applyRestrictionFacets(target: XSDElement, source: XSDElement): void {
+    const r = source.restriction!;
+    if (r.enumeration) target.enumeration = r.enumeration;
+    if (r.pattern !== undefined) target.pattern = r.pattern;
+    if (r.minLength !== undefined) target.minLength = r.minLength;
+    if (r.maxLength !== undefined) target.maxLength = r.maxLength;
+    if (r.minInclusive !== undefined) target.minInclusive = r.minInclusive;
+    if (r.maxInclusive !== undefined) target.maxInclusive = r.maxInclusive;
+    if (r.minExclusive !== undefined) target.minExclusive = r.minExclusive;
+    if (r.maxExclusive !== undefined) target.maxExclusive = r.maxExclusive;
   }
 }

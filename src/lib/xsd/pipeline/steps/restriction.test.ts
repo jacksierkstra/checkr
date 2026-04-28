@@ -196,4 +196,58 @@ describe("ParseRestrictionsStep", () => {
     const result = step.execute(element!);
     expect(result).toEqual({ type: "xs:string", enumeration: ["value 1", " value2 "] });
   });
+
+  it("should parse restriction with custom (non-xs:) base type and include facets in restriction object", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="test">
+                    <xs:simpleType>
+                        <xs:restriction base="MyBaseType">
+                            <xs:enumeration value="A" />
+                            <xs:enumeration value="B" />
+                            <xs:pattern value="[AB]" />
+                            <xs:minLength value="1" />
+                            <xs:maxLength value="1" />
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
+            </xs:schema>
+        `;
+    const element = new DOMParser()
+      .parseFromString(xsdElement, "text/xml")
+      .documentElement?.getElementsByTagName("xs:element")[0];
+    const result = step.execute(element!);
+    expect(result.restriction).toBeDefined();
+    expect(result.restriction!.base).toBe("MyBaseType");
+    expect(result.restriction!.enumeration).toEqual(["A", "B"]);
+    expect(result.restriction!.pattern).toBe("[AB]");
+    expect(result.restriction!.minLength).toBe(1);
+    expect(result.restriction!.maxLength).toBe(1);
+  });
+
+  it("should parse restriction with custom base type and numeric constraints", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="score">
+                    <xs:simpleType>
+                        <xs:restriction base="MyIntType">
+                            <xs:minInclusive value="0" />
+                            <xs:maxInclusive value="100" />
+                            <xs:minExclusive value="-1" />
+                            <xs:maxExclusive value="101" />
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
+            </xs:schema>
+        `;
+    const element = new DOMParser()
+      .parseFromString(xsdElement, "text/xml")
+      .documentElement?.getElementsByTagName("xs:element")[0];
+    const result = step.execute(element!);
+    expect(result.restriction).toBeDefined();
+    expect(result.restriction!.minInclusive).toBe(0);
+    expect(result.restriction!.maxInclusive).toBe(100);
+    expect(result.restriction!.minExclusive).toBe(-1);
+    expect(result.restriction!.maxExclusive).toBe(101);
+  });
 });
