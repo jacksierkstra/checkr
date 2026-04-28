@@ -61,4 +61,36 @@ describe("validateAttributes", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0].message).toMatch(/must be an integer/);
   });
+
+  it("should return no errors when schema has no attributes (open model)", () => {
+    const element = createElement("Item", { unknownAttr: "value" });
+    const schema: XSDElement = { name: "Item" };
+
+    expect(validateAttributes(element, schema)).toEqual([]);
+  });
+
+  it("should report ATTRIBUTE_INVALID for undeclared attributes", () => {
+    const element = createElement("Item", { id: "123", unknownAttr: "value" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "id", type: "xs:string" }],
+    };
+
+    const errors = validateAttributes(element, schema);
+    expect(
+      errors.some((e) => e.code === "ATTRIBUTE_INVALID" && e.message.includes("unknownAttr")),
+    ).toBe(true);
+  });
+
+  it("should not flag xmlns namespace declarations as unexpected", () => {
+    const xml = `<Item xmlns:ex="http://example.com" id="123"></Item>`;
+    const element = parser.parseFromString(xml, "application/xml").documentElement!;
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "id", type: "xs:string" }],
+    };
+
+    const errors = validateAttributes(element, schema);
+    expect(errors.filter((e) => e.message.includes("xmlns"))).toHaveLength(0);
+  });
 });
