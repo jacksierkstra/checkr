@@ -59,7 +59,7 @@ describe("validateAttributes", () => {
 
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].message).toMatch(/must be an integer/);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
   });
 
   it("should return no errors when schema has no attributes (open model)", () => {
@@ -102,7 +102,7 @@ describe("validateAttributes", () => {
     };
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].message).toMatch(/must be a decimal number/);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
   });
 
   it("should pass valid xs:decimal attribute", () => {
@@ -122,7 +122,7 @@ describe("validateAttributes", () => {
     };
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].message).toMatch(/must be a valid date/);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
   });
 
   it("should validate xs:boolean attribute type", () => {
@@ -133,7 +133,7 @@ describe("validateAttributes", () => {
     };
     const errors = validateAttributes(element, schema);
     expect(errors.length).toBeGreaterThan(0);
-    expect(errors[0].message).toMatch(/must be a boolean/);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
   });
 
   it("should treat absent optional attribute as present when schema provides a default", () => {
@@ -183,5 +183,56 @@ describe("validateAttributes", () => {
       allowAnyAttribute: true,
     };
     expect(validateAttributes(element, schema)).toEqual([]);
+  });
+
+  it("should validate xs:dateTime attribute type", () => {
+    const element = createElement("Item", { created: "not-a-datetime" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "created", type: "xs:dateTime" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
+  });
+
+  it("should pass valid xs:dateTime attribute", () => {
+    const element = createElement("Item", { created: "2024-01-15T10:30:00Z" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "created", type: "xs:dateTime" }],
+    };
+    expect(validateAttributes(element, schema)).toEqual([]);
+  });
+
+  it("should validate xs:positiveInteger attribute type", () => {
+    const element = createElement("Item", { count: "0" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "count", type: "xs:positiveInteger" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
+  });
+
+  it("should pass valid xs:NCName attribute", () => {
+    const element = createElement("Item", { ref: "validName" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "ref", type: "xs:NCName" }],
+    };
+    expect(validateAttributes(element, schema)).toEqual([]);
+  });
+
+  it("should reject invalid xs:NCName attribute", () => {
+    const element = createElement("Item", { ref: "1invalid" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "ref", type: "xs:NCName" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
   });
 });

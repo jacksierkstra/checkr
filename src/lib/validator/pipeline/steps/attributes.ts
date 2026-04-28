@@ -1,13 +1,10 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 import { XSDAttribute } from "@lib/types/xsd";
+import { isValidBuiltinType } from "@lib/validator/builtinTypeCheck";
 
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 
-/**
- * Validates an attribute value against a given XSD type.
- * Returns an error message string or null if valid.
- */
 function validateAttrType(
   attrName: string,
   elementName: string,
@@ -15,51 +12,12 @@ function validateAttrType(
   type: string | undefined,
 ): ValidationError | null {
   if (!type || !value.trim()) return null;
-
-  switch (type) {
-    case "xs:string":
-      return null; // any value is valid
-    case "xs:integer":
-      if (!/^-?\d+$/.test(value)) {
-        return {
-          code: "ATTRIBUTE_INVALID",
-          message: `Attribute '${attrName}' in element <${elementName}> must be an integer, but found '${value}'.`,
-          element: elementName,
-        };
-      }
-      return null;
-    case "xs:decimal":
-    case "xs:float":
-    case "xs:double":
-      if (!/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value)) {
-        return {
-          code: "ATTRIBUTE_INVALID",
-          message: `Attribute '${attrName}' in element <${elementName}> must be a decimal number, but found '${value}'.`,
-          element: elementName,
-        };
-      }
-      return null;
-    case "xs:boolean":
-      if (!["true", "false", "1", "0"].includes(value)) {
-        return {
-          code: "ATTRIBUTE_INVALID",
-          message: `Attribute '${attrName}' in element <${elementName}> must be a boolean (true/false/1/0), but found '${value}'.`,
-          element: elementName,
-        };
-      }
-      return null;
-    case "xs:date":
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-        return {
-          code: "ATTRIBUTE_INVALID",
-          message: `Attribute '${attrName}' in element <${elementName}> must be a valid date (YYYY-MM-DD), but found '${value}'.`,
-          element: elementName,
-        };
-      }
-      return null;
-    default:
-      return null; // unknown type — skip
-  }
+  if (isValidBuiltinType(value, type)) return null;
+  return {
+    code: "ATTRIBUTE_INVALID",
+    message: `Attribute '${attrName}' in element <${elementName}> has an invalid value '${value}' for type ${type}.`,
+    element: elementName,
+  };
 }
 
 export const validateAttributes: NodeValidationStep = (node, schema) => {
