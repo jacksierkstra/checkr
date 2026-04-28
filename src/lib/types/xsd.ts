@@ -17,6 +17,7 @@ export interface XSDElement {
   pattern?: string;
   minLength?: number;
   maxLength?: number;
+  length?: number;
   extension?: XSDExtension;
   restriction?: XSDRestriction;
   abstract?: boolean;
@@ -26,6 +27,8 @@ export interface XSDElement {
   maxInclusive?: number;
   minExclusive?: number;
   maxExclusive?: number;
+  totalDigits?: number;
+  fractionDigits?: number;
 }
 
 export interface XSDExtension {
@@ -41,10 +44,13 @@ export interface XSDRestriction {
   pattern?: string;
   minLength?: number;
   maxLength?: number;
+  length?: number;
   minInclusive?: number;
   maxInclusive?: number;
   minExclusive?: number;
   maxExclusive?: number;
+  totalDigits?: number;
+  fractionDigits?: number;
 }
 export interface XSDAttribute {
   name: string;

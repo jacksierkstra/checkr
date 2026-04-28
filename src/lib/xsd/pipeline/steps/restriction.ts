@@ -66,8 +66,11 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
 
   private extractFacets(
     restriction: Element,
-  ): Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength"> {
-    const facets: Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength"> = {};
+  ): Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength" | "length"> {
+    const facets: Pick<
+      XSDRestriction,
+      "enumeration" | "pattern" | "minLength" | "maxLength" | "length"
+    > = {};
 
     const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
     if (enumNodes.length > 0) {
@@ -94,6 +97,12 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       if (!isNaN(val)) facets.maxLength = val;
     }
 
+    const lenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "length")[0];
+    if (lenEl) {
+      const val = parseInt(lenEl.getAttribute("value") || "", 10);
+      if (!isNaN(val)) facets.length = val;
+    }
+
     return facets;
   }
 
@@ -103,10 +112,23 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
 
   private extractNumericFacets(
     restriction: Element,
-  ): Pick<XSDElement, "minInclusive" | "maxInclusive" | "minExclusive" | "maxExclusive"> {
+  ): Pick<
+    XSDElement,
+    | "minInclusive"
+    | "maxInclusive"
+    | "minExclusive"
+    | "maxExclusive"
+    | "totalDigits"
+    | "fractionDigits"
+  > {
     const facets: Pick<
       XSDElement,
-      "minInclusive" | "maxInclusive" | "minExclusive" | "maxExclusive"
+      | "minInclusive"
+      | "maxInclusive"
+      | "minExclusive"
+      | "maxExclusive"
+      | "totalDigits"
+      | "fractionDigits"
     > = {};
 
     const minInclusiveEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minInclusive")[0];
@@ -131,6 +153,18 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
     if (maxExclusiveEl) {
       const val = parseFloat(maxExclusiveEl.getAttribute("value") || "");
       if (!isNaN(val)) facets.maxExclusive = val;
+    }
+
+    const totalDigitsEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "totalDigits")[0];
+    if (totalDigitsEl) {
+      const val = parseInt(totalDigitsEl.getAttribute("value") || "", 10);
+      if (!isNaN(val)) facets.totalDigits = val;
+    }
+
+    const fractionDigitsEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "fractionDigits")[0];
+    if (fractionDigitsEl) {
+      const val = parseInt(fractionDigitsEl.getAttribute("value") || "", 10);
+      if (!isNaN(val)) facets.fractionDigits = val;
     }
 
     return facets;
@@ -174,6 +208,22 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       const val = parseFloat(maxExclusiveEl.getAttribute("value") || "");
       if (!isNaN(val)) {
         restrictionDef.maxExclusive = val;
+      }
+    }
+
+    const totalDigitsEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "totalDigits")[0];
+    if (totalDigitsEl) {
+      const val = parseInt(totalDigitsEl.getAttribute("value") || "", 10);
+      if (!isNaN(val)) {
+        restrictionDef.totalDigits = val;
+      }
+    }
+
+    const fractionDigitsEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "fractionDigits")[0];
+    if (fractionDigitsEl) {
+      const val = parseInt(fractionDigitsEl.getAttribute("value") || "", 10);
+      if (!isNaN(val)) {
+        restrictionDef.fractionDigits = val;
       }
     }
   }

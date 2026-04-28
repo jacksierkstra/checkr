@@ -204,4 +204,48 @@ describe("validateType step", () => {
     expect(errors[0].code).toBe("PATTERN_MISMATCH");
     expect(errors[0].message).toMatch(/invalid pattern/);
   });
+
+  it("should fail when xs:length constraint is violated", () => {
+    const node = createElementWithText("Code", "AB");
+    const schema: XSDElement = { name: "Code", type: "xs:string", length: 5 };
+    const errors = validateType(node, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("RANGE_VIOLATION");
+    expect(errors[0].message).toMatch(/exactly 5 characters/);
+  });
+
+  it("should pass when value length matches xs:length exactly", () => {
+    const node = createElementWithText("Code", "ABCDE");
+    const schema: XSDElement = { name: "Code", type: "xs:string", length: 5 };
+    expect(validateType(node, schema)).toEqual([]);
+  });
+
+  it("should fail when xs:totalDigits constraint is exceeded", () => {
+    const node = createElementWithText("Price", "1234.56");
+    const schema: XSDElement = { name: "Price", type: "xs:decimal", totalDigits: 5 };
+    const errors = validateType(node, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("RANGE_VIOLATION");
+    expect(errors[0].message).toMatch(/total digits/);
+  });
+
+  it("should fail when xs:fractionDigits constraint is exceeded", () => {
+    const node = createElementWithText("Price", "3.14159");
+    const schema: XSDElement = { name: "Price", type: "xs:decimal", fractionDigits: 2 };
+    const errors = validateType(node, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("RANGE_VIOLATION");
+    expect(errors[0].message).toMatch(/fraction digits/);
+  });
+
+  it("should pass valid decimal within totalDigits and fractionDigits constraints", () => {
+    const node = createElementWithText("Price", "123.45");
+    const schema: XSDElement = {
+      name: "Price",
+      type: "xs:decimal",
+      totalDigits: 6,
+      fractionDigits: 2,
+    };
+    expect(validateType(node, schema)).toEqual([]);
+  });
 });

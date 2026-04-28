@@ -59,6 +59,14 @@ export const validateType: NodeValidationStep = (node, schema) => {
     });
   }
 
+  if (schema.length !== undefined && text.length !== schema.length) {
+    errors.push({
+      code: "RANGE_VIOLATION",
+      message: `Element <${schema.name}> must have exactly ${schema.length} characters, but found length ${text.length}.`,
+      element: schema.name,
+    });
+  }
+
   // Basic type validation based on schema type
   switch (schema.type) {
     case "xs:string":
@@ -87,6 +95,7 @@ export const validateType: NodeValidationStep = (node, schema) => {
       } else {
         // Additional numeric validations if this is a number
         validateNumericConstraints(parseFloat(text), schema, errors);
+        validateDecimalPrecision(text, schema, errors);
       }
       break;
     case "xs:boolean":
@@ -152,6 +161,36 @@ function validateNumericConstraints(
     errors.push({
       code: "RANGE_VIOLATION",
       message: `Element <${schema.name}> must have a value less than ${schema.maxExclusive}, but found ${value}.`,
+      element: schema.name,
+    });
+  }
+}
+
+/**
+ * Helper function to validate decimal precision facets (totalDigits, fractionDigits).
+ */
+function validateDecimalPrecision(
+  text: string,
+  schema: XSDElement,
+  errors: ValidationError[],
+): void {
+  const stripped = text.startsWith("-") ? text.slice(1) : text;
+  const [intPart, fracPart = ""] = stripped.split(".");
+  const totalCount = intPart.length + fracPart.length;
+  const fracCount = fracPart.length;
+
+  if (schema.totalDigits !== undefined && totalCount > schema.totalDigits) {
+    errors.push({
+      code: "RANGE_VIOLATION",
+      message: `Element <${schema.name}> must have at most ${schema.totalDigits} total digits, but found ${totalCount}.`,
+      element: schema.name,
+    });
+  }
+
+  if (schema.fractionDigits !== undefined && fracCount > schema.fractionDigits) {
+    errors.push({
+      code: "RANGE_VIOLATION",
+      message: `Element <${schema.name}> must have at most ${schema.fractionDigits} fraction digits, but found ${fracCount}.`,
       element: schema.name,
     });
   }

@@ -52,7 +52,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-unexpected-attributes](./feat-unexpected-attributes.md) | 🟠 high | done | Validate unexpected attributes in XML |
 | [feat-attribute-constraints](./feat-attribute-constraints.md) | 🟠 high | done | Full attribute constraint validation |
 | [feat-sequence-order](./feat-sequence-order.md) | 🟠 high | done | Enforce xs:sequence child ordering |
-| [feat-attribute-defaults](./feat-attribute-defaults.md) | 🟡 medium | backlog | Apply default attribute values |
+| [feat-attribute-defaults](./feat-attribute-defaults.md) | 🟡 medium | done | Apply default attribute values |
 | [feat-length-facet](./feat-length-facet.md) | 🟡 medium | backlog | xs:length restriction facet |
 | [feat-total-fraction-digits](./feat-total-fraction-digits.md) | 🟡 medium | backlog | xs:totalDigits / xs:fractionDigits facets |
 | [feat-more-builtin-types](./feat-more-builtin-types.md) | 🟡 medium | backlog | Additional xs: built-in type checks |

@@ -295,4 +295,46 @@ describe("ParseRestrictionsStep", () => {
     expect(result.minExclusive).toBe(0);
     expect(result.maxExclusive).toBe(1000);
   });
+
+  it("should parse xs:length facet onto element", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="code">
+                    <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                            <xs:length value="5" />
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
+            </xs:schema>
+        `;
+    const element = new DOMParser()
+      .parseFromString(xsdElement, "text/xml")
+      .documentElement?.getElementsByTagName("xs:element")[0];
+    const result = step.execute(element!);
+    expect(result.type).toBe("xs:string");
+    expect(result.length).toBe(5);
+  });
+
+  it("should parse xs:totalDigits and xs:fractionDigits facets onto element", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="price">
+                    <xs:simpleType>
+                        <xs:restriction base="xs:decimal">
+                            <xs:totalDigits value="6" />
+                            <xs:fractionDigits value="2" />
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
+            </xs:schema>
+        `;
+    const element = new DOMParser()
+      .parseFromString(xsdElement, "text/xml")
+      .documentElement?.getElementsByTagName("xs:element")[0];
+    const result = step.execute(element!);
+    expect(result.type).toBe("xs:decimal");
+    expect(result.totalDigits).toBe(6);
+    expect(result.fractionDigits).toBe(2);
+  });
 });
