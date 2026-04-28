@@ -58,4 +58,4 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-more-builtin-types](./feat-more-builtin-types.md) | 🟡 medium | done | Additional xs: built-in type checks |
 | [feat-list-type](./feat-list-type.md) | 🟡 medium | done | xs:list simple type support |
 | [feat-union-type](./feat-union-type.md) | 🟡 medium | done | xs:union simple type support |
-| [feat-nillable](./feat-nillable.md) | 🟢 low | backlog | xs:nillable + xsi:nil support |
+| [feat-nillable](./feat-nillable.md) | 🟢 low | done | xs:nillable + xsi:nil support |
