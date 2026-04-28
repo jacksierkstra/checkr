@@ -205,6 +205,36 @@ describe("validateType step", () => {
     expect(errors[0].message).toMatch(/invalid pattern/);
   });
 
+  describe("xs:list validation", () => {
+    it("should pass valid list of integers", () => {
+      const node = createElementWithText("Scores", "1 2 3 42");
+      const schema: XSDElement = { name: "Scores", listItemType: "xs:integer" };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should fail when a list item fails its type", () => {
+      const node = createElementWithText("Scores", "1 abc 3");
+      const schema: XSDElement = { name: "Scores", listItemType: "xs:integer" };
+      const errors = validateType(node, schema);
+      expect(errors.length).toBe(1);
+      expect(errors[0].code).toBe("TYPE_MISMATCH");
+      expect(errors[0].message).toMatch(/abc/);
+    });
+
+    it("should pass an empty list", () => {
+      const node = createElementWithText("Scores", "");
+      const schema: XSDElement = { name: "Scores", listItemType: "xs:integer" };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should report multiple invalid list items", () => {
+      const node = createElementWithText("Tags", "valid1 1invalid 2alsoInvalid");
+      const schema: XSDElement = { name: "Tags", listItemType: "xs:NCName" };
+      const errors = validateType(node, schema);
+      expect(errors.length).toBe(2);
+    });
+  });
+
   it("should fail when xs:length constraint is violated", () => {
     const node = createElementWithText("Code", "AB");
     const schema: XSDElement = { name: "Code", type: "xs:string", length: 5 };

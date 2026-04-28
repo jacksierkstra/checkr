@@ -9,6 +9,28 @@ export const validateType: NodeValidationStep = (node, schema) => {
   const text = node.textContent?.trim() || "";
 
   // Skip validation if no type is specified
+  if (!schema.type && !schema.listItemType) return errors;
+
+  // Handle xs:list validation — split text into tokens and validate each
+  if (schema.listItemType) {
+    const tokens = text.trim() ? text.trim().split(/\s+/) : [];
+    const fakeSchema: XSDElement = { name: schema.name, type: schema.listItemType };
+    for (const token of tokens) {
+      const fakeNode = node.ownerDocument!.createElement("__token__");
+      fakeNode.textContent = token;
+      const tokenErrors = validateType(fakeNode as unknown as Element, fakeSchema);
+      if (tokenErrors.length > 0) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> list item '${token}' is invalid for type ${schema.listItemType}.`,
+          element: schema.name,
+        });
+      }
+    }
+    return errors;
+  }
+
+  // Skip remaining validation if no type is specified (listItemType handled above)
   if (!schema.type) return errors;
 
   // Handle enumeration validation

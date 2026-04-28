@@ -55,7 +55,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-attribute-defaults](./feat-attribute-defaults.md) | 🟡 medium | done | Apply default attribute values |
 | [feat-length-facet](./feat-length-facet.md) | 🟡 medium | done | xs:length restriction facet |
 | [feat-total-fraction-digits](./feat-total-fraction-digits.md) | 🟡 medium | done | xs:totalDigits / xs:fractionDigits facets |
-| [feat-more-builtin-types](./feat-more-builtin-types.md) | 🟡 medium | backlog | Additional xs: built-in type checks |
+| [feat-more-builtin-types](./feat-more-builtin-types.md) | 🟡 medium | done | Additional xs: built-in type checks |
 | [feat-list-type](./feat-list-type.md) | 🟡 medium | backlog | xs:list simple type support |
 | [feat-union-type](./feat-union-type.md) | 🟡 medium | backlog | xs:union simple type support |
 | [feat-nillable](./feat-nillable.md) | 🟢 low | backlog | xs:nillable + xsi:nil support |

@@ -9,6 +9,7 @@ import { ParseNestedElementsStep } from "@lib/xsd/pipeline/steps/nestedElement";
 import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
 import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
 import { ParseSimpleContentStep } from "@lib/xsd/pipeline/steps/simpleContent";
+import { ParseListStep } from "@lib/xsd/pipeline/steps/list";
 import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
 import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
 export interface XSDParser {
@@ -27,7 +28,8 @@ export class XSDPipelineParserImpl implements XSDParser {
       .addStep(new ParseNestedElementsStep())
       .addStep(new ParseRestrictionsStep())
       .addStep(new ParseExtensionStep())
-      .addStep(new ParseSimpleContentStep());
+      .addStep(new ParseSimpleContentStep())
+      .addStep(new ParseListStep());
     this.assembler = new ElementAssembler();
   }
 

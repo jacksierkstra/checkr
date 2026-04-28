@@ -22,6 +22,7 @@ export interface XSDElement {
   restriction?: XSDRestriction;
   abstract?: boolean;
   mixed?: boolean;
+  listItemType?: string;
   // Numeric constraints that can be applied directly to elements
   minInclusive?: number;
   maxInclusive?: number;
