@@ -13,6 +13,7 @@ import { validateRequiredChildren } from "@lib/validator/pipeline/steps/required
 import { validateType } from "@lib/validator/pipeline/steps/type";
 import { validateAbstract } from "@lib/validator/pipeline/steps/abstract";
 import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements";
+import { validateUnexpectedElements } from "@lib/validator/pipeline/steps/unexpectedElements";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 
@@ -35,7 +36,8 @@ export class ValidatorImpl implements Validator {
       .addStep(validateType)
       .addStep(validateAttributes)
       .addStep(validateConstraints)
-      .addStep(validateRequiredChildren);
+      .addStep(validateRequiredChildren)
+      .addStep(validateUnexpectedElements);
 
     // Global pipeline (occurrence checks, etc.)
     this.globalPipeline = new GlobalValidationPipelineImpl().addStep(validateOccurrence);
@@ -43,6 +45,26 @@ export class ValidatorImpl implements Validator {
 
   private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): ValidationError[] {
     const errors: ValidationError[] = [];
+
+    // Check for unexpected root-level elements
+    if (elements.length > 0) {
+      const declaredNames = new Set(elements.map((e) => e.name.toLowerCase()));
+      Array.from(xmlDoc.childNodes).forEach((child) => {
+        if (child.nodeType !== 1) return;
+        const name = (
+          (child as Element).localName ||
+          (child as Element).tagName ||
+          ""
+        ).toLowerCase();
+        if (name && !declaredNames.has(name)) {
+          errors.push({
+            code: "UNEXPECTED_ELEMENT",
+            message: `Root element <${name}> is not declared in the schema.`,
+            element: name,
+          });
+        }
+      });
+    }
 
     for (const schemaElement of elements) {
       // Only count direct children of the document root (not deep descendants).
