@@ -10,6 +10,7 @@ export type ValidationErrorCode =
   | "ATTRIBUTE_MISSING"
   | "ATTRIBUTE_INVALID"
   | "CHOICE_VIOLATION"
+  | "SEQUENCE_VIOLATION"
   | "ABSTRACT_ELEMENT"
   | "PARSE_ERROR";
 

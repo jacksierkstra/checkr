@@ -14,6 +14,7 @@ import { validateType } from "@lib/validator/pipeline/steps/type";
 import { validateAbstract } from "@lib/validator/pipeline/steps/abstract";
 import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements";
 import { validateUnexpectedElements } from "@lib/validator/pipeline/steps/unexpectedElements";
+import { validateSequenceOrder } from "@lib/validator/pipeline/steps/sequenceOrder";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
 
@@ -37,7 +38,8 @@ export class ValidatorImpl implements Validator {
       .addStep(validateAttributes)
       .addStep(validateConstraints)
       .addStep(validateRequiredChildren)
-      .addStep(validateUnexpectedElements);
+      .addStep(validateUnexpectedElements)
+      .addStep(validateSequenceOrder);
 
     // Global pipeline (occurrence checks, etc.)
     this.globalPipeline = new GlobalValidationPipelineImpl().addStep(validateOccurrence);
