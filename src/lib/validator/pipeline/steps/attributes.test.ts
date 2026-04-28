@@ -93,4 +93,46 @@ describe("validateAttributes", () => {
     const errors = validateAttributes(element, schema);
     expect(errors.filter((e) => e.message.includes("xmlns"))).toHaveLength(0);
   });
+
+  it("should validate xs:decimal attribute type", () => {
+    const element = createElement("Item", { price: "not-a-number" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "price", type: "xs:decimal" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].message).toMatch(/must be a decimal number/);
+  });
+
+  it("should pass valid xs:decimal attribute", () => {
+    const element = createElement("Item", { price: "3.14" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "price", type: "xs:decimal" }],
+    };
+    expect(validateAttributes(element, schema)).toEqual([]);
+  });
+
+  it("should validate xs:date attribute type", () => {
+    const element = createElement("Item", { created: "not-a-date" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "created", type: "xs:date" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].message).toMatch(/must be a valid date/);
+  });
+
+  it("should validate xs:boolean attribute type", () => {
+    const element = createElement("Item", { active: "yes" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "active", type: "xs:boolean" }],
+    };
+    const errors = validateAttributes(element, schema);
+    expect(errors.length).toBeGreaterThan(0);
+    expect(errors[0].message).toMatch(/must be a boolean/);
+  });
 });
