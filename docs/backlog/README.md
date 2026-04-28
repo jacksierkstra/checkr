@@ -65,7 +65,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-whitespace-facet](./feat-whitespace-facet.md) | 🟡 medium | backlog | xs:whiteSpace restriction facet |
 | [feat-wildcard-any](./feat-wildcard-any.md) | 🟡 medium | done | xs:any and xs:anyAttribute wildcard support |
 | [feat-element-ref](./feat-element-ref.md) | 🟡 medium | backlog | xs:element ref and xs:attribute ref support |
-| [feat-missing-builtin-types](./feat-missing-builtin-types.md) | 🟡 medium | backlog | Missing xs: built-in type checks (binary, date-partial, misc) |
+| [feat-missing-builtin-types](./feat-missing-builtin-types.md) | 🟡 medium | done | Missing xs: built-in type checks (binary, date-partial, misc) |
 | [feat-element-default-fixed](./feat-element-default-fixed.md) | 🟢 low | backlog | xs:default and xs:fixed on xs:element |
 | [feat-mixed-content](./feat-mixed-content.md) | 🟢 low | backlog | Validate xs:complexType mixed="true" content model |
 | [feat-substitution-group](./feat-substitution-group.md) | 🟢 low | backlog | xs:substitutionGroup support |

@@ -368,6 +368,107 @@ export const validateType: NodeValidationStep = (node, schema) => {
         });
       }
       break;
+    case "xs:Name":
+      if (!/^[a-zA-Z_:][\w.:-]*$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid XML Name, but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:language":
+      if (!/^[a-zA-Z]{1,8}(-[a-zA-Z0-9]{1,8})*$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid language tag (e.g. en, en-GB), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:NMTOKENS": {
+      const tokens = text.trim().split(/\s+/);
+      if (tokens.length === 0 || !tokens.every((t) => /^[\w.:-]+$/.test(t))) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a whitespace-separated list of NMTOKENs, but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:duration":
+      if (!/^-?P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$/.test(text) || text === "P" || text === "-P") {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid ISO 8601 duration (e.g. P1Y2M3DT4H), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:gYear":
+      if (!/^-?\d{4,}(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid gYear (e.g. 2024), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:gYearMonth":
+      if (!/^-?\d{4,}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid gYearMonth (e.g. 2024-01), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:gMonth":
+      if (!/^--\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid gMonth (e.g. --03), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:gDay":
+      if (!/^---\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid gDay (e.g. ---15), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:gMonthDay":
+      if (!/^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid gMonthDay (e.g. --03-15), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:hexBinary":
+      if (!/^([0-9A-Fa-f]{2})*$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid hexBinary (even-length hex string), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:base64Binary":
+      if (!/^[A-Za-z0-9+/\s]*={0,2}$/.test(text) || (text.replace(/\s/g, "").length % 4 !== 0)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be valid Base64-encoded binary, but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
     default:
       // For non-built-in types, we rely on type resolution to have already happened
       break;
