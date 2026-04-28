@@ -255,4 +255,61 @@ describe("Validator", () => {
       /Element <Username> must have a maximum length of 8, but found length 9./,
     );
   });
+
+  it("should count child occurrences per parent, not globally (fix-occurrence-per-parent)", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="root">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="a">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="item" type="xs:string" minOccurs="1" maxOccurs="1"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="b">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="item" type="xs:string" minOccurs="1" maxOccurs="1"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    // Each parent has exactly 1 <item> — should pass even though there are 2 total
+    const xmlPass = `<root><a><item>1</item></a><b><item>2</item></b></root>`;
+    const resultPass = validator.validate(xmlPass, xsd);
+    expect(resultPass.valid).toBe(true);
+    expect(resultPass.errors).toHaveLength(0);
+
+    // One parent has 2 <item> children — exceeds maxOccurs=1, should fail
+    const xmlFail = `<root><a><item>1</item><item>2</item></a><b><item>3</item></b></root>`;
+    const resultFail = validator.validate(xmlFail, xsd);
+    expect(resultFail.valid).toBe(false);
+    expect(resultFail.errors.some((e) => e.code === "OCCURRENCE_VIOLATION")).toBe(true);
+  });
+
+  it("should not over-count nested elements with same name as root (fix-occurrence-per-parent)", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="person" minOccurs="1" maxOccurs="1">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="name" type="xs:string" minOccurs="1" maxOccurs="1"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    // The <name> element appears once inside <person>; root occurrence should be 1
+    const xml = `<person><name>Alice</name></person>`;
+    const result = validator.validate(xml, xsd);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
 });

@@ -42,6 +42,7 @@ export class XSDPipelineParserImpl implements XSDParser {
     // Separate global elements and global complexTypes.
     const elementNodes = schemaNodes.filter((node) => node.localName === "element");
     const complexTypeNodes = schemaNodes.filter((node) => node.localName === "complexType");
+    const simpleTypeNodes = schemaNodes.filter((node) => node.localName === "simpleType");
 
     // Process global elements via your pipeline.
     const elementPartials = elementNodes.map((el) => this.pipeline.execute(el));
@@ -55,6 +56,15 @@ export class XSDPipelineParserImpl implements XSDParser {
     // Create a map keyed by name (if available)
     const typesMap: { [key: string]: XSDElement } = {};
     typesMerged
+      .filter((t): t is XSDElement => t.name !== undefined)
+      .forEach((typeDef) => {
+        typesMap[typeDef.name] = typeDef;
+      });
+
+    // Process global simpleTypes — pipeline resolves their restriction/facets.
+    const simpleTypePartials = simpleTypeNodes.map((el) => this.pipeline.execute(el));
+    const simpleTypesMerged = this.assembler.mergePartialElements(simpleTypePartials);
+    simpleTypesMerged
       .filter((t): t is XSDElement => t.name !== undefined)
       .forEach((typeDef) => {
         typesMap[typeDef.name] = typeDef;

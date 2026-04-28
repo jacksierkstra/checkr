@@ -12,7 +12,11 @@ describe("GlobalValidationPipelineImpl", () => {
   });
 
   it("runs a single step and returns its errors", () => {
-    const error: ValidationError = { code: "MISSING_REQUIRED_ELEMENT", message: "Missing", element: "Child" };
+    const error: ValidationError = {
+      code: "MISSING_REQUIRED_ELEMENT",
+      message: "Missing",
+      element: "Child",
+    };
     const step: GlobalValidationStep = () => [error];
     const pipeline = new GlobalValidationPipelineImpl();
     pipeline.addStep(step);

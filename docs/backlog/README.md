@@ -39,9 +39,9 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 
 | ID | Priority | Status | Title |
 |----|----------|--------|-------|
-| [fix-numeric-facets](./fix-numeric-facets.md) | 🔴 critical | backlog | Numeric facets dropped for xs: base restrictions |
-| [fix-occurrence-per-parent](./fix-occurrence-per-parent.md) | 🔴 critical | backlog | Occurrence counting is document-global, not per-parent |
-| [fix-global-simpletype](./fix-global-simpletype.md) | 🔴 critical | backlog | Global xs:simpleType nodes are silently discarded |
+| [fix-numeric-facets](./fix-numeric-facets.md) | 🔴 critical | done | Numeric facets dropped for xs: base restrictions |
+| [fix-occurrence-per-parent](./fix-occurrence-per-parent.md) | 🔴 critical | done | Occurrence counting is document-global, not per-parent |
+| [fix-global-simpletype](./fix-global-simpletype.md) | 🔴 critical | done | Global xs:simpleType nodes are silently discarded |
 
 ## Feature Tracker
 

@@ -14,7 +14,8 @@ export class DocumentExtractor {
   }
 
   /**
-   * Extracts top-level schema nodes (elements or complex types) from the document's root element.
+   * Extracts top-level schema nodes (elements, complex types, and simple types)
+   * from the document's root element.
    */
   extractTopLevelSchemaNodes(documentElement: Element | null): Element[] {
     if (!documentElement) {
@@ -27,7 +28,9 @@ export class DocumentExtractor {
       const el = node as Element;
       return (
         el.namespaceURI === xsdNamespace &&
-        (el.localName === "element" || el.localName === "complexType")
+        (el.localName === "element" ||
+          el.localName === "complexType" ||
+          el.localName === "simpleType")
       );
     }) as Element[];
   }

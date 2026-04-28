@@ -34,6 +34,13 @@ export class PropertyMerger implements IPropertyMerger {
     // Merge attributes with proper overriding
     result.attributes = this.mergeAttributes(typeDef.attributes, element.attributes);
 
+    // Propagate the underlying built-in type from a resolved simpleType definition.
+    // Without this, an element that references AgeType keeps type="AgeType" even
+    // after AgeType is resolved to xs:integer.
+    if (typeDef.type) {
+      result.type = typeDef.type;
+    }
+
     // Handle all other facets with proper precedence
     result.enumeration = element.enumeration || typeDef.enumeration;
     result.pattern = element.pattern !== undefined ? element.pattern : typeDef.pattern;

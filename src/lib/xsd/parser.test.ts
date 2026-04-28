@@ -453,4 +453,44 @@ describe("XSDParser", () => {
       ]);
     });
   });
+
+  it("should parse global xs:simpleType and store in schema.types (fix-global-simpletype)", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:simpleType name="AgeType">
+          <xs:restriction base="xs:integer">
+            <xs:minInclusive value="0"/>
+            <xs:maxInclusive value="120"/>
+          </xs:restriction>
+        </xs:simpleType>
+      </xs:schema>
+    `;
+    parseAndExpect(xsd, (schema) => {
+      expect(schema.types["AgeType"]).toBeDefined();
+      expect(schema.types["AgeType"].type).toBe("xs:integer");
+      expect(schema.types["AgeType"].minInclusive).toBe(0);
+      expect(schema.types["AgeType"].maxInclusive).toBe(120);
+    });
+  });
+
+  it("should resolve element type reference to global xs:simpleType (fix-global-simpletype)", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:simpleType name="AgeType">
+          <xs:restriction base="xs:integer">
+            <xs:minInclusive value="0"/>
+            <xs:maxInclusive value="120"/>
+          </xs:restriction>
+        </xs:simpleType>
+        <xs:element name="Age" type="AgeType"/>
+      </xs:schema>
+    `;
+    parseAndExpect(xsd, (schema) => {
+      const ageEl = schema.elements.find((el) => el.name === "Age");
+      expect(ageEl).toBeDefined();
+      expect(ageEl!.type).toBe("xs:integer");
+      expect(ageEl!.minInclusive).toBe(0);
+      expect(ageEl!.maxInclusive).toBe(120);
+    });
+  });
 });

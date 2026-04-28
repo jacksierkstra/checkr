@@ -45,11 +45,15 @@ export class ValidatorImpl implements Validator {
     const errors: ValidationError[] = [];
 
     for (const schemaElement of elements) {
-      // Find all nodes matching this element
-      const nodes = Array.from(
-        schemaElement.namespace
-          ? xmlDoc.getElementsByTagNameNS(schemaElement.namespace || null, schemaElement.name)
-          : xmlDoc.getElementsByTagName(schemaElement.name),
+      // Only count direct children of the document root (not deep descendants).
+      // getElementsByTagName would count every occurrence in the tree, producing
+      // false OCCURRENCE_VIOLATION errors when the same element name appears at
+      // multiple nesting levels.
+      const nodes = Array.from(xmlDoc.childNodes).filter(
+        (n): n is Element =>
+          n.nodeType === 1 &&
+          ((n as Element).localName === schemaElement.name ||
+            (n as Element).tagName === schemaElement.name),
       );
 
       // Global checks (e.g., occurrence constraints) for this element

@@ -250,4 +250,49 @@ describe("ParseRestrictionsStep", () => {
     expect(result.restriction!.minExclusive).toBe(-1);
     expect(result.restriction!.maxExclusive).toBe(101);
   });
+
+  it("should parse xs:integer restriction with minInclusive/maxInclusive onto element (bug fix)", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="age">
+                    <xs:simpleType>
+                        <xs:restriction base="xs:integer">
+                            <xs:minInclusive value="0" />
+                            <xs:maxInclusive value="120" />
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
+            </xs:schema>
+        `;
+    const element = new DOMParser()
+      .parseFromString(xsdElement, "text/xml")
+      .documentElement?.getElementsByTagName("xs:element")[0];
+    const result = step.execute(element!);
+    expect(result.type).toBe("xs:integer");
+    expect(result.minInclusive).toBe(0);
+    expect(result.maxInclusive).toBe(120);
+    expect(result.restriction).toBeUndefined();
+  });
+
+  it("should parse xs:decimal restriction with all numeric facets onto element", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:element name="price">
+                    <xs:simpleType>
+                        <xs:restriction base="xs:decimal">
+                            <xs:minExclusive value="0" />
+                            <xs:maxExclusive value="1000" />
+                        </xs:restriction>
+                    </xs:simpleType>
+                </xs:element>
+            </xs:schema>
+        `;
+    const element = new DOMParser()
+      .parseFromString(xsdElement, "text/xml")
+      .documentElement?.getElementsByTagName("xs:element")[0];
+    const result = step.execute(element!);
+    expect(result.type).toBe("xs:decimal");
+    expect(result.minExclusive).toBe(0);
+    expect(result.maxExclusive).toBe(1000);
+  });
 });
