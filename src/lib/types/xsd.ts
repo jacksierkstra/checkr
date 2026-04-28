@@ -25,6 +25,13 @@ export interface XSDElement {
   nillable?: boolean;
   listItemType?: string;
   unionMemberTypes?: string[];
+  /** True when this element was declared inside xs:all (order-independent) */
+  inAll?: boolean;
+  /** True when the element's content model includes xs:any (wildcard child elements allowed) */
+  allowAnyChild?: boolean;
+  /** True when the element's schema includes xs:anyAttribute (wildcard attributes allowed) */
+  allowAnyAttribute?: boolean;
+  whiteSpace?: "preserve" | "replace" | "collapse";
   // Numeric constraints that can be applied directly to elements
   minInclusive?: number;
   maxInclusive?: number;
@@ -54,6 +61,7 @@ export interface XSDRestriction {
   maxExclusive?: number;
   totalDigits?: number;
   fractionDigits?: number;
+  whiteSpace?: "preserve" | "replace" | "collapse";
 }
 export interface XSDAttribute {
   name: string;

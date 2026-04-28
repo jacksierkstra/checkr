@@ -7,8 +7,13 @@ export const validateSequenceOrder: NodeValidationStep = (
 ): ReturnType<NodeValidationStep> => {
   if (!schema.children || schema.children.length === 0) return [];
 
+  // Build index map only from sequence-ordered children (skip xs:all members)
   const schemaIndexMap = new Map<string, number>();
-  schema.children.forEach((child, i) => schemaIndexMap.set(child.name, i));
+  schema.children
+    .filter((child) => !child.inAll)
+    .forEach((child, i) => schemaIndexMap.set(child.name, i));
+
+  if (schemaIndexMap.size === 0) return [];
 
   const xmlChildren = Array.from(node.childNodes).filter(
     (n): n is Element => n.nodeType === 1,

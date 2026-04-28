@@ -174,4 +174,14 @@ describe("validateAttributes", () => {
     const errors = validateAttributes(element, schema);
     expect(errors.some((e) => e.code === "ATTRIBUTE_INVALID")).toBe(true);
   });
+
+  it("should allow any attribute when schema has allowAnyAttribute (xs:anyAttribute)", () => {
+    const element = createElement("Item", { id: "1", undeclared: "foo", extra: "bar" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "id", type: "xs:string" }],
+      allowAnyAttribute: true,
+    };
+    expect(validateAttributes(element, schema)).toEqual([]);
+  });
 });

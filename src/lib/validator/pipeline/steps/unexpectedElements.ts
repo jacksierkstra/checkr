@@ -10,6 +10,9 @@ export const validateUnexpectedElements: NodeValidationStep = (node, schema) => 
 
   if (!hasChildren && !hasChoices) return [];
 
+  // xs:any wildcard — all child elements are permitted
+  if (schema.allowAnyChild) return [];
+
   const declaredNames = new Set<string>();
   if (schema.children) {
     schema.children.forEach((c) => declaredNames.add(c.name.toLowerCase()));

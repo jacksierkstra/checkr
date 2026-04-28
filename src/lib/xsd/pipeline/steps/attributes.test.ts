@@ -131,4 +131,36 @@ describe("ParseAttributesStep", () => {
       attributes: [{ name: "", type: "xs:string", use: "required", fixed: undefined }],
     });
   });
+
+  it("should set allowAnyAttribute when xs:anyAttribute is present", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:complexType>
+          <xs:attribute name="id" type="xs:string" use="required"/>
+          <xs:anyAttribute/>
+        </xs:complexType>
+      </xs:schema>
+    `;
+    const element = new DOMParser()
+      .parseFromString(xsd, "text/xml")
+      ?.documentElement?.getElementsByTagName("xs:complexType")[0];
+    const result = step.execute(element!);
+    expect(result.allowAnyAttribute).toBe(true);
+    expect(result.attributes).toHaveLength(1);
+  });
+
+  it("should not set allowAnyAttribute when xs:anyAttribute is absent", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:complexType>
+          <xs:attribute name="id" type="xs:string"/>
+        </xs:complexType>
+      </xs:schema>
+    `;
+    const element = new DOMParser()
+      .parseFromString(xsd, "text/xml")
+      ?.documentElement?.getElementsByTagName("xs:complexType")[0];
+    const result = step.execute(element!);
+    expect(result.allowAnyAttribute).toBeUndefined();
+  });
 });

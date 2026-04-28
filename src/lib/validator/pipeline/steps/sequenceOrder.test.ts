@@ -52,4 +52,32 @@ describe("validateSequenceOrder", () => {
     };
     expect(validateSequenceOrder(makeElement(xml), schema)).toEqual([]);
   });
+
+  it("should allow xs:all children in any order", () => {
+    const xmlForward = `<Form><Name>Alice</Name><Age>30</Age></Form>`;
+    const xmlReverse = `<Form><Age>30</Age><Name>Alice</Name></Form>`;
+    const schema: XSDElement = {
+      name: "Form",
+      children: [
+        { name: "Name", inAll: true },
+        { name: "Age", inAll: true },
+      ],
+    };
+    expect(validateSequenceOrder(makeElement(xmlForward), schema)).toEqual([]);
+    expect(validateSequenceOrder(makeElement(xmlReverse), schema)).toEqual([]);
+  });
+
+  it("should still enforce order for xs:sequence children even when xs:all children present", () => {
+    const xml = `<Form><B>2</B><A>1</A></Form>`;
+    const schema: XSDElement = {
+      name: "Form",
+      children: [
+        { name: "A", inAll: false },
+        { name: "B", inAll: false },
+      ],
+    };
+    const errors = validateSequenceOrder(makeElement(xml), schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("SEQUENCE_VIOLATION");
+  });
 });

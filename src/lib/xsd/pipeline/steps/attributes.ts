@@ -13,6 +13,10 @@ export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDEle
       use: (attr.getAttribute("use") as "required" | "optional") || "optional",
       fixed: attr.getAttribute("fixed") || undefined,
     }));
-    return { attributes };
+
+    const anyAttr = el.getElementsByTagNameNS(XSD_NAMESPACE, "anyAttribute")[0];
+    const result: Partial<XSDElement> = { attributes };
+    if (anyAttr) result.allowAnyAttribute = true;
+    return result;
   }
 }

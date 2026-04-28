@@ -107,21 +107,23 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
 
   // Check for unexpected attributes (attributes in XML not declared in schema)
   const declaredNames = new Set(schema.attributes.map((a) => a.name.toLowerCase()));
-  Array.from(node.attributes).forEach((attr) => {
-    // Allow xmlns namespace declarations and xsi:* attributes
-    if (attr.namespaceURI === XMLNS_NAMESPACE) return;
-    if (attr.namespaceURI === XSI_NAMESPACE) return;
-    if (attr.name === "xmlns" || attr.name.startsWith("xmlns:")) return;
+  if (!schema.allowAnyAttribute) {
+    Array.from(node.attributes).forEach((attr) => {
+      // Allow xmlns namespace declarations and xsi:* attributes
+      if (attr.namespaceURI === XMLNS_NAMESPACE) return;
+      if (attr.namespaceURI === XSI_NAMESPACE) return;
+      if (attr.name === "xmlns" || attr.name.startsWith("xmlns:")) return;
 
-    const attrLocalName = attr.localName || attr.name;
-    if (!declaredNames.has(attrLocalName.toLowerCase())) {
-      errors.push({
-        code: "ATTRIBUTE_INVALID",
-        message: `Attribute '${attrLocalName}' in element <${schema.name}> is not declared in the schema.`,
-        element: schema.name,
-      });
-    }
-  });
+      const attrLocalName = attr.localName || attr.name;
+      if (!declaredNames.has(attrLocalName.toLowerCase())) {
+        errors.push({
+          code: "ATTRIBUTE_INVALID",
+          message: `Attribute '${attrLocalName}' in element <${schema.name}> is not declared in the schema.`,
+          element: schema.name,
+        });
+      }
+    });
+  }
 
   return errors;
 };

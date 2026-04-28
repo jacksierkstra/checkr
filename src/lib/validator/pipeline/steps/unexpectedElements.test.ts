@@ -58,4 +58,14 @@ describe("validateUnexpectedElements", () => {
     expect(errors).toHaveLength(2);
     expect(errors.map((e) => e.element)).toEqual(["foo", "bar"]);
   });
+
+  it("returns no errors when schema has allowAnyChild (xs:any)", () => {
+    const node = parseNode(`<root><anything>1</anything><other>2</other></root>`);
+    const schema: XSDElement = {
+      name: "root",
+      children: [{ name: "known" }],
+      allowAnyChild: true,
+    };
+    expect(validateUnexpectedElements(node, schema)).toEqual([]);
+  });
 });

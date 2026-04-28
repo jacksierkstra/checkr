@@ -67,6 +67,7 @@ export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElem
 
   private parseContentStructure(extension: Element): Partial<XSDElement> {
     const result: Partial<XSDElement> = { children: [], choices: [] };
+    let allowAnyChild = false;
 
     Array.from(extension.childNodes).forEach((node) => {
       if (node.nodeType !== 1) return;
@@ -82,10 +83,13 @@ export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElem
         }
       } else if (this.isXsdElement(child, "all")) {
         const elements = this.parseChildElements(child);
-        result.children?.push(...elements);
+        result.children?.push(...elements.map((e) => ({ ...e, inAll: true })));
+      } else if (this.isXsdElement(child, "any")) {
+        allowAnyChild = true;
       }
     });
 
+    if (allowAnyChild) result.allowAnyChild = true;
     return result;
   }
 

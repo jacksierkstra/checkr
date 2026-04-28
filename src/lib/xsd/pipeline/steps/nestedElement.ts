@@ -5,7 +5,7 @@ const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
 export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {
-    let result = { children: [] as XSDElement[], choices: [] as XSDChoice[] };
+    let result = { children: [] as XSDElement[], choices: [] as XSDChoice[], allowAnyChild: false };
 
     if (this.isXsdElement(el, "complexType")) {
       const res = this.parseContainer(el, false);
@@ -13,6 +13,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       if (res.choices.length > 0) {
         result.choices.push(...res.choices);
       }
+      if (res.allowAnyChild) result.allowAnyChild = true;
     } else {
       const complexTypes = Array.from(el.childNodes)
         .filter((node) => {
@@ -27,18 +28,22 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         if (res.choices.length > 0) {
           result.choices.push(...res.choices);
         }
+        if (res.allowAnyChild) result.allowAnyChild = true;
       });
     }
 
-    return result;
+    return result.allowAnyChild
+      ? { children: result.children, choices: result.choices, allowAnyChild: true }
+      : { children: result.children, choices: result.choices };
   }
 
   private parseContainer(
     el: Element,
     isInChoice: boolean = false,
-  ): { children: XSDElement[]; choices: XSDChoice[] } {
+  ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean } {
     let children: XSDElement[] = [];
     let choices: XSDChoice[] = [];
+    let allowAnyChild = false;
 
     Array.from(el.childNodes).forEach((node) => {
       if (node.nodeType !== 1) return;
@@ -53,20 +58,26 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         const res = this.parseContainer(child, false);
         children.push(...res.children);
         choices.push(...res.choices);
+        if (res.allowAnyChild) allowAnyChild = true;
       } else if (this.isXsdElement(child, "choice")) {
         const res = this.parseContainer(child, true);
         if (res.children.length > 0) {
           choices.push({ elements: res.children });
         }
         choices.push(...res.choices);
+        if (res.allowAnyChild) allowAnyChild = true;
       } else if (this.isXsdElement(child, "all")) {
         const res = this.parseContainer(child, false);
-        children.push(...res.children);
+        // Tag all children as order-independent
+        children.push(...res.children.map((c) => ({ ...c, inAll: true })));
         choices.push(...res.choices);
+        if (res.allowAnyChild) allowAnyChild = true;
+      } else if (this.isXsdElement(child, "any")) {
+        allowAnyChild = true;
       }
     });
 
-    return { children, choices };
+    return { children, choices, allowAnyChild };
   }
 
   private parseElement(el: Element, isInChoice: boolean = false): XSDElement | null {
