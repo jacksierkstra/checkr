@@ -99,4 +99,18 @@ describe("ParseRootElementStep", () => {
       maxOccurs: 1,
     });
   });
+
+  it("should parse nillable=true", () => {
+    const xsd = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="el" type="xs:string" nillable="true" /></xs:schema>`;
+    const element = new DOMParser().parseFromString(xsd, "text/xml").documentElement!
+      .firstChild as Element;
+    expect(step.execute(element).nillable).toBe(true);
+  });
+
+  it("should not set nillable when not declared", () => {
+    const xsd = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="el" type="xs:string" /></xs:schema>`;
+    const element = new DOMParser().parseFromString(xsd, "text/xml").documentElement!
+      .firstChild as Element;
+    expect(step.execute(element).nillable).toBeUndefined();
+  });
 });

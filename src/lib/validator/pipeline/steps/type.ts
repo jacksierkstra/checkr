@@ -1,12 +1,39 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 import { XSDElement } from "@lib/types/xsd";
 
+const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
+
 /**
  * Type validation step to enforce XSD-defined types and constraints.
  */
 export const validateType: NodeValidationStep = (node, schema) => {
   const errors: ValidationError[] = [];
   const text = node.textContent?.trim() || "";
+
+  // Handle xsi:nil — nil elements skip type/content validation
+  const isNil =
+    node.getAttributeNS(XSI_NAMESPACE, "nil") === "true" || node.getAttribute("xsi:nil") === "true";
+  if (isNil) {
+    if (!schema.nillable) {
+      return [
+        {
+          code: "NIL_NOT_ALLOWED",
+          message: `Element <${schema.name}> has xsi:nil="true" but is not declared nillable in the schema.`,
+          element: schema.name,
+        },
+      ];
+    }
+    if (text) {
+      return [
+        {
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> has xsi:nil="true" but contains text content.`,
+          element: schema.name,
+        },
+      ];
+    }
+    return [];
+  }
 
   // Skip validation if no type is specified
   if (!schema.type && !schema.listItemType && !schema.unionMemberTypes) return errors;

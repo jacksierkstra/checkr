@@ -371,4 +371,35 @@ describe("validateType step", () => {
       }
     });
   });
+
+  describe("xsi:nil support", () => {
+    function createNilElement(tag: string, nilValue: string): Element {
+      const xml = `<${tag} xsi:nil="${nilValue}" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"></${tag}>`;
+      return parser.parseFromString(xml, "application/xml").documentElement!;
+    }
+
+    it("should skip type validation when xsi:nil=true and element is nillable", () => {
+      const node = createNilElement("Age", "true");
+      const schema: XSDElement = { name: "Age", type: "xs:integer", nillable: true };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+
+    it("should emit NIL_NOT_ALLOWED when xsi:nil=true and element is not nillable", () => {
+      const node = createNilElement("Age", "true");
+      const schema: XSDElement = { name: "Age", type: "xs:integer" };
+      const errors = validateType(node, schema);
+      expect(errors.length).toBe(1);
+      expect(errors[0].code).toBe("NIL_NOT_ALLOWED");
+    });
+
+    it("should not treat xsi:nil=false as nil — normal type validation applies", () => {
+      const doc = parser.parseFromString(
+        `<Age xsi:nil="false" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">42</Age>`,
+        "application/xml",
+      );
+      const node = doc.documentElement!;
+      const schema: XSDElement = { name: "Age", type: "xs:integer", nillable: true };
+      expect(validateType(node, schema)).toEqual([]);
+    });
+  });
 });

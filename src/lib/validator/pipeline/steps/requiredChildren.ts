@@ -1,7 +1,15 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 
+const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
+
 export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElement) => {
   const errors: ValidationError[] = [];
+
+  // Skip required children check when element is explicitly nil
+  const isNil =
+    xmlNode.getAttributeNS(XSI_NAMESPACE, "nil") === "true" ||
+    xmlNode.getAttribute("xsi:nil") === "true";
+  if (isNil) return errors;
 
   if (!schemaElement.children) return errors;
 

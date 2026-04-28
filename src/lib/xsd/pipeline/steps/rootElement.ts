@@ -7,8 +7,9 @@ export class ParseRootElementStep implements PipelineStep<Element, Partial<XSDEl
     const type = el.getAttribute("type") || undefined;
     const minOccurs = this.parseMinOccurs(el);
     const maxOccurs = this.parseMaxOccurs(el);
+    const nillable = el.getAttribute("nillable") === "true" ? true : undefined;
 
-    return name !== null ? { name, type, minOccurs, maxOccurs } : {};
+    return name !== null ? { name, type, minOccurs, maxOccurs, nillable } : {};
   }
 
   parseMaxOccurs(el: Element): number | "unbounded" {
