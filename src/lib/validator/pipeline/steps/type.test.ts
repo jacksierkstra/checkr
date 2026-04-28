@@ -248,4 +248,63 @@ describe("validateType step", () => {
     };
     expect(validateType(node, schema)).toEqual([]);
   });
+
+  describe("additional built-in types", () => {
+    it.each([
+      ["xs:long", "9223372036854775807", true],
+      ["xs:long", "not-a-number", false],
+      ["xs:int", "2147483647", true],
+      ["xs:int", "2147483648", false],
+      ["xs:int", "-2147483648", true],
+      ["xs:short", "32767", true],
+      ["xs:short", "32768", false],
+      ["xs:byte", "127", true],
+      ["xs:byte", "128", false],
+      ["xs:byte", "-128", true],
+      ["xs:unsignedLong", "0", true],
+      ["xs:unsignedLong", "-1", false],
+      ["xs:unsignedInt", "4294967295", true],
+      ["xs:unsignedInt", "4294967296", false],
+      ["xs:unsignedShort", "65535", true],
+      ["xs:unsignedShort", "65536", false],
+      ["xs:unsignedByte", "255", true],
+      ["xs:unsignedByte", "256", false],
+      ["xs:nonNegativeInteger", "0", true],
+      ["xs:nonNegativeInteger", "-1", false],
+      ["xs:positiveInteger", "1", true],
+      ["xs:positiveInteger", "0", false],
+      ["xs:negativeInteger", "-1", true],
+      ["xs:negativeInteger", "0", false],
+      ["xs:nonPositiveInteger", "0", true],
+      ["xs:nonPositiveInteger", "1", false],
+      ["xs:dateTime", "2023-01-01T12:00:00", true],
+      ["xs:dateTime", "2023-01-01T12:00:00Z", true],
+      ["xs:dateTime", "2023-01-01T12:00:00+05:30", true],
+      ["xs:dateTime", "2023-01-01", false],
+      ["xs:time", "12:00:00", true],
+      ["xs:time", "12:00:00Z", true],
+      ["xs:time", "not-a-time", false],
+      ["xs:anyURI", "http://example.com", true],
+      ["xs:normalizedString", "hello world", true],
+      ["xs:normalizedString", "hello\tworld", false],
+      ["xs:token", "hello world", true],
+      ["xs:token", "hello\tworld", false],
+      ["xs:token", "double  space", false],
+      ["xs:NMTOKEN", "valid-token", true],
+      ["xs:NMTOKEN", "invalid token", false],
+      ["xs:NCName", "validName", true],
+      ["xs:NCName", "1invalid", false],
+      ["xs:NCName", "invalid:name", false],
+    ])("type %s with value '%s' → valid: %s", (type: string, value: string, valid: boolean) => {
+      const node = createElementWithText("Field", value);
+      const schema: XSDElement = { name: "Field", type };
+      const errors = validateType(node, schema);
+      if (valid) {
+        expect(errors).toEqual([]);
+      } else {
+        expect(errors.length).toBeGreaterThan(0);
+        expect(errors[0].code).toBe("TYPE_MISMATCH");
+      }
+    });
+  });
 });

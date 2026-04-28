@@ -83,6 +83,128 @@ export const validateType: NodeValidationStep = (node, schema) => {
         validateNumericConstraints(parseInt(text, 10), schema, errors);
       }
       break;
+    case "xs:long":
+      if (!/^-?\d+$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a long integer, but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:int": {
+      const intVal = parseInt(text, 10);
+      if (!/^-?\d+$/.test(text) || intVal < -2147483648 || intVal > 2147483647) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a 32-bit integer (-2147483648 to 2147483647), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:short": {
+      const shortVal = parseInt(text, 10);
+      if (!/^-?\d+$/.test(text) || shortVal < -32768 || shortVal > 32767) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a 16-bit integer (-32768 to 32767), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:byte": {
+      const byteVal = parseInt(text, 10);
+      if (!/^-?\d+$/.test(text) || byteVal < -128 || byteVal > 127) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be an 8-bit integer (-128 to 127), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:unsignedLong":
+      if (!/^\d+$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a non-negative integer, but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:unsignedInt": {
+      const uintVal = parseInt(text, 10);
+      if (!/^\d+$/.test(text) || uintVal > 4294967295) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be an unsigned 32-bit integer (0 to 4294967295), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:unsignedShort": {
+      const ushortVal = parseInt(text, 10);
+      if (!/^\d+$/.test(text) || ushortVal > 65535) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be an unsigned 16-bit integer (0 to 65535), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:unsignedByte": {
+      const ubyteVal = parseInt(text, 10);
+      if (!/^\d+$/.test(text) || ubyteVal > 255) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be an unsigned 8-bit integer (0 to 255), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
+    case "xs:nonNegativeInteger":
+      if (!/^\d+$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a non-negative integer (>= 0), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:positiveInteger":
+      if (!/^\d+$/.test(text) || parseInt(text, 10) <= 0) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a positive integer (> 0), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:negativeInteger":
+      if (!/^-\d+$/.test(text) || parseInt(text, 10) >= 0) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a negative integer (< 0), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:nonPositiveInteger": {
+      const nonPosVal = parseInt(text, 10);
+      if (!/^-?\d+$/.test(text) || nonPosVal > 0) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a non-positive integer (<= 0), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    }
     case "xs:decimal":
     case "xs:float":
     case "xs:double":
@@ -112,6 +234,69 @@ export const validateType: NodeValidationStep = (node, schema) => {
         errors.push({
           code: "TYPE_MISMATCH",
           message: `Element <${schema.name}> must be a valid date (YYYY-MM-DD), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:dateTime":
+      if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid dateTime (YYYY-MM-DDTHH:MM:SS), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:time":
+      if (!/^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid time (HH:MM:SS), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:anyURI":
+      if (!text) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a non-empty URI, but found empty value.`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:normalizedString":
+      if (/[\r\n\t]/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a normalized string (no CR, LF, or TAB), but found control characters.`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:token":
+      if (/^\s|\s$/.test(text) || /\s{2,}/.test(text) || /[\r\n\t]/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a token (no leading/trailing whitespace, no consecutive spaces), but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:NMTOKEN":
+      if (!/^[\w.:-]+$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid NMTOKEN, but found "${text}".`,
+          element: schema.name,
+        });
+      }
+      break;
+    case "xs:NCName":
+      if (!/^[a-zA-Z_][\w.-]*$/.test(text)) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid NCName (no colons, starts with letter or underscore), but found "${text}".`,
           element: schema.name,
         });
       }
