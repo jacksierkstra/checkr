@@ -66,10 +66,10 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
 
   private extractFacets(
     restriction: Element,
-  ): Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength" | "length"> {
+  ): Pick<XSDRestriction, "enumeration" | "pattern" | "minLength" | "maxLength" | "length" | "whiteSpace"> {
     const facets: Pick<
       XSDRestriction,
-      "enumeration" | "pattern" | "minLength" | "maxLength" | "length"
+      "enumeration" | "pattern" | "minLength" | "maxLength" | "length" | "whiteSpace"
     > = {};
 
     const enumNodes = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "enumeration");
@@ -101,6 +101,14 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
     if (lenEl) {
       const val = parseInt(lenEl.getAttribute("value") || "", 10);
       if (!isNaN(val)) facets.length = val;
+    }
+
+    const whiteSpaceEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "whiteSpace")[0];
+    if (whiteSpaceEl) {
+      const val = whiteSpaceEl.getAttribute("value");
+      if (val === "preserve" || val === "replace" || val === "collapse") {
+        facets.whiteSpace = val;
+      }
     }
 
     return facets;

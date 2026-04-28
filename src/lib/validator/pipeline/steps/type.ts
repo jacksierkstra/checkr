@@ -3,12 +3,25 @@ import { XSDElement } from "@lib/types/xsd";
 
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 
+function normalizeWhiteSpace(raw: string, mode: "preserve" | "replace" | "collapse"): string {
+  switch (mode) {
+    case "preserve":
+      return raw;
+    case "replace":
+      return raw.replace(/[\t\n\r]/g, " ");
+    case "collapse":
+      return raw.replace(/[\t\n\r]/g, " ").replace(/\s+/g, " ").trim();
+  }
+}
+
 /**
  * Type validation step to enforce XSD-defined types and constraints.
  */
 export const validateType: NodeValidationStep = (node, schema) => {
   const errors: ValidationError[] = [];
-  const text = node.textContent?.trim() || "";
+  const rawText = node.textContent ?? "";
+  const whiteSpaceMode = schema.whiteSpace ?? schema.restriction?.whiteSpace;
+  const text = whiteSpaceMode ? normalizeWhiteSpace(rawText, whiteSpaceMode) : rawText.trim();
 
   // Handle xsi:nil — nil elements skip type/content validation
   const isNil =

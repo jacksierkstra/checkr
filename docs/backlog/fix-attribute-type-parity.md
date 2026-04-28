@@ -4,7 +4,7 @@
 |----------|----------|
 | Type     | bug      |
 | Priority | high     |
-| Status   | backlog  |
+| Status   | done     |
 
 ## Problem
 
