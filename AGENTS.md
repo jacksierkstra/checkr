@@ -15,6 +15,19 @@ npx jest src/lib/xsd/parser.test.ts             # single test file
 npx jest --testNamePattern="validates type"     # tests matching a name pattern
 ```
 
+## Backlog
+
+All known bugs and planned features are tracked in [`docs/backlog/README.md`](docs/backlog/README.md).
+
+**Rules for agents:**
+
+1. **Before starting** any XSD feature or bugfix, check `docs/backlog/README.md`. If the item exists, set its `Status` to `in-progress` in both the index and the item's `.md` file.
+2. **After completing** an item, update its `Status` to `done` in both files.
+3. **When you discover a new gap** (a bug or missing feature not already listed), create a new `docs/backlog/<id>.md` file using the template in `docs/backlog/README.md` and add a row to the index table.
+4. Keep the index and individual files **in sync** — status must be consistent between them.
+
+---
+
 ## Out-of-scope XSD features — do not implement
 
 The following XSD features are explicitly deferred. Do not implement them unless asked:
