@@ -18,6 +18,18 @@ export function isValidBuiltinType(value: string, type: string): boolean {
     }
     case "xs:NCName":
       return /^[a-zA-Z_][\w.-]*$/.test(value);
+    case "xs:ID":
+    case "xs:IDREF":
+    case "xs:ENTITY":
+      return /^[a-zA-Z_][\w.-]*$/.test(value);
+    case "xs:IDREFS":
+    case "xs:ENTITIES": {
+      const tokens = value.trim().split(/\s+/);
+      return tokens.length > 0 && tokens[0] !== "" && tokens.every((t) => /^[a-zA-Z_][\w.-]*$/.test(t));
+    }
+    case "xs:QName":
+    case "xs:NOTATION":
+      return /^([a-zA-Z_][\w.-]*:)?[a-zA-Z_][\w.-]*$/.test(value);
     case "xs:Name":
       return /^[a-zA-Z_:][\w.:-]*$/.test(value);
     case "xs:language":
