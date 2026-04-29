@@ -86,10 +86,13 @@ export class TypeRestrictor implements ITypeRestrictor {
     if (r.pattern !== undefined) target.pattern = r.pattern;
     if (r.minLength !== undefined) target.minLength = r.minLength;
     if (r.maxLength !== undefined) target.maxLength = r.maxLength;
+    if (r.length !== undefined) target.length = r.length;
     if (r.minInclusive !== undefined) target.minInclusive = r.minInclusive;
     if (r.maxInclusive !== undefined) target.maxInclusive = r.maxInclusive;
     if (r.minExclusive !== undefined) target.minExclusive = r.minExclusive;
     if (r.maxExclusive !== undefined) target.maxExclusive = r.maxExclusive;
+    if (r.totalDigits !== undefined) target.totalDigits = r.totalDigits;
+    if (r.fractionDigits !== undefined) target.fractionDigits = r.fractionDigits;
     if (r.whiteSpace !== undefined) target.whiteSpace = r.whiteSpace;
   }
 }

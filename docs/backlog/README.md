@@ -67,7 +67,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-element-ref](./feat-element-ref.md) | 🟡 medium | backlog | xs:element ref and xs:attribute ref support |
 | [feat-missing-builtin-types](./feat-missing-builtin-types.md) | 🟡 medium | done | Missing xs: built-in type checks (binary, date-partial, misc) |
 | [feat-missing-id-types](./feat-missing-id-types.md) | 🟡 medium | done | Lexical validation for xs:QName, xs:ID, xs:IDREF, xs:IDREFS, xs:ENTITY, xs:ENTITIES, xs:NOTATION |
-| [feat-list-restriction-facets](./feat-list-restriction-facets.md) | 🟡 medium | backlog | xs:restriction of xs:list with list-level facets |
+| [feat-list-restriction-facets](./feat-list-restriction-facets.md) | 🟡 medium | done | xs:restriction of xs:list with list-level facets |
 | [feat-element-default-fixed](./feat-element-default-fixed.md) | 🟢 low | done | xs:default and xs:fixed on xs:element |
 | [feat-mixed-content](./feat-mixed-content.md) | 🟢 low | done | Validate xs:complexType mixed="true" content model |
 | [feat-substitution-group](./feat-substitution-group.md) | 🟢 low | backlog | xs:substitutionGroup support |

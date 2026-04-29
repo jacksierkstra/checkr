@@ -67,6 +67,46 @@ export const validateType: NodeValidationStep = (node, schema) => {
         });
       }
     }
+    // List-level facet checks (applied to token count / full value, not individual items)
+    const tokenCount = tokens.length;
+    if (schema.length !== undefined && tokenCount !== schema.length) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Element <${schema.name}> list must contain exactly ${schema.length} items, but found ${tokenCount}.`,
+        element: schema.name,
+        expected: schema.length,
+        actual: tokenCount,
+      });
+    }
+    if (schema.minLength !== undefined && tokenCount < schema.minLength) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Element <${schema.name}> list must contain at least ${schema.minLength} items, but found ${tokenCount}.`,
+        element: schema.name,
+        expected: schema.minLength,
+        actual: tokenCount,
+      });
+    }
+    if (schema.maxLength !== undefined && tokenCount > schema.maxLength) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Element <${schema.name}> list must contain at most ${schema.maxLength} items, but found ${tokenCount}.`,
+        element: schema.name,
+        expected: schema.maxLength,
+        actual: tokenCount,
+      });
+    }
+    if (schema.enumeration && schema.enumeration.length > 0) {
+      if (!schema.enumeration.includes(text.trim())) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> list value "${text.trim()}" must be one of [${schema.enumeration.join(", ")}].`,
+          element: schema.name,
+          expected: schema.enumeration,
+          actual: text.trim(),
+        });
+      }
+    }
     return errors;
   }
 
