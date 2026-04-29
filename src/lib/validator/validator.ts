@@ -9,6 +9,7 @@ import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validat
 import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
 import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
 import { validateElementFixed } from "@lib/validator/pipeline/steps/elementFixed";
+import { validateMixedContent } from "@lib/validator/pipeline/steps/mixedContent";
 import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
 import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
 import { validateType } from "@lib/validator/pipeline/steps/type";
@@ -37,6 +38,7 @@ export class ValidatorImpl implements Validator {
       .addStep(validateAbstract) // Check for abstract elements first
       .addStep(validateType)
       .addStep(validateElementFixed)
+      .addStep(validateMixedContent)
       .addStep(validateAttributes)
       .addStep(validateConstraints)
       .addStep(validateRequiredChildren)
