@@ -77,12 +77,16 @@ Restrictions allow for creating new types by adding constraints to a base type. 
   - `xs:enumeration` - List of allowed values
   - `xs:minLength` - Minimum string length
   - `xs:maxLength` - Maximum string length
+  - `xs:length` - Exact string length
+  - `xs:whiteSpace` - Whitespace normalisation (`preserve`, `replace`, `collapse`)
 
 - **Numeric facets**:
   - `xs:minInclusive` - Minimum value (inclusive)
   - `xs:maxInclusive` - Maximum value (inclusive)
   - `xs:minExclusive` - Minimum value (exclusive)
   - `xs:maxExclusive` - Maximum value (exclusive)
+  - `xs:totalDigits` - Maximum total significant digits
+  - `xs:fractionDigits` - Maximum digits after the decimal point
 
 ## Performance Optimization
 
@@ -94,11 +98,7 @@ The type reference resolver includes several optimizations:
 
 ## Error Handling
 
-The type resolver provides detailed diagnostic information when types cannot be resolved:
-
-- Clear warning messages when a type reference cannot be found
-- Contextual information about where the reference occurred
-- Fallback behavior to continue validation as much as possible
+When a type reference cannot be resolved, the validator skips resolution silently and continues. Programmer errors (null dereferences, unexpected types) inside the resolver propagate as thrown exceptions so they surface as stack traces rather than silent `valid: false` results (see [ADR-018](./adr/ADR-018-throw-on-programmer-errors.md)).
 
 ## Usage Example
 
@@ -144,9 +144,9 @@ console.log(validation.valid); // true
 
 ## Implementation Details
 
-### TypeReferenceResolver
+### ModularTypeReferenceResolver
 
-The core component of the type system is the `TypeReferenceResolver` class, which handles:
+The core component of the type system is the `ModularTypeReferenceResolver` class, which handles:
 
 - Parsing qualified type names
 - Resolving references within the schema
@@ -163,13 +163,13 @@ The type system is integrated into the validation pipeline architecture:
 
 ## Known Limitations
 
-- The current implementation does not yet support `xs:all` content model
-- Complete support for substitution groups is still in development
+- Substitution groups (`xs:substitutionGroup`) are tracked as a backlog item but are not currently implemented. See [`feat-substitution-group`](../backlog/feat-substitution-group.md).
 - Circular type references may cause performance issues
 
-## Future Enhancements
+## Out of Scope
 
-- Improved support for `xs:import` and `xs:include`
-- Support for `xs:group` and `xs:attributeGroup`
-- Enhanced reporting for type resolution issues
-- Full support for abstract types and substitution groups
+The following features are explicitly deferred and will not be implemented (see [ADR-009](./adr/ADR-009-deferred-xsd-features.md)):
+
+- `xs:import` and `xs:include` (external schema loading)
+- `xs:group` and `xs:attributeGroup`
+- `xs:key`, `xs:unique`, `xs:keyref`

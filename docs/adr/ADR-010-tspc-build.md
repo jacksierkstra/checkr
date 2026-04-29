@@ -20,7 +20,7 @@ Three solutions were considered:
 
 ## Decision
 
-The build uses **`ts-patch`** (`tspc` binary) with the `typescript-transform-paths` plugin declared in `tsconfig.build.json`. This rewrites `@lib/*` aliases to relative paths in the emitted `dist/` JavaScript.
+The build uses **`ts-patch`** (`tspc` binary) with the `typescript-transform-paths` plugin declared in `tsconfig.json` (and therefore inherited by `tsconfig.build.json` via `extends`). This rewrites `@lib/*` aliases to relative paths in the emitted `dist/` JavaScript.
 
 `npm run build` invokes `tspc -p tsconfig.build.json`. Contributors must not substitute `tsc` for `tspc` in the build command.
 

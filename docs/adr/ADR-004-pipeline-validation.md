@@ -17,6 +17,8 @@ Two kinds of validation steps exist:
 - **Node-level:** run once per XML element, checking properties of that element against its schema definition.
 - **Global (occurrence-level):** run across all instances of an element type, checking cardinality constraints that require a full population count.
 
+A third kind — **document-level** — exists in the codebase but is not part of either pipeline: these functions receive the full `XMLDocument` and `XSDSchema` and are called directly from `validate()`. Currently only `validateRootElements` uses this pattern (checks that required root elements are present). It is not registered in a pipeline because it needs the document root and the whole schema, not a single `XSDElement`.
+
 ---
 
 ## Decision
@@ -24,11 +26,13 @@ Two kinds of validation steps exist:
 `ValidatorImpl` uses two composable pipelines:
 
 ```ts
-type NodeValidationStep = (node: Element, schema: XSDElement) => string[];
-type GlobalValidationStep = (nodes: Element[], schema: XSDElement) => string[];
+type NodeValidationStep = (node: Element, schema: XSDElement) => ValidationError[];
+type GlobalValidationStep = (nodes: Element[], schema: XSDElement) => ValidationError[];
 ```
 
-Node-level steps are registered in `nodePipeline`. Occurrence-style steps are registered in `globalPipeline`. Every step returns a `string[]` of error messages (empty = no errors). Steps **never throw** (see [ADR-005](./ADR-005-error-as-values.md)).
+Node-level steps are registered in `nodePipeline`. Occurrence-style steps are registered in `globalPipeline`. Every step returns a `ValidationError[]` (empty = no errors). Steps **never throw** (see [ADR-018](./ADR-018-throw-on-programmer-errors.md)).
+
+> **Note:** When this ADR was written, steps returned `string[]`. [ADR-020](./ADR-020-structured-validation-errors.md) replaced plain strings with structured `ValidationError` objects. The pipeline contract is otherwise unchanged.
 
 ---
 

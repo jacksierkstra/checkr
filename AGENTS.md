@@ -84,12 +84,12 @@ Before writing any code, confirm:
 
 The following XSD features are explicitly deferred. Do not implement them unless asked:
 
-- `xs:all`
+- `xs:all` — **partial support exists**: `xs:all` children are already parsed with `inAll: true` and are exempt from sequence-order enforcement (`validateSequenceOrder` skips them). Full `xs:all` semantics — enforcing that each child appears exactly 0 or 1 times and no more — are **not** implemented and remain deferred. Do not add further xs:all logic without a new ADR.
 - `xs:key`, `xs:unique`, `xs:keyref`
 - `xs:import`, `xs:include`
 - `xs:group`, `xs:attributeGroup`
 
-Attempting partial support for any of these will silently produce wrong validation results.
+Attempting partial support for `xs:key`, `xs:unique`, `xs:keyref`, `xs:import`/`xs:include`, or `xs:group`/`xs:attributeGroup` will silently produce wrong validation results.
 
 ## Architecture overview
 
@@ -157,6 +157,8 @@ Create a new class implementing `PipelineStep<Element, Partial<XSDElement>>`. Th
 
 **3. Add a validation step if needed** (`src/lib/validator/pipeline/steps/`)  
 If the new feature requires runtime validation, create a function matching `NodeValidationStep = (node: Element, schema: XSDElement) => ValidationError[]` or `GlobalValidationStep = (nodes: Element[], schema: XSDElement) => ValidationError[]`. Register node-level steps in `ValidatorImpl`'s `nodePipeline`, occurrence-style steps in `globalPipeline`.
+
+> **Document-level steps** (signature `(xmlDoc: XMLDocument, schema: XSDSchema) => ValidationError[]`) sit outside both pipelines and are called directly in `ValidatorImpl.validate()`. Only `validateRootElements` uses this pattern. Introduce a new document-level function only if the check genuinely needs the full document root and the entire `XSDSchema` — most new validation rules belong in the node or global pipeline instead.
 
 Each function must return `ValidationError[]` — never `string[]`, never `void`. Use a structured `code` from `ValidationErrorCode` and populate `element`, `expected`, and `actual` where applicable. Example:
 

@@ -21,14 +21,16 @@ These are not theoretical risks — they are existing defects that a linter woul
 
 Add **ESLint** (with `@typescript-eslint`) and **Prettier** as development tooling.
 
-### ESLint configuration (`.eslintrc.json`)
+### ESLint configuration (`eslint.config.js`)
 
-Minimum high-value rules enabled:
+The project uses ESLint's **flat config format** (`eslint.config.js`). Rules enabled:
 
 - `@typescript-eslint/no-explicit-any` — eliminates `any` escapes.
 - `no-console` — enforces the errors-as-values contract; no side-effecting `console.warn` in pipeline steps.
 - `@typescript-eslint/no-floating-promises` — catches unawaited Promises.
-- `@typescript-eslint/explicit-function-return-type` — ensures pipeline step return types are always declared.
+- `@typescript-eslint/no-unused-vars` — catches unused variables (with `^_` ignore pattern for intentionally unused parameters).
+
+`no-console` is disabled for `src/**/*.test.ts`. Benchmark scripts (`src/benchmark/**`) are excluded entirely via the `ignores` configuration.
 
 ### Prettier configuration (`.prettierrc`)
 
@@ -53,4 +55,4 @@ Both `npm run lint` and `npm run format:check` are added as CI steps that block 
 - **Positive:** New contributors get real-time feedback in their IDE via the ESLint/Prettier plugins.
 - **Negative:** Initial setup requires fixing all existing lint violations before CI passes.
 - **Negative:** Stricter formatting means existing code diffs will show whitespace-only changes on first Prettier pass.
-- **Constraint:** `no-console` applies to library code only (`src/lib/**`). It does not apply to benchmark scripts or test utilities.
+- **Constraint:** `no-console` applies to all source files (`src/**`) except test files and benchmark scripts.

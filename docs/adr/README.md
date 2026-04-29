@@ -38,7 +38,7 @@ All ADRs follow the [Michael Nygard template](https://cognitect.com/blog/2011/11
 | [ADR-018](./ADR-018-throw-on-programmer-errors.md) | Throw on programmer errors — preserve errors as values for validation failures | Accepted |
 | [ADR-019](./ADR-019-sync-and-async-api.md) | Expose both `validate()` (sync) and `validateAsync()` (async) | Accepted |
 | [ADR-020](./ADR-020-structured-validation-errors.md) | Structured validation errors with codes | Accepted |
-| [ADR-021](./ADR-021-narrow-public-api.md) | Narrow public API — export only `Checkr` and `ValidationResult` | Accepted |
+| [ADR-021](./ADR-021-narrow-public-api.md) | Narrow public API — export only `Checkr` and the public validation types | Accepted |
 | [ADR-022](./ADR-022-esm-only-output.md) | ESM-only module output | Accepted |
 | [ADR-023](./ADR-023-eslint-prettier.md) | Add ESLint + Prettier toolchain | Accepted |
 | [ADR-024](./ADR-024-conventional-commits-release-please.md) | Adopt Conventional Commits + Release Please | Accepted |

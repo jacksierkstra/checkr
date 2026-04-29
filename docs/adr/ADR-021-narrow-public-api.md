@@ -1,4 +1,4 @@
-# ADR-021: Narrow public API — export only `Checkr` and `ValidationResult`
+# ADR-021: Narrow public API — export only `Checkr` and the public validation types
 
 **Status:** Accepted  
 **Supersedes:** [ADR-013](./ADR-013-public-api-surface.md)

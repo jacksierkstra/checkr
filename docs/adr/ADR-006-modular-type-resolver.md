@@ -27,6 +27,7 @@ The type resolver is structured as `ModularTypeReferenceResolver`, which orchest
 ModularTypeReferenceResolver
   ├── ITypeRegistry     → TypeRegistry
   ├── IElementResolver  → ElementResolver
+  ├── ITypeResolver     → TypeResolver
   ├── ITypeExtender     → TypeExtender
   ├── ITypeRestrictor   → TypeRestrictor
   ├── IPropertyMerger   → PropertyMerger
@@ -42,5 +43,5 @@ The interface is defined first in `interfaces.ts`, then the concrete module impl
 - **Positive:** Each module is independently unit-testable against its interface.
 - **Positive:** The orchestrator (`ModularTypeReferenceResolver`) is decoupled from concrete implementations, making it straightforward to swap or mock individual modules in tests.
 - **Positive:** The interface-first rule enforces clear ownership of responsibilities as the resolver grows.
-- **Negative:** The indirection adds boilerplate — six interfaces for six modules where a simpler design might use three or four functions.
+- **Negative:** The indirection adds boilerplate — seven interfaces for seven modules where a simpler design might use three or four functions.
 - **Negative:** Interfaces must be kept in sync with implementations; a mismatch is a compile-time error but can still cause confusion during refactoring.
