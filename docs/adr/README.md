@@ -42,5 +42,14 @@ All ADRs follow the [Michael Nygard template](https://cognitect.com/blog/2011/11
 | [ADR-022](./ADR-022-esm-only-output.md) | ESM-only module output | Accepted |
 | [ADR-023](./ADR-023-eslint-prettier.md) | Add ESLint + Prettier toolchain | Accepted |
 | [ADR-024](./ADR-024-conventional-commits-release-please.md) | Adopt Conventional Commits + Release Please | Accepted |
+| [ADR-025](./ADR-025-xs-all-full-semantics.md) | Full `xs:all` semantics | Proposed |
+| [ADR-026](./ADR-026-xs-group-attribute-group.md) | `xs:group` and `xs:attributeGroup` support | Proposed |
+| [ADR-027](./ADR-027-substitution-group.md) | `xs:substitutionGroup` support | Proposed |
+| [ADR-028](./ADR-028-xsd-11-support.md) | XSD 1.1 support strategy | Proposed |
+| [ADR-029](./ADR-029-xpath-evaluation.md) | XPath evaluation integration | Proposed |
+| [ADR-030](./ADR-030-schematron-support.md) | Schematron support strategy | Proposed |
+| [ADR-031](./ADR-031-relaxng-support.md) | RelaxNG support strategy | Proposed |
+| [ADR-032](./ADR-032-relaxng-compact-syntax.md) | RelaxNG compact syntax (`.rnc`) support | Proposed |
+| [ADR-033](./ADR-033-dtd-validation.md) | DTD validation strategy (deferred) | Proposed |
 
 ¹ Amended — see the "Known tensions" / "Decision" section of that ADR for corrections to the original reasoning.
