@@ -70,5 +70,5 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-list-restriction-facets](./feat-list-restriction-facets.md) | 🟡 medium | done | xs:restriction of xs:list with list-level facets |
 | [feat-element-default-fixed](./feat-element-default-fixed.md) | 🟢 low | done | xs:default and xs:fixed on xs:element |
 | [feat-mixed-content](./feat-mixed-content.md) | 🟢 low | done | Validate xs:complexType mixed="true" content model |
-| [feat-substitution-group](./feat-substitution-group.md) | 🟢 low | backlog | xs:substitutionGroup support |
+| [feat-substitution-group](./feat-substitution-group.md) | 🟢 low | done | xs:substitutionGroup support |
 | [feat-namespace-qualification](./feat-namespace-qualification.md) | 🟢 low | backlog | elementFormDefault, attributeFormDefault, and form attribute handling |

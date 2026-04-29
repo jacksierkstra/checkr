@@ -15,11 +15,17 @@ export const validateUnexpectedElements: NodeValidationStep = (node, schema) => 
 
   const declaredNames = new Set<string>();
   if (schema.children) {
-    schema.children.forEach((c) => declaredNames.add(c.name.toLowerCase()));
+    schema.children.forEach((c) => {
+      declaredNames.add(c.name.toLowerCase());
+      c.allowedSubstitutes?.forEach((s) => declaredNames.add(s.toLowerCase()));
+    });
   }
   if (schema.choices) {
     schema.choices.forEach((choice) => {
-      choice.elements.forEach((el) => declaredNames.add(el.name.toLowerCase()));
+      choice.elements.forEach((el) => {
+        declaredNames.add(el.name.toLowerCase());
+        el.allowedSubstitutes?.forEach((s) => declaredNames.add(s.toLowerCase()));
+      });
     });
   }
 

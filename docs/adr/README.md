@@ -44,7 +44,7 @@ All ADRs follow the [Michael Nygard template](https://cognitect.com/blog/2011/11
 | [ADR-024](./ADR-024-conventional-commits-release-please.md) | Adopt Conventional Commits + Release Please | Accepted |
 | [ADR-025](./ADR-025-xs-all-full-semantics.md) | Full `xs:all` semantics | Accepted |
 | [ADR-026](./ADR-026-xs-group-attribute-group.md) | `xs:group` and `xs:attributeGroup` support | Proposed |
-| [ADR-027](./ADR-027-substitution-group.md) | `xs:substitutionGroup` support | Proposed |
+| [ADR-027](./ADR-027-substitution-group.md) | `xs:substitutionGroup` support | Accepted |
 | [ADR-028](./ADR-028-xsd-11-support.md) | XSD 1.1 support strategy | Proposed |
 | [ADR-029](./ADR-029-xpath-evaluation.md) | XPath evaluation integration | Proposed |
 | [ADR-030](./ADR-030-schematron-support.md) | Schematron support strategy | Proposed |

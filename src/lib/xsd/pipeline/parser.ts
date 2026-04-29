@@ -12,6 +12,7 @@ import { ParseSimpleContentStep } from "@lib/xsd/pipeline/steps/simpleContent";
 import { ParseListStep } from "@lib/xsd/pipeline/steps/list";
 import { ParseUnionStep } from "@lib/xsd/pipeline/steps/union";
 import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
+import { SubstitutionGroupResolver } from "@lib/xsd/resolvers/SubstitutionGroupResolver";
 import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
 export interface XSDParser {
   parse(xsd: string): XSDSchema;
@@ -87,6 +88,11 @@ export class XSDPipelineParserImpl implements XSDParser {
     const resolver = new ModularTypeReferenceResolver(schema);
     const resolvedElements = resolver.resolve();
 
-    return { targetNamespace, elements: resolvedElements, types: typesMap };
+    // Build substitution group map and enrich resolved elements
+    const subGroupResolver = new SubstitutionGroupResolver();
+    const subGroupMap = subGroupResolver.buildMap(validElements);
+    const enrichedElements = subGroupResolver.enrichElements(resolvedElements, subGroupMap);
+
+    return { targetNamespace, elements: enrichedElements, types: typesMap };
   }
 }

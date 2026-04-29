@@ -1,6 +1,6 @@
 # ADR-027: xs:substitutionGroup Support
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Supersedes:** [ADR-009](./ADR-009-deferred-xsd-features.md) *(for xs:substitutionGroup only)*
 
 ---

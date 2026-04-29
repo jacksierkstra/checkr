@@ -27,6 +27,10 @@ export interface XSDElement {
   unionMemberTypes?: string[];
   /** When set, this element is a placeholder for a globally declared element with this name */
   ref?: string;
+  /** When set, this element is a member of the substitution group with this head element name */
+  substitutionGroup?: string;
+  /** Names of elements that may substitute this element (populated at resolution time) */
+  allowedSubstitutes?: string[];
   /** True when this element was declared inside xs:all (order-independent) */
   inAll?: boolean;
   /** True when the element's content model includes xs:any (wildcard child elements allowed) */

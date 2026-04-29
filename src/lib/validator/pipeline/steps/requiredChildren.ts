@@ -20,11 +20,16 @@ export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElem
 
   for (const childDef of schemaElement.children) {
     const minOccurs = childDef.minOccurs ?? 1; // Default to 1 if not specified
-    // Compare names in a case-insensitive manner
+    const acceptedNames = new Set([
+      childDef.name.toLowerCase(),
+      ...(childDef.allowedSubstitutes ?? []).map((s) => s.toLowerCase()),
+    ]);
+    // Compare names in a case-insensitive manner, including substitution group members
     const matchingChildren = childrenElements.filter(
-      (child) =>
-        child?.localName?.toLowerCase() === childDef.name.toLowerCase() ||
-        child?.tagName?.toLowerCase() === childDef.name.toLowerCase(),
+      (child) => {
+        const name = (child?.localName || child?.tagName || "").toLowerCase();
+        return acceptedNames.has(name);
+      }
     );
 
     if (matchingChildren.length < minOccurs) {

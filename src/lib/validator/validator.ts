@@ -53,6 +53,7 @@ export class ValidatorImpl implements Validator {
 
   private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): ValidationError[] {
     const errors: ValidationError[] = [];
+    const elementsByName = new Map(elements.map((e) => [e.name.toLowerCase(), e]));
 
     // Check for unexpected root-level elements
     if (elements.length > 0) {
@@ -92,7 +93,7 @@ export class ValidatorImpl implements Validator {
 
       // Node-level checks for each instance of this element
       for (const node of nodes) {
-        const nodeErrors = this.validateNode(node, schemaElement);
+        const nodeErrors = this.validateNode(node, schemaElement, elementsByName);
         errors.push(...nodeErrors);
       }
     }
@@ -100,7 +101,11 @@ export class ValidatorImpl implements Validator {
     return errors;
   }
 
-  private validateNode(node: Element, schemaElement: XSDElement): ValidationError[] {
+  private validateNode(
+    node: Element,
+    schemaElement: XSDElement,
+    elementsByName?: Map<string, XSDElement>,
+  ): ValidationError[] {
     const errors: ValidationError[] = [];
 
     // Node-level validation pipeline
@@ -118,12 +123,15 @@ export class ValidatorImpl implements Validator {
     if (schemaElement.children && schemaElement.children.length > 0) {
       const childrenErrors = schemaElement.children.flatMap((childSchema) => {
         const childNodes = node.hasChildNodes() ? Array.from(node.childNodes) : [];
+        const acceptedNames = new Set([
+          childSchema.name.toLowerCase(),
+          ...(childSchema.allowedSubstitutes ?? []).map((s) => s.toLowerCase()),
+        ]);
         const filtered = childNodes
           .filter((child): child is Element => child.nodeType === 1)
           .filter((child) => {
-            // Match by tagName or localName (case-insensitive)
             const childName = child.tagName || child.localName;
-            return childName && childName.toLowerCase() === childSchema.name.toLowerCase();
+            return childName && acceptedNames.has(childName.toLowerCase());
           });
 
         // Only validate children that exist in the document
@@ -131,7 +139,16 @@ export class ValidatorImpl implements Validator {
         return filtered.length > 0
           ? [
               ...this.globalPipeline.execute(filtered, childSchema),
-              ...filtered.flatMap((childNode) => this.validateNode(childNode, childSchema)),
+              ...filtered.flatMap((childNode) => {
+                // If this child is a substitute (different name), look up its own schema
+                const childName = (childNode.localName || childNode.tagName || "").toLowerCase();
+                const isSubstitute = childName !== childSchema.name.toLowerCase();
+                const effectiveSchema =
+                  isSubstitute && elementsByName
+                    ? (elementsByName.get(childName) ?? childSchema)
+                    : childSchema;
+                return this.validateNode(childNode, effectiveSchema, elementsByName);
+              }),
             ]
           : [];
       });
