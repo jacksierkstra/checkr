@@ -44,12 +44,13 @@ const xsd = `<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
             </xs:schema>`;
 
 const validator = new Checkr();
-const validation = validator.validate(xml, xsd);
+const result = validator.validate(xml, xsd);
 
-validation.then(result => {
-    console.log('Valid: ', result.valid);
-    console.log('Errors: ', result.errors);
-});
+console.log('Valid: ', result.valid);
+console.log('Errors: ', result.errors);
+
+// For async call chains, use validateAsync:
+// const result = await validator.validateAsync(xml, xsd);
 ```
 
 ## Validation Pipeline
@@ -69,15 +70,24 @@ The validation process consists of multiple pipeline stages:
 ## Supported XSD Features
 
 - ✅ `xs:sequence`, `xs:choice`
-- ✅ `xs:element`, `xs:complexType`
+- ⚠️ `xs:all` (partial: children are parsed and exempt from sequence ordering; full `xs:all` cardinality semantics — each child appearing exactly once, per-child `minOccurs`/`maxOccurs` — are not yet enforced)
+- ✅ `xs:element`, `xs:complexType`, `xs:simpleType`
+- ✅ `xs:simpleContent` with extension and restriction
 - ✅ `xs:enumeration`, `xs:pattern`
-- ✅ `xs:minLength`, `xs:maxLength`
-- ✅ Attribute validation (`xs:attribute`)
+- ✅ `xs:minLength`, `xs:maxLength`, `xs:length`
+- ✅ `xs:totalDigits`, `xs:fractionDigits`
+- ✅ `xs:whiteSpace` facet (`preserve`, `replace`, `collapse`)
+- ✅ Attribute validation (`xs:attribute`) — required, optional, fixed, default
 - ✅ Type inheritance (`xs:extension`, `xs:restriction`)
-- ✅ Numeric constraints (`minInclusive`, `maxInclusive`, etc.)
+- ✅ Numeric constraints (`minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`)
+- ✅ `xs:list` and `xs:union` simple types
+- ✅ `xs:nillable` elements with `xsi:nil` support
+- ✅ `xs:any` and `xs:anyAttribute` wildcards
+- ✅ `xs:sequence` child-order enforcement
+- ✅ Unexpected element and attribute detection
+- ✅ Element `default` and `fixed` value constraints
 - ✅ Namespace support and resolution
-- 🚧 **Planned**:
-  - `xs:all`
+- 🚧 **Out of scope** (explicitly deferred — see ADR-009):
   - `xs:key`, `xs:unique`, `xs:keyref`
   - Namespaced imports (`xs:import`, `xs:include`)
   - `xs:group` and `xs:attributeGroup`
@@ -87,7 +97,7 @@ The validation process consists of multiple pipeline stages:
 To run the test suite:
 
 ```sh
-yarn test
+npm test
 ```
 
 ## Contributing
