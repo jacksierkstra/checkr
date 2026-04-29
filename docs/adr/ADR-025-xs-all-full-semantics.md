@@ -1,6 +1,6 @@
 # ADR-025: Full xs:all Semantics
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Supersedes:** [ADR-009](./ADR-009-deferred-xsd-features.md) *(for xs:all only)*
 
 ---
