@@ -64,7 +64,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-nillable](./feat-nillable.md) | 🟢 low | done | xs:nillable + xsi:nil support |
 | [feat-whitespace-facet](./feat-whitespace-facet.md) | 🟡 medium | done | xs:whiteSpace restriction facet |
 | [feat-wildcard-any](./feat-wildcard-any.md) | 🟡 medium | done | xs:any and xs:anyAttribute wildcard support |
-| [feat-element-ref](./feat-element-ref.md) | 🟡 medium | backlog | xs:element ref and xs:attribute ref support |
+| [feat-element-ref](./feat-element-ref.md) | 🟡 medium | done | xs:element ref and xs:attribute ref support |
 | [feat-missing-builtin-types](./feat-missing-builtin-types.md) | 🟡 medium | done | Missing xs: built-in type checks (binary, date-partial, misc) |
 | [feat-missing-id-types](./feat-missing-id-types.md) | 🟡 medium | done | Lexical validation for xs:QName, xs:ID, xs:IDREF, xs:IDREFS, xs:ENTITY, xs:ENTITIES, xs:NOTATION |
 | [feat-list-restriction-facets](./feat-list-restriction-facets.md) | 🟡 medium | done | xs:restriction of xs:list with list-level facets |

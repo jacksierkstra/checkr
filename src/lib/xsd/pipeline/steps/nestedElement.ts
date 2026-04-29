@@ -82,7 +82,11 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
 
   private parseElement(el: Element, isInChoice: boolean = false): XSDElement | null {
     const name = el.getAttribute("name");
-    if (!name) return null;
+    const ref = el.getAttribute("ref");
+
+    // Use ref local name as element name when ref is present but name is absent
+    const effectiveName = name ?? (ref ? ref.replace(/^.*:/, "") : null);
+    if (!effectiveName) return null;
 
     const minOccursAttr = el.getAttribute("minOccurs");
     const minOccurs = parseInt(
@@ -98,7 +102,13 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         ? "unbounded"
         : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
 
-    const xsdElement: XSDElement = { name, minOccurs: effectiveMinOccurs, maxOccurs };
+    const xsdElement: XSDElement = { name: effectiveName, minOccurs: effectiveMinOccurs, maxOccurs };
+
+    if (ref && !name) {
+      // Mark as a ref placeholder; resolver will replace with global definition
+      xsdElement.ref = ref.replace(/^.*:/, "");
+      return xsdElement;
+    }
 
     const typeAttr = el.getAttribute("type");
     if (typeAttr) {

@@ -1,5 +1,5 @@
 import { XSDElement, XSDChoice } from "@lib/types/xsd";
-import { IElementResolver, ITypeResolver, ITypeExtender, ITypeRestrictor } from "./interfaces";
+import { IElementResolver, ITypeResolver, ITypeExtender, ITypeRestrictor, IRefResolver } from "./interfaces";
 
 /**
  * Core resolver that orchestrates the complete element resolution process
@@ -10,11 +10,13 @@ export class ElementResolver implements IElementResolver {
    * @param typeResolver The type resolver for type references
    * @param typeExtender The type extender for extensions
    * @param typeRestrictor The type restrictor for restrictions
+   * @param refResolver Optional resolver for xs:element ref= placeholders
    */
   constructor(
     private typeResolver: ITypeResolver,
     private typeExtender: ITypeExtender,
     private typeRestrictor: ITypeRestrictor,
+    private refResolver?: IRefResolver,
   ) {}
 
   /**
@@ -25,6 +27,18 @@ export class ElementResolver implements IElementResolver {
   resolveElement(element: XSDElement): XSDElement {
     // Create a working copy to avoid mutating the original
     let resolvedElement = { ...element };
+
+    // Resolve xs:element ref= placeholders before any other resolution
+    if (resolvedElement.ref && this.refResolver) {
+      const refResolved = this.refResolver.resolveElementRef(
+        resolvedElement.ref,
+        resolvedElement.minOccurs,
+        resolvedElement.maxOccurs,
+      );
+      if (refResolved) {
+        resolvedElement = { ...refResolved };
+      }
+    }
 
     // Store original children (needed for a special edge case)
     const originalChildren = resolvedElement.children ? [...resolvedElement.children] : [];

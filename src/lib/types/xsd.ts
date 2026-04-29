@@ -25,6 +25,8 @@ export interface XSDElement {
   nillable?: boolean;
   listItemType?: string;
   unionMemberTypes?: string[];
+  /** When set, this element is a placeholder for a globally declared element with this name */
+  ref?: string;
   /** True when this element was declared inside xs:all (order-independent) */
   inAll?: boolean;
   /** True when the element's content model includes xs:any (wildcard child elements allowed) */
@@ -80,6 +82,8 @@ export interface XSDAttribute {
   use?: "required" | "optional";
   fixed?: string;
   default?: string;
+  /** When set, this attribute is a placeholder for a globally declared attribute with this name */
+  ref?: string;
 }
 
 export interface XSDChoice {

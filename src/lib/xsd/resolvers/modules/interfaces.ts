@@ -119,7 +119,19 @@ export interface IPropertyMerger {
 }
 
 /**
- * Interface for complete element resolvers that can process all resolution aspects
+ * Interface for resolvers that handle xs:element ref= and xs:attribute ref= placeholders
+ */
+export interface IRefResolver {
+  /**
+   * Resolves an element ref placeholder to the global element definition,
+   * preserving local occurrence constraints from the ref site.
+   * @param ref The local name of the referenced global element
+   * @param minOccurs Occurrence constraint from the ref site
+   * @param maxOccurs Occurrence constraint from the ref site
+   * @returns The resolved element, or undefined if the ref target is not found
+   */
+  resolveElementRef(ref: string, minOccurs?: number, maxOccurs?: number | "unbounded"): XSDElement | undefined;
+}
  */
 export interface IElementResolver {
   /**

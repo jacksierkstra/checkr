@@ -8,6 +8,7 @@ export { PropertyMerger } from "./PropertyMerger";
 export { TypeResolver } from "./TypeResolver";
 export { TypeExtender } from "./TypeExtender";
 export { TypeRestrictor } from "./TypeRestrictor";
+export { RefResolver } from "./RefResolver";
 export { ElementResolver } from "./ElementResolver";
 
 // Export the main facade
