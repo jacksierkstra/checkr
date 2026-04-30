@@ -80,16 +80,19 @@ Before writing any code, confirm:
 
 ---
 
-## Out-of-scope XSD features — do not implement
+## Deferred XSD features — do not implement
 
-The following XSD features are explicitly deferred. Do not implement them unless asked:
+The following features are deferred because they require loading external resources or multi-document schema composition, which is not yet supported by the library API:
 
-- `xs:all` — **partial support exists**: `xs:all` children are already parsed with `inAll: true` and are exempt from sequence-order enforcement (`validateSequenceOrder` skips them). Full `xs:all` semantics — enforcing that each child appears exactly 0 or 1 times and no more — are **not** implemented and remain deferred. Do not add further xs:all logic without a new ADR.
-- `xs:key`, `xs:unique`, `xs:keyref`
-- `xs:import`, `xs:include`
-- `xs:group`, `xs:attributeGroup`
+- `xs:import`, `xs:include`, `xs:redefine`
 
-Attempting partial support for `xs:key`, `xs:unique`, `xs:keyref`, `xs:import`/`xs:include`, or `xs:group`/`xs:attributeGroup` will silently produce wrong validation results.
+## Planned but not yet implemented
+
+The following features are tracked in `docs/backlog/` and should be implemented using the standard workflow (backlog item → ADR if needed → implementation → tests):
+
+- `xs:all` full count semantics ([feat-all-count-semantics](docs/backlog/feat-all-count-semantics.md)) — `xs:all` children are already parsed with `inAll: true` and are exempt from sequence-order enforcement. Full semantics — enforcing that each child appears exactly 0 or 1 times — are tracked and ready to implement.
+- `xs:group` / `xs:attributeGroup` ([feat-group-attributegroup](docs/backlog/feat-group-attributegroup.md)) — named model groups referenced via `ref` are currently ignored.
+- `xs:key`, `xs:unique`, `xs:keyref` ([feat-identity-constraints](docs/backlog/feat-identity-constraints.md)) — identity constraints are currently ignored.
 
 ## Architecture overview
 
