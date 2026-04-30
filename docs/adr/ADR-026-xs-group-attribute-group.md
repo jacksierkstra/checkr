@@ -1,6 +1,6 @@
 # ADR-026: xs:group and xs:attributeGroup Support
 
-**Status:** Proposed  
+**Status:** Accepted  
 **Supersedes:** [ADR-009](./ADR-009-deferred-xsd-features.md) *(for xs:group and xs:attributeGroup only)*
 
 ---

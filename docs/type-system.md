@@ -163,13 +163,10 @@ The type system is integrated into the validation pipeline architecture:
 
 ## Known Limitations
 
-- Substitution groups (`xs:substitutionGroup`) are tracked as a backlog item but are not currently implemented. See [`feat-substitution-group`](../backlog/feat-substitution-group.md).
 - Circular type references may cause performance issues
 
 ## Out of Scope
 
 The following features are explicitly deferred and will not be implemented (see [ADR-009](./adr/ADR-009-deferred-xsd-features.md)):
 
-- `xs:import` and `xs:include` (external schema loading)
-- `xs:group` and `xs:attributeGroup`
-- `xs:key`, `xs:unique`, `xs:keyref`
+- `xs:import`, `xs:include`, `xs:redefine` (external schema loading)

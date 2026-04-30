@@ -86,14 +86,6 @@ The following features are deferred because they require loading external resour
 
 - `xs:import`, `xs:include`, `xs:redefine`
 
-## Planned but not yet implemented
-
-The following features are tracked in `docs/backlog/` and should be implemented using the standard workflow (backlog item → ADR if needed → implementation → tests):
-
-- `xs:all` full count semantics ([feat-all-count-semantics](docs/backlog/feat-all-count-semantics.md)) — `xs:all` children are already parsed with `inAll: true` and are exempt from sequence-order enforcement. Full semantics — enforcing that each child appears exactly 0 or 1 times — are tracked and ready to implement.
-- `xs:group` / `xs:attributeGroup` ([feat-group-attributegroup](docs/backlog/feat-group-attributegroup.md)) — named model groups referenced via `ref` are currently ignored.
-- `xs:key`, `xs:unique`, `xs:keyref` ([feat-identity-constraints](docs/backlog/feat-identity-constraints.md)) — identity constraints are currently ignored.
-
 ## Architecture overview
 
 The library is split into three responsibilities wired together in `Checkr`:

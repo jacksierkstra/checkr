@@ -70,14 +70,14 @@ The validation process consists of multiple pipeline stages:
 ## Supported XSD Features
 
 - ✅ `xs:sequence`, `xs:choice`
-- ⚠️ `xs:all` (partial: children are parsed and exempt from sequence ordering; full `xs:all` cardinality semantics — each child appearing exactly once, per-child `minOccurs`/`maxOccurs` — are not yet enforced)
+- ✅ `xs:all` — order-independent children, each allowed at most once; per-child `minOccurs`/`maxOccurs` enforced
 - ✅ `xs:element`, `xs:complexType`, `xs:simpleType`
 - ✅ `xs:simpleContent` with extension and restriction
 - ✅ `xs:enumeration`, `xs:pattern`
 - ✅ `xs:minLength`, `xs:maxLength`, `xs:length`
 - ✅ `xs:totalDigits`, `xs:fractionDigits`
 - ✅ `xs:whiteSpace` facet (`preserve`, `replace`, `collapse`)
-- ✅ Attribute validation (`xs:attribute`) — required, optional, fixed, default
+- ✅ Attribute validation (`xs:attribute`) — required, optional, fixed, default, prohibited
 - ✅ Type inheritance (`xs:extension`, `xs:restriction`)
 - ✅ Numeric constraints (`minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`)
 - ✅ `xs:list` and `xs:union` simple types
@@ -86,11 +86,15 @@ The validation process consists of multiple pipeline stages:
 - ✅ `xs:sequence` child-order enforcement
 - ✅ Unexpected element and attribute detection
 - ✅ Element `default` and `fixed` value constraints
-- ✅ Namespace support and resolution
+- ✅ Namespace support and resolution (`elementFormDefault`, `attributeFormDefault`, `form`)
+- ✅ `xs:substitutionGroup` — element substitution including transitive chains
+- ✅ `xs:group` and `xs:attributeGroup` — named model groups and attribute groups with `ref` expansion
+- ✅ `xs:key`, `xs:unique`, `xs:keyref` — identity constraint validation
+- ✅ `xs:abstract` element declarations
+- ✅ `block` / `final` / `blockDefault` / `finalDefault` derivation control
+- ✅ `xs:ID` uniqueness and `xs:IDREF` referential integrity
 - 🚧 **Out of scope** (explicitly deferred — see ADR-009):
-  - `xs:key`, `xs:unique`, `xs:keyref`
-  - Namespaced imports (`xs:import`, `xs:include`)
-  - `xs:group` and `xs:attributeGroup`
+  - Namespaced imports (`xs:import`, `xs:include`, `xs:redefine`)
 
 ## Running Tests
 

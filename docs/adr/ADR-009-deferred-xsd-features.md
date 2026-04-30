@@ -1,6 +1,10 @@
 # ADR-009: Explicitly defer `xs:all`, `xs:key`, `xs:import`, `xs:group`
 
-**Status:** Accepted
+**Status:** Partially Superseded  
+**Superseded for xs:all by:** [ADR-025](./ADR-025-xs-all-full-semantics.md)  
+**Superseded for xs:group/xs:attributeGroup by:** [ADR-026](./ADR-026-xs-group-attribute-group.md)  
+**Superseded for xs:substitutionGroup by:** [ADR-027](./ADR-027-substitution-group.md)  
+**Still applies to:** `xs:import`, `xs:include`, `xs:redefine`
 
 ---
 
@@ -24,18 +28,15 @@ The features in question:
 
 ## Decision
 
-The following XSD features are **explicitly out of scope** and must not be partially implemented:
+The following XSD features were **explicitly out of scope** at the time of this decision. Most have since been implemented:
 
-- `xs:all` — **partial support exists** (see note below)
-- `xs:key`, `xs:unique`, `xs:keyref`
-- `xs:import`, `xs:include`
-- `xs:group`, `xs:attributeGroup`
+- `xs:all` — ✅ **Implemented** (full semantics via ADR-025; `validateAllChildren` step)
+- `xs:key`, `xs:unique`, `xs:keyref` — ✅ **Implemented** (`validateIdentityConstraints` document-level step)
+- `xs:import`, `xs:include`, `xs:redefine` — ❌ **Still deferred** (requires loading external schema documents)
+- `xs:group`, `xs:attributeGroup` — ✅ **Implemented** (two-phase parse + `GroupResolver` module via ADR-026)
+- `xs:substitutionGroup` — ✅ **Implemented** (`SubstitutionGroupResolver` via ADR-027)
 
-If Checkr encounters these constructs in an XSD document, it silently ignores them rather than attempting partial validation (except for `xs:all` — see below).
-
-> **`xs:all` partial support:** The bug `fix-all-order-independence` introduced an `inAll: boolean` flag on `XSDElement`. `ParseNestedElementsStep` tags children of `xs:all` with `inAll: true`, and `validateSequenceOrder` skips those children so they are not subject to sequence-order enforcement. This is the minimum correct behaviour. **Full `xs:all` semantics** — enforcing that each child appears at most once and that `minOccurs`/`maxOccurs` per-child constraints are distinct from `xs:sequence` semantics — remain deferred. Implementing full `xs:all` support requires a new ADR that supersedes this one for xs:all.
-
-Implementing any of the other deferred features requires a new ADR that supersedes this one for the feature in question.
+Only `xs:import`, `xs:include`, and `xs:redefine` remain out of scope. If Checkr encounters these constructs it silently ignores them.
 
 ---
 
