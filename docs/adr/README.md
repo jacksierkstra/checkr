@@ -26,7 +26,7 @@ All ADRs follow the [Michael Nygard template](https://cognitect.com/blog/2011/11
 | [ADR-006](./ADR-006-modular-type-resolver.md) | Modular, interface-backed type resolver | Accepted |
 | [ADR-007](./ADR-007-dual-namespace-lookup.md) | Dual namespace lookup pattern for DOM queries | Superseded by [ADR-017](./ADR-017-native-domparser.md) |
 | [ADR-008](./ADR-008-jsdom-test-environment.md) | Use `jest-environment-jsdom` as the test environment ¹ | Accepted |
-| [ADR-009](./ADR-009-deferred-xsd-features.md) | Explicitly defer `xs:all`, `xs:key`, `xs:import`, `xs:group` | Accepted |
+| [ADR-009](./ADR-009-deferred-xsd-features.md) | Explicitly defer `xs:all`, `xs:key`, `xs:import`, `xs:group` | Partially Superseded by [ADR-025](./ADR-025-xs-all-full-semantics.md), [ADR-026](./ADR-026-xs-group-attribute-group.md), [ADR-027](./ADR-027-substitution-group.md) |
 | [ADR-010](./ADR-010-tspc-build.md) | Use `ts-patch` (`tspc`) instead of plain `tsc` for builds | Accepted |
 | [ADR-011](./ADR-011-async-api.md) | `validate()` returns a `Promise` despite a synchronous pipeline | Superseded by [ADR-019](./ADR-019-sync-and-async-api.md) |
 | [ADR-012](./ADR-012-string-error-messages.md) | Error messages are plain strings — no error codes | Superseded by [ADR-020](./ADR-020-structured-validation-errors.md) |
@@ -43,7 +43,7 @@ All ADRs follow the [Michael Nygard template](https://cognitect.com/blog/2011/11
 | [ADR-023](./ADR-023-eslint-prettier.md) | Add ESLint + Prettier toolchain | Accepted |
 | [ADR-024](./ADR-024-conventional-commits-release-please.md) | Adopt Conventional Commits + Release Please | Accepted |
 | [ADR-025](./ADR-025-xs-all-full-semantics.md) | Full `xs:all` semantics | Accepted |
-| [ADR-026](./ADR-026-xs-group-attribute-group.md) | `xs:group` and `xs:attributeGroup` support | Proposed |
+| [ADR-026](./ADR-026-xs-group-attribute-group.md) | `xs:group` and `xs:attributeGroup` support | Accepted |
 | [ADR-027](./ADR-027-substitution-group.md) | `xs:substitutionGroup` support | Accepted |
 | [ADR-028](./ADR-028-xsd-11-support.md) | XSD 1.1 support strategy | Proposed |
 | [ADR-029](./ADR-029-xpath-evaluation.md) | XPath evaluation integration | Proposed |

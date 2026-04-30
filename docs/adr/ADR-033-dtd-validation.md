@@ -19,7 +19,7 @@ The native `DOMParser` API does **not** expose DTD validation results. It parses
 
 To implement DTD validation, Checkr would need one of:
 1. A **custom DTD tokenizer and parser** (significant effort; ~1,000–2,000 lines for a conformant implementation)
-2. A **third-party XML/DTD parser library** — conflicts with ADR-002 (zero runtime dependencies)
+2. A **third-party XML/DTD parser library** — conflicts with ADR-017 (zero runtime dependencies)
 
 ---
 
@@ -29,7 +29,7 @@ DTD validation is **deferred indefinitely** due to:
 
 1. **Low demand:** DTD usage is declining. XSD and Schematron cover the vast majority of modern XML validation needs.
 2. **High implementation cost:** A conformant DTD parser is a significant engineering investment for limited return.
-3. **Dependency conflict:** A third-party parser would break ADR-002.
+3. **Dependency conflict:** A third-party parser would break ADR-017's zero-runtime-dependency contract.
 4. **Native API limitations:** `DOMParser` does not expose DTD validation; there is no lightweight path.
 
 If user demand emerges, this ADR should be revisited. At that point, the preferred approach would be a custom DTD parser rather than a runtime dependency, to preserve the zero-dependency contract.

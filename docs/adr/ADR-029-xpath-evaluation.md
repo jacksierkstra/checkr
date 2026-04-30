@@ -17,7 +17,7 @@ Several planned features require evaluating XPath expressions against XML docume
 
 The DOM Level 3 `document.evaluate` API provides XPath 1.0 evaluation and is available natively in all modern browsers and in Node.js 18+ (via `jsdom` in tests, and natively in the V8 runtime). XPath 2.0 is **not** natively available in any browser or Node.js environment.
 
-This creates a tension with Checkr's current **zero runtime dependency** stance (ADR-002).
+This conflicts with Checkr's current **zero runtime dependency** stance (ADR-017).
 
 ---
 
@@ -30,7 +30,7 @@ Use `document.evaluate` (native DOM API) for XPath 1.0 evaluation. This:
 - Is sufficient for Schematron basic profiles.
 
 ### XPath 2.0
-XPath 2.0 evaluation requires a third-party library (e.g., `fontoxpath`, `xpath`). This conflicts with ADR-002.
+XPath 2.0 evaluation requires a third-party library (e.g., `fontoxpath`, `xpath`). This conflicts with ADR-017's zero-runtime-dependency contract.
 
 **Resolution:** XSD 1.1 `xs:assert` and `xs:alternative` will be implemented using XPath 1.0 syntax only in the initial release, with a documented limitation that XPath 2.0 expressions are not supported. If demand warrants it, XPath 2.0 support can be added as an **optional peer dependency** — the library checks for its presence at runtime and falls back gracefully (emitting a `PARSE_ERROR` with a helpful message if a 2.0-only expression is encountered without the library installed).
 

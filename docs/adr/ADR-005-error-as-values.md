@@ -42,7 +42,7 @@ All pipeline steps and resolver modules follow the same rule: they return `strin
 ## Known tensions
 
 **1. `validate()` is `async` but the pipeline is synchronous.**
-The public API returns `Promise<ValidationResult>`, yet no step in the pipeline performs I/O or deferred work. The `async` wrapper is a forward-looking affordance: if remote schema loading (`xs:import` via HTTP) is ever supported, the API contract will not need to change. Until then, consumers must `await` what is effectively synchronous work. See [ADR-011](./ADR-011-async-api.md) for the full rationale.
+The public API returned `Promise<ValidationResult>`, yet no step in the pipeline performs I/O or deferred work. See [ADR-011](./ADR-011-async-api.md) for the original rationale. **This was resolved in [ADR-019](./ADR-019-sync-and-async-api.md)**: `validate()` is now synchronous and `validateAsync()` is a separate convenience wrapper.
 
 **2. `console.warn` in validation steps.**
-The `validateType` step calls `console.warn(...)` when a regex pattern is invalid. This is a side effect that violates the spirit of "errors as values" — it leaks to stderr rather than returning an error string. This is a known inconsistency: the step should instead return a descriptive error string. Until corrected, contributors should treat `console.warn` as prohibited inside pipeline steps.
+The `validateType` step called `console.warn(...)` when a regex pattern was invalid. This was a side effect that violated the spirit of "errors as values" — it leaked to stderr rather than returning an error string. **This was resolved in [ADR-018](./ADR-018-throw-on-programmer-errors.md)**, which replaced the `console.warn` call with a proper returned error and prohibits `console.warn` in all pipeline steps going forward.
