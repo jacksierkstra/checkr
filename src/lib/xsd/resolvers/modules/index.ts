@@ -9,6 +9,7 @@ export { TypeResolver } from "./TypeResolver";
 export { TypeExtender } from "./TypeExtender";
 export { TypeRestrictor } from "./TypeRestrictor";
 export { RefResolver } from "./RefResolver";
+export { GroupResolver } from "./GroupResolver";
 export { ElementResolver } from "./ElementResolver";
 
 // Export the main facade

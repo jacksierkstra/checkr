@@ -11,11 +11,20 @@ export class ParseRootElementStep implements PipelineStep<Element, Partial<XSDEl
     const defaultVal = el.getAttribute("default");
     const fixedVal = el.getAttribute("fixed");
     const substitutionGroup = el.getAttribute("substitutionGroup") || undefined;
+    const form = el.getAttribute("form");
+    const block = el.getAttribute("block");
+    const final = el.getAttribute("final");
+    const abstract = el.getAttribute("abstract");
 
-    const result: Partial<XSDElement> = name !== null ? { name, type, minOccurs, maxOccurs, nillable } : {};
+    const result: Partial<XSDElement> =
+      name !== null ? { name, type, minOccurs, maxOccurs, nillable } : {};
     if (defaultVal !== null) result.default = defaultVal;
     if (fixedVal !== null) result.fixed = fixedVal;
     if (substitutionGroup) result.substitutionGroup = substitutionGroup;
+    if (form === "qualified" || form === "unqualified") result.form = form;
+    if (block !== null) result.block = block;
+    if (final !== null) result.final = final;
+    if (abstract === "true") result.abstract = true;
     return result;
   }
 

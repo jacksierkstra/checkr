@@ -1,6 +1,7 @@
 import { XSDElement } from "@lib/types/xsd";
 import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
 import { ParseAttributesStep } from "./attributes";
+import { parseRestrictionFacets } from "./facetParser";
 
 const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
@@ -65,7 +66,7 @@ export class ParseSimpleContentStep implements PipelineStep<Element, Partial<XSD
     const base = restriction.getAttribute("base");
     if (!base) return {};
 
-    const result: Partial<XSDElement> = {};
+    const result: Partial<XSDElement> = { ...parseRestrictionFacets(restriction) };
 
     if (base.startsWith("xs:")) {
       result.type = base;

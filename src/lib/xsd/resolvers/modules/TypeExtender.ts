@@ -39,6 +39,14 @@ export class TypeExtender implements ITypeExtender {
     const baseTypeName = element.extension.base;
     const baseTypeDef = this.registry.getTypeDefinition(baseTypeName);
 
+    if (this.blocksExtension(baseTypeDef?.final)) {
+      return {
+        ...element,
+        derivationBlocked: "extension",
+        extension: undefined,
+      };
+    }
+
     if (!baseTypeDef) {
       // Base type not found, merge extension's direct content only
       return {
@@ -82,5 +90,11 @@ export class TypeExtender implements ITypeExtender {
       type: resolvedBaseElement.type,
       abstract: element.abstract !== undefined ? element.abstract : resolvedBaseElement.abstract,
     };
+  }
+
+  private blocksExtension(final?: string): boolean {
+    if (!final) return false;
+    const tokens = final.split(/\s+/).filter(Boolean);
+    return tokens.includes("#all") || tokens.includes("extension");
   }
 }

@@ -76,6 +76,26 @@ describe("ParseSimpleContentStep", () => {
     expect(result.attributes![0].name).toBe("lang");
   });
 
+  it("parses simpleContent restriction facets", () => {
+    const el = parse(`
+      <xs:element xmlns:xs="http://www.w3.org/2001/XMLSchema" name="code">
+        <xs:complexType>
+          <xs:simpleContent>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="A"/>
+              <xs:pattern value="[A-Z]"/>
+              <xs:length value="1"/>
+            </xs:restriction>
+          </xs:simpleContent>
+        </xs:complexType>
+      </xs:element>
+    `);
+    const result = step.execute(el);
+    expect(result.enumeration).toEqual(["A"]);
+    expect(result.pattern).toBe("[A-Z]");
+    expect(result.length).toBe(1);
+  });
+
   it("does not set type for non-xs: base in extension", () => {
     const el = parse(`
       <xs:element xmlns:xs="http://www.w3.org/2001/XMLSchema" name="item">

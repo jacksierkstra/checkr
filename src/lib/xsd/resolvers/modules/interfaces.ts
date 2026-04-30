@@ -132,7 +132,13 @@ export interface IRefResolver {
    */
   resolveElementRef(ref: string, minOccurs?: number, maxOccurs?: number | "unbounded"): XSDElement | undefined;
 }
+
+/**
+ * Interface for resolvers that expand xs:group and xs:attributeGroup references.
  */
+export interface IGroupResolver {
+  resolveGroups(element: XSDElement): XSDElement;
+}
 export interface IElementResolver {
   /**
    * Resolves a single element definition including all of its sub-components

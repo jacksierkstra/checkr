@@ -1,5 +1,6 @@
 import { NodeValidationStep } from "@lib/types/validation";
 import { XSDElement } from "@lib/types/xsd";
+import { directChildElements } from "@lib/validator/utils/schemaMatch";
 
 export const validateSequenceOrder: NodeValidationStep = (
   node: Element,
@@ -11,17 +12,16 @@ export const validateSequenceOrder: NodeValidationStep = (
   const schemaIndexMap = new Map<string, number>();
   schema.children
     .filter((child) => !child.inAll)
-    .forEach((child, i) => schemaIndexMap.set(child.name, i));
+    .forEach((child, i) => schemaIndexMap.set(`${child.namespace ?? ""}:${child.name.toLowerCase()}`, i));
 
   if (schemaIndexMap.size === 0) return [];
 
-  const xmlChildren = Array.from(node.childNodes).filter(
-    (n): n is Element => n.nodeType === 1,
-  ) as Element[];
+  const xmlChildren = directChildElements(node);
 
   let lastSchemaIndex = -1;
   for (const child of xmlChildren) {
-    const schemaIndex = schemaIndexMap.get(child.localName ?? child.nodeName);
+    const key = `${child.namespaceURI ?? ""}:${(child.localName ?? child.nodeName).toLowerCase()}`;
+    const schemaIndex = schemaIndexMap.get(key);
     if (schemaIndex === undefined) continue;
     if (schemaIndex < lastSchemaIndex) {
       return [

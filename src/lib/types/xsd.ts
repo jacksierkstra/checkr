@@ -1,7 +1,13 @@
 export interface XSDSchema {
   targetNamespace?: string;
+  elementFormDefault?: "qualified" | "unqualified";
+  attributeFormDefault?: "qualified" | "unqualified";
+  blockDefault?: string;
+  finalDefault?: string;
   elements: XSDElement[];
   types: { [typeName: string]: XSDElement }; // Global complexType definitions
+  groups?: { [name: string]: XSDElement[] };
+  attributeGroups?: { [name: string]: XSDAttribute[] };
 }
 
 export interface XSDElement {
@@ -12,6 +18,9 @@ export interface XSDElement {
   maxOccurs?: number | "unbounded";
   attributes?: XSDAttribute[];
   children?: XSDElement[];
+  form?: "qualified" | "unqualified";
+  block?: string;
+  final?: string;
   enumeration?: string[];
   choices?: XSDChoice[];
   pattern?: string;
@@ -27,10 +36,14 @@ export interface XSDElement {
   unionMemberTypes?: string[];
   /** When set, this element is a placeholder for a globally declared element with this name */
   ref?: string;
+  /** When set, this element is a placeholder for a globally declared group with this name */
+  groupRef?: string;
   /** When set, this element is a member of the substitution group with this head element name */
   substitutionGroup?: string;
   /** Names of elements that may substitute this element (populated at resolution time) */
   allowedSubstitutes?: string[];
+  /** Names of elements that are blocked from substituting this element */
+  blockedSubstitutes?: string[];
   /** True when this element was declared inside xs:all (order-independent) */
   inAll?: boolean;
   /** True when the element's content model includes xs:any (wildcard child elements allowed) */
@@ -42,6 +55,8 @@ export interface XSDElement {
   default?: string;
   /** Fixed value constraint — element content must equal this if present */
   fixed?: string;
+  /** Marks a derivation that is blocked by block/final rules */
+  derivationBlocked?: "extension" | "restriction" | "substitution";
   // Numeric constraints that can be applied directly to elements
   minInclusive?: number;
   maxInclusive?: number;
@@ -49,6 +64,7 @@ export interface XSDElement {
   maxExclusive?: number;
   totalDigits?: number;
   fractionDigits?: number;
+  identityConstraints?: XSDIdentityConstraint[];
 }
 
 export interface XSDExtension {
@@ -83,11 +99,27 @@ export interface XSDAttribute {
   name: string;
   namespace?: string;
   type?: string;
-  use?: "required" | "optional";
+  form?: "qualified" | "unqualified";
+  use?: "required" | "optional" | "prohibited";
   fixed?: string;
   default?: string;
   /** When set, this attribute is a placeholder for a globally declared attribute with this name */
   ref?: string;
+  /** When set, this attribute is a placeholder for a globally declared attributeGroup with this name */
+  attributeGroupRef?: string;
+  enumeration?: string[];
+  pattern?: string;
+  minLength?: number;
+  maxLength?: number;
+  length?: number;
+}
+
+export interface XSDIdentityConstraint {
+  kind: "key" | "unique" | "keyref";
+  name: string;
+  refer?: string;
+  selector: string;
+  fields: string[];
 }
 
 export interface XSDChoice {

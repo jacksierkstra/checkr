@@ -7,7 +7,14 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
   execute(el: Element): Partial<XSDElement> {
     let result = { children: [] as XSDElement[], choices: [] as XSDChoice[], allowAnyChild: false };
 
-    if (this.isXsdElement(el, "complexType")) {
+    if (this.isXsdElement(el, "group") && !el.getAttribute("ref")) {
+      const res = this.parseContainer(el, false, false);
+      result.children.push(...res.children);
+      if (res.choices.length > 0) {
+        result.choices.push(...res.choices);
+      }
+      if (res.allowAnyChild) result.allowAnyChild = true;
+    } else if (this.isXsdElement(el, "complexType")) {
       const res = this.parseContainer(el, false);
       result.children.push(...res.children);
       if (res.choices.length > 0) {
@@ -40,6 +47,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
   private parseContainer(
     el: Element,
     isInChoice: boolean = false,
+    isInAll: boolean = false,
   ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean } {
     let children: XSDElement[] = [];
     let choices: XSDChoice[] = [];
@@ -50,28 +58,44 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       const child = node as Element;
 
       if (this.isXsdElement(child, "element")) {
-        const element = this.parseElement(child, isInChoice);
+        const element = this.parseElement(child, isInChoice, isInAll);
         if (element) {
           children.push(element);
         }
       } else if (this.isXsdElement(child, "sequence")) {
-        const res = this.parseContainer(child, false);
+        const res = this.parseContainer(child, false, isInAll);
         children.push(...res.children);
         choices.push(...res.choices);
         if (res.allowAnyChild) allowAnyChild = true;
       } else if (this.isXsdElement(child, "choice")) {
-        const res = this.parseContainer(child, true);
+        const res = this.parseContainer(child, true, isInAll);
         if (res.children.length > 0) {
           choices.push({ elements: res.children });
         }
         choices.push(...res.choices);
         if (res.allowAnyChild) allowAnyChild = true;
       } else if (this.isXsdElement(child, "all")) {
-        const res = this.parseContainer(child, false);
+        const res = this.parseContainer(child, false, true);
         // Tag all children as order-independent
         children.push(...res.children.map((c) => ({ ...c, inAll: true })));
         choices.push(...res.choices);
         if (res.allowAnyChild) allowAnyChild = true;
+      } else if (this.isXsdElement(child, "group")) {
+        const ref = child.getAttribute("ref");
+        if (!ref) return;
+        const localRef = ref.replace(/^.*:/, "");
+        const minOccursAttr = child.getAttribute("minOccurs");
+        const minOccurs = parseInt(
+          minOccursAttr && minOccursAttr.trim() !== "" ? minOccursAttr : "1",
+          10,
+        );
+        const maxOccursAttr = child.getAttribute("maxOccurs");
+        const maxOccurs =
+          maxOccursAttr === "unbounded"
+            ? ("unbounded" as const)
+            : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
+        const effectiveMaxOccurs = isInAll && maxOccurs !== "unbounded" ? Math.min(maxOccurs, 1) : maxOccurs;
+        children.push({ name: localRef, groupRef: localRef, minOccurs, maxOccurs: effectiveMaxOccurs });
       } else if (this.isXsdElement(child, "any")) {
         allowAnyChild = true;
       }
@@ -80,7 +104,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     return { children, choices, allowAnyChild };
   }
 
-  private parseElement(el: Element, isInChoice: boolean = false): XSDElement | null {
+  private parseElement(el: Element, isInChoice: boolean = false, isInAll: boolean = false): XSDElement | null {
     const name = el.getAttribute("name");
     const ref = el.getAttribute("ref");
 
@@ -97,10 +121,13 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       isInChoice && (!minOccursAttr || minOccursAttr.trim() === "") ? 0 : minOccurs;
 
     const maxOccursAttr = el.getAttribute("maxOccurs");
-    const maxOccurs =
+    let maxOccurs: number | "unbounded" =
       maxOccursAttr === "unbounded"
         ? "unbounded"
         : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
+    if (isInAll) {
+      maxOccurs = maxOccurs === "unbounded" ? 1 : Math.min(maxOccurs, 1);
+    }
 
     const xsdElement: XSDElement = { name: effectiveName, minOccurs: effectiveMinOccurs, maxOccurs };
 
@@ -113,6 +140,31 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     const typeAttr = el.getAttribute("type");
     if (typeAttr) {
       xsdElement.type = typeAttr;
+    }
+
+    const form = el.getAttribute("form");
+    if (form === "qualified" || form === "unqualified") {
+      xsdElement.form = form;
+    }
+
+    const block = el.getAttribute("block");
+    if (block !== null) {
+      xsdElement.block = block;
+    }
+
+    const final = el.getAttribute("final");
+    if (final !== null) {
+      xsdElement.final = final;
+    }
+
+    const abstract = el.getAttribute("abstract");
+    if (abstract === "true") {
+      xsdElement.abstract = true;
+    }
+
+    const nillable = el.getAttribute("nillable");
+    if (nillable === "true") {
+      xsdElement.nillable = true;
     }
 
     const defaultAttr = el.getAttribute("default");
@@ -128,6 +180,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       const res = this.parseContainer(inlineComplexType, false);
       if (res.children.length > 0) xsdElement.children = res.children;
       if (res.choices.length > 0) xsdElement.choices = res.choices;
+      if (res.allowAnyChild) xsdElement.allowAnyChild = true;
     }
     return xsdElement;
   }

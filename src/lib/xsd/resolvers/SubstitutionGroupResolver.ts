@@ -57,9 +57,12 @@ export class SubstitutionGroupResolver {
 
   private enrichElement(el: XSDElement, map: SubstitutionMap): XSDElement {
     const substitutes = map[el.name];
-    const enriched: XSDElement = substitutes
+    const blocksSubstitution = this.blocksSubstitution(el.block);
+    const enriched: XSDElement = substitutes && !blocksSubstitution
       ? { ...el, allowedSubstitutes: substitutes }
-      : { ...el };
+      : substitutes && blocksSubstitution
+        ? { ...el, blockedSubstitutes: substitutes }
+        : { ...el };
 
     if (enriched.children && enriched.children.length > 0) {
       enriched.children = enriched.children.map((child) => this.enrichElement(child, map));
@@ -72,5 +75,11 @@ export class SubstitutionGroupResolver {
     }
 
     return enriched;
+  }
+
+  private blocksSubstitution(block?: string): boolean {
+    if (!block) return false;
+    const tokens = block.split(/\s+/).filter(Boolean);
+    return tokens.includes("#all") || tokens.includes("substitution");
   }
 }

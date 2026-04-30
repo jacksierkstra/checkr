@@ -171,4 +171,28 @@ describe("ParseNestedElementsStep", () => {
       { name: "child2", minOccurs: 0, maxOccurs: "unbounded" },
     ]);
   });
+
+  it("should clamp xs:all child maxOccurs and preserve group refs", () => {
+    const xsdElement = `
+            <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+                <xs:group name="addressGroup">
+                    <xs:sequence>
+                        <xs:element name="street" />
+                    </xs:sequence>
+                </xs:group>
+                <xs:complexType>
+                    <xs:all>
+                        <xs:element name="name" maxOccurs="5" />
+                        <xs:group ref="addressGroup" maxOccurs="2" />
+                    </xs:all>
+                </xs:complexType>
+            </xs:schema>
+        `;
+    const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
+    const result = step.execute(element!);
+    expect(result.children).toEqual([
+      { name: "name", minOccurs: 1, maxOccurs: 1, inAll: true },
+      { name: "addressGroup", groupRef: "addressGroup", minOccurs: 1, maxOccurs: 1, inAll: true },
+    ]);
+  });
 });

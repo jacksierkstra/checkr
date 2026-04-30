@@ -84,6 +84,22 @@ export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElem
       } else if (this.isXsdElement(child, "all")) {
         const elements = this.parseChildElements(child);
         result.children?.push(...elements.map((e) => ({ ...e, inAll: true })));
+      } else if (this.isXsdElement(child, "group")) {
+        const ref = child.getAttribute("ref");
+        if (ref) {
+          const localRef = ref.replace(/^.*:/, "");
+          const minOccursAttr = child.getAttribute("minOccurs");
+          const minOccurs = parseInt(
+            minOccursAttr && minOccursAttr.trim() !== "" ? minOccursAttr : "1",
+            10,
+          );
+          const maxOccursAttr = child.getAttribute("maxOccurs");
+          const maxOccurs =
+            maxOccursAttr === "unbounded"
+              ? ("unbounded" as const)
+              : parseInt(maxOccursAttr && maxOccursAttr.trim() !== "" ? maxOccursAttr : "1", 10);
+          result.children?.push({ name: localRef, groupRef: localRef, minOccurs, maxOccurs });
+        }
       } else if (this.isXsdElement(child, "any")) {
         allowAnyChild = true;
       }
@@ -107,11 +123,13 @@ export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElem
             : maxOccursAttr
               ? parseInt(maxOccursAttr, 10)
               : 1;
+        const form = el.getAttribute("form") as "qualified" | "unqualified" | null;
         return {
           name: el.getAttribute("name") || "",
           type: typeAttr || undefined,
           minOccurs: inChoice ? 0 : parseInt(el.getAttribute("minOccurs") || "1", 10),
           maxOccurs,
+          ...(form === "qualified" || form === "unqualified" ? { form } : {}),
         };
       });
   }

@@ -7,6 +7,7 @@ import { TypeRestrictor } from "./modules/TypeRestrictor";
 import { TypeResolver } from "./modules/TypeResolver";
 import { ElementResolver } from "./modules/ElementResolver";
 import { RefResolver } from "./modules/RefResolver";
+import { GroupResolver } from "./modules/GroupResolver";
 import {
   ITypeRegistry,
   IResolutionCache,
@@ -32,6 +33,7 @@ export class ModularTypeReferenceResolver implements IElementResolver {
   private typeExtender: ITypeExtender;
   private typeRestrictor: ITypeRestrictor;
   private refResolver: IRefResolver;
+  private groupResolver: GroupResolver;
 
   /**
    * Creates a new modular type reference resolver
@@ -69,11 +71,18 @@ export class ModularTypeReferenceResolver implements IElementResolver {
     this.typeRestrictor = new TypeRestrictor(this.registry, this.cache, this.elementResolver);
 
     this.refResolver = new RefResolver(schema);
+    this.groupResolver = new GroupResolver(schema);
 
     // Update the element resolver with the actual components
     Object.assign(
       this.elementResolver,
-      new ElementResolver(this.typeResolver, this.typeExtender, this.typeRestrictor, this.refResolver),
+      new ElementResolver(
+        this.typeResolver,
+        this.typeExtender,
+        this.typeRestrictor,
+        this.refResolver,
+        this.groupResolver,
+      ),
     );
   }
 

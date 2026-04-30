@@ -1,4 +1,5 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
 
 /**
  * Enforces full xs:all semantics on a parent element.
@@ -17,24 +18,12 @@ export const validateAllChildren: NodeValidationStep = (node, schema) => {
   const allChildren = schema.children.filter((c) => c.inAll === true);
   if (allChildren.length === 0) return [];
 
-  const xmlChildren = Array.from(node.childNodes).filter(
-    (n): n is Element => n.nodeType === 1,
-  );
+  const xmlChildren = directChildElements(node);
 
   const errors: ValidationError[] = [];
 
   for (const childSchema of allChildren) {
-    const maxOccurs = childSchema.maxOccurs;
-    // validateOccurrence already handles the standard case (maxOccurs=1 exceeded).
-    // Only add an error here when maxOccurs > 1 or "unbounded" would allow more than one,
-    // but xs:all semantics require at most one.
-    if (maxOccurs === 1 || maxOccurs === undefined) continue;
-
-    const count = xmlChildren.filter(
-      (el) =>
-        el.localName?.toLowerCase() === childSchema.name.toLowerCase() ||
-        el.tagName?.toLowerCase() === childSchema.name.toLowerCase(),
-    ).length;
+    const count = xmlChildren.filter((el) => matchesSchemaElement(el, childSchema)).length;
 
     if (count > 1) {
       errors.push({

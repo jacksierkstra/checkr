@@ -235,4 +235,33 @@ describe("validateAttributes", () => {
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0].code).toBe("ATTRIBUTE_INVALID");
   });
+
+  it("should reject prohibited attributes", () => {
+    const element = createElement("Item", { status: "blocked" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [{ name: "status", type: "xs:string", use: "prohibited" }],
+    };
+    expect(validateAttributes(element, schema).some((e) => e.code === "ATTRIBUTE_INVALID")).toBe(
+      true,
+    );
+  });
+
+  it("should validate inline simpleType facets on attributes", () => {
+    const element = createElement("Item", { code: "C" });
+    const schema: XSDElement = {
+      name: "Item",
+      attributes: [
+        {
+          name: "code",
+          type: "xs:string",
+          use: "optional",
+          enumeration: ["A", "B"],
+        },
+      ],
+    };
+    expect(validateAttributes(element, schema).some((e) => e.code === "PATTERN_MISMATCH")).toBe(
+      true,
+    );
+  });
 });

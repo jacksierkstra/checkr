@@ -1,4 +1,4 @@
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
+import { XSDElement, XSDAttribute, XSDSchema } from "@lib/types/xsd";
 import { XMLParser } from "@lib/xml/parser";
 import { ElementAssembler } from "@lib/xsd/pipeline/elementAssembler";
 import { Pipeline, PipelineImpl } from "@lib/xsd/pipeline/pipeline";
@@ -6,6 +6,7 @@ import { ParseAttributesStep } from "@lib/xsd/pipeline/steps/attributes";
 import { ParseEnumerationStep } from "@lib/xsd/pipeline/steps/enumeration";
 import { ParseExtensionStep } from "@lib/xsd/pipeline/steps/extension";
 import { ParseNestedElementsStep } from "@lib/xsd/pipeline/steps/nestedElement";
+import { ParseIdentityConstraintsStep } from "@lib/xsd/pipeline/steps/identityConstraints";
 import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
 import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
 import { ParseSimpleContentStep } from "@lib/xsd/pipeline/steps/simpleContent";
@@ -25,6 +26,7 @@ export class XSDPipelineParserImpl implements XSDParser {
   constructor(private xmlParser: XMLParser) {
     this.pipeline = new PipelineImpl<Element, Partial<XSDElement>>()
       .addStep(new ParseRootElementStep())
+      .addStep(new ParseIdentityConstraintsStep())
       .addStep(new ParseEnumerationStep())
       .addStep(new ParseAttributesStep())
       .addStep(new ParseNestedElementsStep())
@@ -50,6 +52,8 @@ export class XSDPipelineParserImpl implements XSDParser {
     const elementNodes = schemaNodes.filter((node) => node.localName === "element");
     const complexTypeNodes = schemaNodes.filter((node) => node.localName === "complexType");
     const simpleTypeNodes = schemaNodes.filter((node) => node.localName === "simpleType");
+    const groupNodes = schemaNodes.filter((node) => node.localName === "group");
+    const attributeGroupNodes = schemaNodes.filter((node) => node.localName === "attributeGroup");
 
     // Process global elements via your pipeline.
     const elementPartials = elementNodes.map((el) => this.pipeline.execute(el));
@@ -77,12 +81,51 @@ export class XSDPipelineParserImpl implements XSDParser {
         typesMap[typeDef.name] = typeDef;
       });
 
+    const groupPartials = groupNodes.map((el) => this.pipeline.execute(el));
+    const groupsMerged = this.assembler.mergePartialElements(groupPartials);
+    const groupsMap: { [key: string]: XSDElement[] } = {};
+    groupsMerged
+      .filter((group): group is XSDElement => group.name !== undefined)
+      .forEach((groupDef) => {
+        groupsMap[groupDef.name] = [
+          ...(groupDef.children || []),
+          ...(groupDef.choices?.flatMap((choice) => choice.elements) || []),
+        ];
+      });
+
+    const attributeGroupPartials = attributeGroupNodes.map((el) => this.pipeline.execute(el));
+    const attributeGroupsMerged = this.assembler.mergePartialElements(attributeGroupPartials);
+    const attributeGroupsMap: { [key: string]: XSDAttribute[] } = {};
+    attributeGroupsMerged
+      .filter((group): group is XSDElement => group.name !== undefined)
+      .forEach((groupDef) => {
+        attributeGroupsMap[groupDef.name] = groupDef.attributes || [];
+      });
+
     const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
+    const elementFormDefault =
+      (doc.documentElement.getAttribute("elementFormDefault") as "qualified" | "unqualified") ||
+      "unqualified";
+    const attributeFormDefault =
+      (doc.documentElement.getAttribute("attributeFormDefault") as "qualified" | "unqualified") ||
+      "unqualified";
+    const blockDefault = doc.documentElement.getAttribute("blockDefault") || undefined;
+    const finalDefault = doc.documentElement.getAttribute("finalDefault") || undefined;
     const namespacedElements = targetNamespace
       ? this.assembler.applyNamespace(validElements, targetNamespace)
       : validElements;
 
-    const schema: XSDSchema = { targetNamespace, elements: namespacedElements, types: typesMap };
+    const schema: XSDSchema = {
+      targetNamespace,
+      elementFormDefault,
+      attributeFormDefault,
+      blockDefault,
+      finalDefault,
+      elements: namespacedElements,
+      types: typesMap,
+      groups: groupsMap,
+      attributeGroups: attributeGroupsMap,
+    };
 
     // Resolve type references now that we have global types available.
     const resolver = new ModularTypeReferenceResolver(schema);
@@ -93,6 +136,138 @@ export class XSDPipelineParserImpl implements XSDParser {
     const subGroupMap = subGroupResolver.buildMap(validElements);
     const enrichedElements = subGroupResolver.enrichElements(resolvedElements, subGroupMap);
 
-    return { targetNamespace, elements: enrichedElements, types: typesMap };
+    const namespaceAppliedElements = this.applyNamespaces(enrichedElements, schema);
+    const namespaceAppliedTypes = this.applyNamespacesOnMap(typesMap, schema);
+    const namespaceAppliedGroups = this.applyNamespacesOnGroupMap(groupsMap, schema);
+    const namespaceAppliedAttributeGroups = this.applyNamespacesOnAttributeGroupMap(
+      attributeGroupsMap,
+      schema,
+    );
+
+    return {
+      ...schema,
+      elements: namespaceAppliedElements,
+      types: namespaceAppliedTypes,
+      groups: namespaceAppliedGroups,
+      attributeGroups: namespaceAppliedAttributeGroups,
+    };
+  }
+
+  private applyNamespaces(elements: XSDElement[], schema: XSDSchema): XSDElement[] {
+    return elements.map((element) => this.applyNamespaceToElement(element, schema, true));
+  }
+
+  private applyNamespacesOnMap(
+    items: { [key: string]: XSDElement },
+    schema: XSDSchema,
+  ): { [key: string]: XSDElement } {
+    return Object.fromEntries(
+      Object.entries(items).map(([key, value]) => [key, this.applyNamespaceToElement(value, schema, true)]),
+    );
+  }
+
+  private applyNamespacesOnGroupMap(
+    items: { [key: string]: XSDElement[] },
+    schema: XSDSchema,
+  ): { [key: string]: XSDElement[] } {
+    return Object.fromEntries(
+      Object.entries(items).map(([key, value]) => [key, value.map((el) => this.applyNamespaceToElement(el, schema, false))]),
+    );
+  }
+
+  private applyNamespacesOnAttributeGroupMap(
+    items: { [key: string]: XSDAttribute[] },
+    schema: XSDSchema,
+  ): { [key: string]: XSDAttribute[] } {
+    return Object.fromEntries(
+      Object.entries(items).map(([key, value]) => [key, value.map((attr) => this.applyNamespaceToAttribute(attr, schema, false))]),
+    );
+  }
+
+  private applyNamespaceToElement(
+    element: XSDElement,
+    schema: XSDSchema,
+    isTopLevel: boolean,
+  ): XSDElement {
+    const resolved: XSDElement = { ...element };
+    if (resolved.block === undefined && schema.blockDefault) {
+      resolved.block = schema.blockDefault;
+    }
+    if (resolved.final === undefined && schema.finalDefault) {
+      resolved.final = schema.finalDefault;
+    }
+    const effectiveForm = resolved.form ?? (isTopLevel ? "qualified" : schema.elementFormDefault ?? "unqualified");
+    resolved.namespace = this.resolveNamespace(effectiveForm, schema.targetNamespace, isTopLevel);
+
+    if (resolved.attributes) {
+      resolved.attributes = resolved.attributes.map((attr) => this.applyNamespaceToAttribute(attr, schema, false));
+    }
+
+    if (resolved.children) {
+      resolved.children = resolved.children.map((child) => this.applyNamespaceToElement(child, schema, false));
+    }
+
+    if (resolved.choices) {
+      resolved.choices = resolved.choices.map((choice) => ({
+        ...choice,
+        elements: choice.elements.map((child) => this.applyNamespaceToElement(child, schema, false)),
+      }));
+    }
+
+    if (resolved.extension) {
+      resolved.extension = {
+        ...resolved.extension,
+        attributes: resolved.extension.attributes?.map((attr) =>
+          this.applyNamespaceToAttribute(attr, schema, false),
+        ),
+        children: resolved.extension.children?.map((child) =>
+          this.applyNamespaceToElement(child, schema, false),
+        ),
+        choices: resolved.extension.choices?.map((choice) => ({
+          ...choice,
+          elements: choice.elements.map((child) => this.applyNamespaceToElement(child, schema, false)),
+        })),
+      };
+    }
+
+    if (resolved.restriction) {
+      resolved.restriction = {
+        ...resolved.restriction,
+        attributes: resolved.restriction.attributes?.map((attr) =>
+          this.applyNamespaceToAttribute(attr, schema, false),
+        ),
+        children: resolved.restriction.children?.map((child) =>
+          this.applyNamespaceToElement(child, schema, false),
+        ),
+        choices: resolved.restriction.choices?.map((choice) => ({
+          ...choice,
+          elements: choice.elements.map((child) => this.applyNamespaceToElement(child, schema, false)),
+        })),
+      };
+    }
+
+    return resolved;
+  }
+
+  private applyNamespaceToAttribute(
+    attr: XSDAttribute,
+    schema: XSDSchema,
+    isTopLevel: boolean,
+  ): XSDAttribute {
+    const resolved = { ...attr };
+    const effectiveForm =
+      resolved.form ?? (isTopLevel ? "qualified" : schema.attributeFormDefault ?? "unqualified");
+    resolved.namespace = this.resolveNamespace(effectiveForm, schema.targetNamespace, isTopLevel);
+    return resolved;
+  }
+
+  private resolveNamespace(
+    form: "qualified" | "unqualified",
+    targetNamespace: string | undefined,
+    isTopLevel: boolean,
+  ): string | undefined {
+    if (!targetNamespace) return undefined;
+    if (isTopLevel) return targetNamespace;
+    return form === "qualified" ? targetNamespace : undefined;
   }
 }

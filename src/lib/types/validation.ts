@@ -13,6 +13,11 @@ export type ValidationErrorCode =
   | "SEQUENCE_VIOLATION"
   | "ABSTRACT_ELEMENT"
   | "NIL_NOT_ALLOWED"
+  | "UNIQUENESS_VIOLATION"
+  | "REFERENCE_VIOLATION"
+  | "DUPLICATE_ID"
+  | "UNRESOLVED_IDREF"
+  | "DERIVATION_BLOCKED"
   | "PARSE_ERROR";
 
 export interface ValidationError {

@@ -1,6 +1,7 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 import { XSDAttribute } from "@lib/types/xsd";
 import { isValidBuiltinType } from "@lib/validator/builtinTypeCheck";
+import { matchesSchemaAttribute } from "@lib/validator/utils/schemaMatch";
 
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
@@ -20,15 +21,87 @@ function validateAttrType(
   };
 }
 
+function validateAttrFacets(
+  attrName: string,
+  elementName: string,
+  value: string,
+  attr: XSDAttribute,
+): ValidationError[] {
+  const errors: ValidationError[] = [];
+  if (attr.enumeration && !attr.enumeration.includes(value)) {
+    errors.push({
+      code: "PATTERN_MISMATCH",
+      message: `Attribute '${attrName}' in element <${elementName}> must be one of [${attr.enumeration.join(", ")}], but found "${value}".`,
+      element: elementName,
+      expected: attr.enumeration,
+      actual: value,
+    });
+  }
+
+  if (attr.pattern) {
+    const regex = new RegExp(attr.pattern);
+    if (!regex.test(value)) {
+      errors.push({
+        code: "PATTERN_MISMATCH",
+        message: `Attribute '${attrName}' in element <${elementName}> does not match pattern /${attr.pattern}/.`,
+        element: elementName,
+        expected: attr.pattern,
+        actual: value,
+      });
+    }
+  }
+
+  if (attr.length != null && value.length !== attr.length) {
+    errors.push({
+      code: "RANGE_VIOLATION",
+      message: `Attribute '${attrName}' in element <${elementName}> must have length ${attr.length}, but found ${value.length}.`,
+      element: elementName,
+      expected: attr.length,
+      actual: value.length,
+    });
+  }
+
+  if (attr.minLength != null && value.length < attr.minLength) {
+    errors.push({
+      code: "RANGE_VIOLATION",
+      message: `Attribute '${attrName}' in element <${elementName}> must be at least length ${attr.minLength}, but found ${value.length}.`,
+      element: elementName,
+      expected: attr.minLength,
+      actual: value.length,
+    });
+  }
+
+  if (attr.maxLength != null && value.length > attr.maxLength) {
+    errors.push({
+      code: "RANGE_VIOLATION",
+      message: `Attribute '${attrName}' in element <${elementName}> must be at most length ${attr.maxLength}, but found ${value.length}.`,
+      element: elementName,
+      expected: attr.maxLength,
+      actual: value.length,
+    });
+  }
+
+  return errors;
+}
+
 export const validateAttributes: NodeValidationStep = (node, schema) => {
   if (!schema.attributes || schema.attributes.length === 0) return [];
+  const declaredAttributes = schema.attributes;
 
-  const errors: ValidationError[] = schema.attributes.flatMap((attr: XSDAttribute) => {
-    // Handle both namespaced and non-namespaced attributes
-    const value = attr.namespace
-      ? node.getAttributeNS(attr.namespace, attr.name)
-      : node.getAttribute(attr.name);
+  const errors: ValidationError[] = declaredAttributes.flatMap((attr: XSDAttribute) => {
+    const value = attr.namespace ? node.getAttributeNS(attr.namespace, attr.name) : node.getAttribute(attr.name);
     const attrErrors: ValidationError[] = [];
+
+    if (attr.use === "prohibited") {
+      if (value !== null) {
+        attrErrors.push({
+          code: "ATTRIBUTE_INVALID",
+          message: `Attribute '${attr.name}' is prohibited on element <${schema.name}>.`,
+          element: schema.name,
+        });
+      }
+      return attrErrors;
+    }
 
     // Apply default value for absent optional attributes
     const effectiveValue =
@@ -58,13 +131,13 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
     if (effectiveValue !== null && effectiveValue.trim() !== "") {
       const typeError = validateAttrType(attr.name, schema.name, effectiveValue, attr.type);
       if (typeError) attrErrors.push(typeError);
+      attrErrors.push(...validateAttrFacets(attr.name, schema.name, effectiveValue, attr));
     }
 
     return attrErrors;
   });
 
   // Check for unexpected attributes (attributes in XML not declared in schema)
-  const declaredNames = new Set(schema.attributes.map((a) => a.name.toLowerCase()));
   if (!schema.allowAnyAttribute) {
     Array.from(node.attributes).forEach((attr) => {
       // Allow xmlns namespace declarations and xsi:* attributes
@@ -72,11 +145,11 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
       if (attr.namespaceURI === XSI_NAMESPACE) return;
       if (attr.name === "xmlns" || attr.name.startsWith("xmlns:")) return;
 
-      const attrLocalName = attr.localName || attr.name;
-      if (!declaredNames.has(attrLocalName.toLowerCase())) {
+      const declared = declaredAttributes.some((declaredAttr) => matchesSchemaAttribute(attr, declaredAttr));
+      if (!declared) {
         errors.push({
           code: "ATTRIBUTE_INVALID",
-          message: `Attribute '${attrLocalName}' in element <${schema.name}> is not declared in the schema.`,
+          message: `Attribute '${attr.localName || attr.name}' in element <${schema.name}> is not declared in the schema.`,
           element: schema.name,
         });
       }

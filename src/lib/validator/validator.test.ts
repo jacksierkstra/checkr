@@ -312,4 +312,121 @@ describe("Validator", () => {
     expect(result.valid).toBe(true);
     expect(result.errors).toHaveLength(0);
   });
+
+  it("should enforce namespace qualification and per-element form overrides", () => {
+    const qualified = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                 targetNamespace="http://example.com"
+                 elementFormDefault="qualified">
+        <xs:element name="person">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="address" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    const xmlInvalid = `<person xmlns="http://example.com"><address xmlns="">Street</address></person>`;
+    const xmlValid = `<person xmlns="http://example.com"><address xmlns="http://example.com">Street</address></person>`;
+    expect(validator.validate(xmlInvalid, qualified).valid).toBe(false);
+    expect(validator.validate(xmlValid, qualified).valid).toBe(true);
+
+    const override = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+                 targetNamespace="http://example.com"
+                 elementFormDefault="qualified">
+        <xs:element name="person">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="nickname" form="unqualified" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    expect(
+      validator.validate(`<person xmlns="http://example.com"><nickname xmlns="">A</nickname></person>`, override).valid,
+    ).toBe(true);
+  });
+
+  it("should enforce xs:all count semantics", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="record">
+          <xs:complexType>
+            <xs:all>
+              <xs:element name="A" type="xs:string"/>
+              <xs:element name="B" type="xs:string" minOccurs="0"/>
+            </xs:all>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    expect(validator.validate(`<record><A>1</A><A>2</A></record>`, xsd).errors.some((e) => e.code === "OCCURRENCE_VIOLATION")).toBe(true);
+    expect(validator.validate(`<record><B>2</B><A>1</A></record>`, xsd).valid).toBe(true);
+  });
+
+  it("should enforce prohibited attributes, inline simpleType facets, and simpleContent facets", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:element name="item">
+          <xs:complexType>
+            <xs:attribute name="status" use="prohibited"/>
+            <xs:attribute name="code">
+              <xs:simpleType>
+                <xs:restriction base="xs:string">
+                  <xs:enumeration value="A"/>
+                  <xs:enumeration value="B"/>
+                </xs:restriction>
+              </xs:simpleType>
+            </xs:attribute>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="label">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:pattern value="[A-Z]+"/>
+              <xs:length value="3"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:element>
+      </xs:schema>
+    `;
+    expect(validator.validate(`<item status="x" code="A"/>`, xsd).errors.some((e) => e.code === "ATTRIBUTE_INVALID")).toBe(true);
+    expect(validator.validate(`<item code="C"/>`, xsd).errors.some((e) => e.code === "PATTERN_MISMATCH")).toBe(true);
+    expect(validator.validate(`<label>AB</label>`, xsd).errors.some((e) => e.code === "RANGE_VIOLATION")).toBe(true);
+  });
+
+  it("should block final and substitution derivations", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:complexType name="BaseType" final="extension">
+          <xs:sequence>
+            <xs:element name="baseChild" type="xs:string"/>
+          </xs:sequence>
+        </xs:complexType>
+        <xs:element name="head" type="xs:string" block="substitution"/>
+        <xs:element name="member" substitutionGroup="head" type="xs:string"/>
+        <xs:element name="wrapper">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element ref="head"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="blocked">
+          <xs:complexType>
+            <xs:complexContent>
+              <xs:extension base="BaseType"/>
+            </xs:complexContent>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    const blockedExt = validator.validate(`<blocked><baseChild>A</baseChild><extra>B</extra></blocked>`, xsd);
+    expect(blockedExt.errors.some((e) => e.code === "DERIVATION_BLOCKED")).toBe(true);
+    const blockedSub = validator.validate(`<wrapper><member>A</member></wrapper>`, xsd);
+    expect(blockedSub.errors.some((e) => e.code === "DERIVATION_BLOCKED")).toBe(true);
+  });
 });

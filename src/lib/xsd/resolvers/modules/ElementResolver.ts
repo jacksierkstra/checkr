@@ -1,5 +1,12 @@
 import { XSDElement, XSDChoice } from "@lib/types/xsd";
-import { IElementResolver, ITypeResolver, ITypeExtender, ITypeRestrictor, IRefResolver } from "./interfaces";
+import {
+  IElementResolver,
+  ITypeResolver,
+  ITypeExtender,
+  ITypeRestrictor,
+  IRefResolver,
+  IGroupResolver,
+} from "./interfaces";
 
 /**
  * Core resolver that orchestrates the complete element resolution process
@@ -17,6 +24,7 @@ export class ElementResolver implements IElementResolver {
     private typeExtender: ITypeExtender,
     private typeRestrictor: ITypeRestrictor,
     private refResolver?: IRefResolver,
+    private groupResolver?: IGroupResolver,
   ) {}
 
   /**
@@ -64,6 +72,10 @@ export class ElementResolver implements IElementResolver {
       }
     } else if (resolvedElement.restriction) {
       resolvedElement = this.typeRestrictor.resolveRestriction(resolvedElement);
+    }
+
+    if (this.groupResolver) {
+      resolvedElement = this.groupResolver.resolveGroups(resolvedElement);
     }
 
     // Now recursively resolve children

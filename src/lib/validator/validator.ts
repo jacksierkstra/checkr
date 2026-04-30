@@ -15,11 +15,15 @@ import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
 import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
 import { validateType } from "@lib/validator/pipeline/steps/type";
 import { validateAbstract } from "@lib/validator/pipeline/steps/abstract";
+import { validateDerivationBlocked } from "@lib/validator/pipeline/steps/derivationBlocked";
 import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements";
 import { validateUnexpectedElements } from "@lib/validator/pipeline/steps/unexpectedElements";
 import { validateSequenceOrder } from "@lib/validator/pipeline/steps/sequenceOrder";
+import { validateIdentityConstraints } from "@lib/validator/pipeline/steps/identityConstraints";
+import { validateIdSemantics } from "@lib/validator/pipeline/steps/idSemantics";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
 
 export interface Validator {
   validate(xml: string, xsd: string): ValidationResult;
@@ -37,6 +41,7 @@ export class ValidatorImpl implements Validator {
     // Node-level pipeline (type checks, attribute checks, etc.)
     this.nodePipeline = new NodeValidationPipelineImpl()
       .addStep(validateAbstract)
+      .addStep(validateDerivationBlocked)
       .addStep(validateType)
       .addStep(validateElementFixed)
       .addStep(validateMixedContent)
@@ -57,15 +62,12 @@ export class ValidatorImpl implements Validator {
 
     // Check for unexpected root-level elements
     if (elements.length > 0) {
-      const declaredNames = new Set(elements.map((e) => e.name.toLowerCase()));
       Array.from(xmlDoc.childNodes).forEach((child) => {
         if (child.nodeType !== 1) return;
-        const name = (
-          (child as Element).localName ||
-          (child as Element).tagName ||
-          ""
-        ).toLowerCase();
-        if (name && !declaredNames.has(name)) {
+        const childEl = child as Element;
+        const isDeclared = elements.some((schemaEl) => matchesSchemaElement(childEl, schemaEl));
+        if (!isDeclared) {
+          const name = (childEl.localName || childEl.tagName || "").toLowerCase();
           errors.push({
             code: "UNEXPECTED_ELEMENT",
             message: `Root element <${name}> is not declared in the schema.`,
@@ -81,10 +83,7 @@ export class ValidatorImpl implements Validator {
       // false OCCURRENCE_VIOLATION errors when the same element name appears at
       // multiple nesting levels.
       const nodes = Array.from(xmlDoc.childNodes).filter(
-        (n): n is Element =>
-          n.nodeType === 1 &&
-          ((n as Element).localName === schemaElement.name ||
-            (n as Element).tagName === schemaElement.name),
+        (n): n is Element => n.nodeType === 1 && matchesSchemaElement(n as Element, schemaElement),
       );
 
       // Global checks (e.g., occurrence constraints) for this element
@@ -124,15 +123,13 @@ export class ValidatorImpl implements Validator {
       const childrenErrors = schemaElement.children.flatMap((childSchema) => {
         const childNodes = node.hasChildNodes() ? Array.from(node.childNodes) : [];
         const acceptedNames = new Set([
-          childSchema.name.toLowerCase(),
           ...(childSchema.allowedSubstitutes ?? []).map((s) => s.toLowerCase()),
         ]);
-        const filtered = childNodes
-          .filter((child): child is Element => child.nodeType === 1)
-          .filter((child) => {
-            const childName = child.tagName || child.localName;
-            return childName && acceptedNames.has(childName.toLowerCase());
-          });
+        const filtered = directChildElements(node).filter(
+          (child) =>
+            matchesSchemaElement(child, childSchema) ||
+            acceptedNames.has((child.tagName || child.localName || "").toLowerCase()),
+        );
 
         // Only validate children that exist in the document
         // Missing required children are handled by validateRequiredChildren
@@ -162,7 +159,10 @@ export class ValidatorImpl implements Validator {
   private validateChoice(node: Element, choice: XSDChoice): ValidationError[] {
     // Sum how many total child elements from the choice are present
     const matches = choice.elements.reduce((count, el) => {
-      return count + node.getElementsByTagName(el.name).length;
+      return (
+        count +
+        directChildElements(node).filter((child) => matchesSchemaElement(child, el)).length
+      );
     }, 0);
 
     // If exactly 1 is found, good
@@ -213,7 +213,9 @@ export class ValidatorImpl implements Validator {
     // Programmer errors (bugs in pipeline steps) propagate — do NOT catch
     const rootElementErrors = validateRootElements(xmlDoc, schema);
     const elementErrors = this.validateElements(xmlDoc, schema.elements);
-    const errors = [...rootElementErrors, ...elementErrors];
+    const identityErrors = validateIdentityConstraints(xmlDoc, schema);
+    const idErrors = validateIdSemantics(xmlDoc, schema);
+    const errors = [...rootElementErrors, ...elementErrors, ...identityErrors, ...idErrors];
 
     return { valid: errors.length === 0, errors };
   }

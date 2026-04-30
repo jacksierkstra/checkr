@@ -29,15 +29,15 @@ describe("validateAllChildren (xs:all full semantics)", () => {
     expect(validateAllChildren(node, schema)).toEqual([]);
   });
 
-  it("returns no error when xs:all child with maxOccurs=1 appears twice (validateOccurrence handles that case)", () => {
-    // validateOccurrence already handles the standard maxOccurs=1 case;
-    // validateAllChildren should not double-report it.
+  it("returns OCCURRENCE_VIOLATION when xs:all child with maxOccurs=1 appears twice", () => {
     const schema: XSDElement = {
       name: "root",
       children: [{ name: "A", inAll: true, maxOccurs: 1 }],
     };
     const node = parse("<root><A/><A/></root>");
-    expect(validateAllChildren(node, schema)).toEqual([]);
+    expect(validateAllChildren(node, schema).some((e) => e.code === "OCCURRENCE_VIOLATION")).toBe(
+      true,
+    );
   });
 
   it("returns OCCURRENCE_VIOLATION when xs:all child with maxOccurs=unbounded appears more than once", () => {

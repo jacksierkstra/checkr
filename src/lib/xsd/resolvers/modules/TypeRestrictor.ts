@@ -30,6 +30,14 @@ export class TypeRestrictor implements ITypeRestrictor {
     const baseTypeName = element.restriction.base;
     const baseTypeDef = this.registry.getTypeDefinition(baseTypeName);
 
+    if (this.blocksRestriction(baseTypeDef?.final)) {
+      return {
+        ...element,
+        derivationBlocked: "restriction",
+        restriction: undefined,
+      };
+    }
+
     if (!baseTypeDef) {
       // Base type not found, apply restriction facets directly
       const resultOnError = { ...element };
@@ -94,5 +102,11 @@ export class TypeRestrictor implements ITypeRestrictor {
     if (r.totalDigits !== undefined) target.totalDigits = r.totalDigits;
     if (r.fractionDigits !== undefined) target.fractionDigits = r.fractionDigits;
     if (r.whiteSpace !== undefined) target.whiteSpace = r.whiteSpace;
+  }
+
+  private blocksRestriction(final?: string): boolean {
+    if (!final) return false;
+    const tokens = final.split(/\s+/).filter(Boolean);
+    return tokens.includes("#all") || tokens.includes("restriction");
   }
 }

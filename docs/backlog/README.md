@@ -71,12 +71,12 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-element-default-fixed](./feat-element-default-fixed.md) | 🟢 low | done | xs:default and xs:fixed on xs:element |
 | [feat-mixed-content](./feat-mixed-content.md) | 🟢 low | done | Validate xs:complexType mixed="true" content model |
 | [feat-substitution-group](./feat-substitution-group.md) | 🟢 low | done | xs:substitutionGroup support |
-| [feat-namespace-qualification](./feat-namespace-qualification.md) | 🟢 low | backlog | elementFormDefault, attributeFormDefault, and form attribute handling |
-| [feat-group-attributegroup](./feat-group-attributegroup.md) | 🟠 high | backlog | xs:group and xs:attributeGroup named model group support |
-| [feat-all-count-semantics](./feat-all-count-semantics.md) | 🟡 medium | backlog | xs:all full count enforcement (each child at most once) |
-| [feat-identity-constraints](./feat-identity-constraints.md) | 🟡 medium | backlog | xs:key, xs:unique, xs:keyref identity constraint validation |
-| [feat-attribute-prohibited](./feat-attribute-prohibited.md) | 🟡 medium | backlog | xs:attribute use="prohibited" support |
-| [feat-id-idref-semantic](./feat-id-idref-semantic.md) | 🟠 high | backlog | xs:ID uniqueness and xs:IDREF referential integrity |
-| [feat-inline-simpletype-attribute](./feat-inline-simpletype-attribute.md) | 🟡 medium | backlog | Inline xs:simpleType child of xs:attribute |
-| [feat-simplecontent-restriction-facets](./feat-simplecontent-restriction-facets.md) | 🟡 medium | backlog | xs:simpleContent > xs:restriction facet extraction |
-| [feat-block-final](./feat-block-final.md) | 🟢 low | backlog | block/final/blockDefault/finalDefault derivation control |
+| [feat-namespace-qualification](./feat-namespace-qualification.md) | 🟢 low | done | elementFormDefault, attributeFormDefault, and form attribute handling |
+| [feat-group-attributegroup](./feat-group-attributegroup.md) | 🟠 high | done | xs:group and xs:attributeGroup named model group support |
+| [feat-all-count-semantics](./feat-all-count-semantics.md) | 🟡 medium | done | xs:all full count enforcement (each child at most once) |
+| [feat-identity-constraints](./feat-identity-constraints.md) | 🟡 medium | done | xs:key, xs:unique, xs:keyref identity constraint validation |
+| [feat-attribute-prohibited](./feat-attribute-prohibited.md) | 🟡 medium | done | xs:attribute use="prohibited" support |
+| [feat-id-idref-semantic](./feat-id-idref-semantic.md) | 🟠 high | done | xs:ID uniqueness and xs:IDREF referential integrity |
+| [feat-inline-simpletype-attribute](./feat-inline-simpletype-attribute.md) | 🟡 medium | done | Inline xs:simpleType child of xs:attribute |
+| [feat-simplecontent-restriction-facets](./feat-simplecontent-restriction-facets.md) | 🟡 medium | done | xs:simpleContent > xs:restriction facet extraction |
+| [feat-block-final](./feat-block-final.md) | 🟢 low | done | block/final/blockDefault/finalDefault derivation control |

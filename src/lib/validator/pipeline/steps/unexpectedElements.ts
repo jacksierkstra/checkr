@@ -1,4 +1,5 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
 
 /**
  * Validates that child elements of an XML node are all declared in the schema.
@@ -13,29 +14,38 @@ export const validateUnexpectedElements: NodeValidationStep = (node, schema) => 
   // xs:any wildcard — all child elements are permitted
   if (schema.allowAnyChild) return [];
 
-  const declaredNames = new Set<string>();
-  if (schema.children) {
-    schema.children.forEach((c) => {
-      declaredNames.add(c.name.toLowerCase());
-      c.allowedSubstitutes?.forEach((s) => declaredNames.add(s.toLowerCase()));
-    });
-  }
-  if (schema.choices) {
-    schema.choices.forEach((choice) => {
-      choice.elements.forEach((el) => {
-        declaredNames.add(el.name.toLowerCase());
-        el.allowedSubstitutes?.forEach((s) => declaredNames.add(s.toLowerCase()));
-      });
-    });
-  }
-
   const errors: ValidationError[] = [];
 
-  Array.from(node.childNodes).forEach((child) => {
-    if (child.nodeType !== 1) return; // skip non-elements
-    const childEl = child as Element;
+  directChildElements(node).forEach((childEl) => {
     const childName = (childEl.localName || childEl.tagName || "").toLowerCase();
-    if (childName && !declaredNames.has(childName)) {
+    const blocked = [
+      ...(schema.children ?? []),
+      ...((schema.choices ?? []).flatMap((choice) => choice.elements)),
+    ].some((declaredChild) =>
+      (declaredChild.blockedSubstitutes ?? []).some((s) => s.toLowerCase() === childName),
+    );
+    const declared =
+      (schema.children ?? []).some(
+        (declaredChild) =>
+          matchesSchemaElement(childEl, declaredChild) ||
+          (declaredChild.allowedSubstitutes ?? []).some((s) => s.toLowerCase() === childName),
+      ) ||
+      (schema.choices ?? []).some((choice) =>
+        choice.elements.some(
+          (declaredChild) =>
+            matchesSchemaElement(childEl, declaredChild) ||
+            (declaredChild.allowedSubstitutes ?? []).some((s) => s.toLowerCase() === childName),
+        ),
+      );
+    if (blocked) {
+      errors.push({
+        code: "DERIVATION_BLOCKED",
+        message: `Element <${childName}> is blocked from substituting its head element in <${schema.name}>.`,
+        element: childName,
+      });
+      return;
+    }
+    if (childName && !declared) {
       errors.push({
         code: "UNEXPECTED_ELEMENT",
         message: `Element <${childName}> is not declared in the schema for <${schema.name}>.`,

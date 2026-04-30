@@ -1,4 +1,5 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
+import { matchesSchemaElement, directChildElements } from "@lib/validator/utils/schemaMatch";
 
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 
@@ -13,22 +14,18 @@ export const validateRequiredChildren: NodeValidationStep = (xmlNode, schemaElem
 
   if (!schemaElement.children) return errors;
 
-  // Use xmlNode.children if available; otherwise fall back to childNodes filtered to Elements.
-  const childrenElements = xmlNode.childNodes
-    ? Array.from(xmlNode.childNodes).filter((child): child is Element => child.nodeType === 1)
-    : [];
+  const childrenElements = directChildElements(xmlNode);
 
   for (const childDef of schemaElement.children) {
     const minOccurs = childDef.minOccurs ?? 1; // Default to 1 if not specified
     const acceptedNames = new Set([
-      childDef.name.toLowerCase(),
       ...(childDef.allowedSubstitutes ?? []).map((s) => s.toLowerCase()),
+      ...(childDef.blockedSubstitutes ?? []).map((s) => s.toLowerCase()),
     ]);
     // Compare names in a case-insensitive manner, including substitution group members
     const matchingChildren = childrenElements.filter(
       (child) => {
-        const name = (child?.localName || child?.tagName || "").toLowerCase();
-        return acceptedNames.has(name);
+        return matchesSchemaElement(child, childDef) || acceptedNames.has((child?.localName || child?.tagName || "").toLowerCase());
       }
     );
 

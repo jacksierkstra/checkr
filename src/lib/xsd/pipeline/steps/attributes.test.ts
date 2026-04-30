@@ -163,4 +163,37 @@ describe("ParseAttributesStep", () => {
     const result = step.execute(element!);
     expect(result.allowAnyAttribute).toBeUndefined();
   });
+
+  it("should parse prohibited attributes and inline simpleType facets", () => {
+    const xsd = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:complexType>
+          <xs:attribute name="status" use="prohibited"/>
+          <xs:attribute name="code" type="xs:string">
+            <xs:simpleType>
+              <xs:restriction base="xs:string">
+                <xs:enumeration value="A"/>
+                <xs:enumeration value="B"/>
+              </xs:restriction>
+            </xs:simpleType>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:schema>
+    `;
+    const element = new DOMParser()
+      .parseFromString(xsd, "text/xml")
+      ?.documentElement?.getElementsByTagName("xs:complexType")[0];
+    const result = step.execute(element!);
+    expect(result.attributes).toEqual([
+      { name: "status", type: "xs:string", use: "prohibited", fixed: undefined, form: undefined },
+      {
+        name: "code",
+        type: "xs:string",
+        use: "optional",
+        fixed: undefined,
+        form: undefined,
+        enumeration: ["A", "B"],
+      },
+    ]);
+  });
 });
