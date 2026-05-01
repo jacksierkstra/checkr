@@ -28,6 +28,18 @@ export class TypeRestrictor implements ITypeRestrictor {
     }
 
     const baseTypeName = element.restriction.base;
+
+    // xs:anyType is the XSD ur-type — restriction is always valid; apply facets and content directly
+    if (baseTypeName === "xs:anyType") {
+      const result: XSDElement = { ...element };
+      this.applyRestrictionFacets(result, element);
+      if (element.restriction.children !== undefined) result.children = element.restriction.children;
+      if (element.restriction.choices !== undefined) result.choices = element.restriction.choices;
+      if (element.restriction.attributes !== undefined) result.attributes = element.restriction.attributes;
+      result.restriction = undefined;
+      return result;
+    }
+
     const baseTypeDef = this.registry.getTypeDefinition(baseTypeName);
 
     if (this.blocksRestriction(baseTypeDef?.final)) {

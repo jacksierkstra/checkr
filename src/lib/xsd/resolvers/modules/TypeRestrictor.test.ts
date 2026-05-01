@@ -249,6 +249,36 @@ describe("TypeRestrictor", () => {
       expect(resolved.children![0].minOccurs).toBe(1);
     });
 
+    it("should treat xs:anyType base as ur-type and apply restriction facets + content directly", () => {
+      const mockResolver = new MockElementResolver();
+      const restrictor = new TypeRestrictor(registry, cache, mockResolver);
+
+      const element: XSDElement = {
+        name: "RestrictedAny",
+        restriction: {
+          base: "xs:anyType",
+          enumeration: ["A", "B"],
+          children: [{ name: "Child", type: "xs:string", minOccurs: 1, maxOccurs: 1 }],
+          attributes: [{ name: "id", type: "xs:string" }],
+        },
+      };
+
+      const resolved = restrictor.resolveRestriction(element);
+
+      // Should not try to resolve base type
+      expect(mockResolver.resolveElementCallCount).toBe(0);
+      // Facets applied
+      expect(resolved.enumeration).toEqual(["A", "B"]);
+      // Content model from restriction
+      expect(resolved.children).toHaveLength(1);
+      expect(resolved.children![0].name).toBe("Child");
+      // Attributes from restriction
+      expect(resolved.attributes).toHaveLength(1);
+      expect(resolved.attributes![0].name).toBe("id");
+      // Restriction cleared
+      expect(resolved.restriction).toBeUndefined();
+    });
+
     it("should use restriction attributes instead of base type attributes", () => {
       const mockResolver = new MockElementResolver((element) => {
         if (element.name === "ItemBase") {
