@@ -56,6 +56,8 @@ export interface XSDElement {
   anyProcessContents?: "strict" | "lax" | "skip";
   /** True when the element's schema includes xs:anyAttribute (wildcard attributes allowed) */
   allowAnyAttribute?: boolean;
+  /** processContents value from xs:anyAttribute — "strict" validates against declarations, "lax" validates if found */
+  anyAttributeProcessContents?: "strict" | "lax" | "skip";
   whiteSpace?: "preserve" | "replace" | "collapse";
   /** Default value for this element (used when element is absent) */
   default?: string;

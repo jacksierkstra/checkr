@@ -178,7 +178,8 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
   });
 
   // Check for unexpected attributes (attributes in XML not declared in schema)
-  if (!schema.allowAnyAttribute) {
+  const strictWildcard = schema.allowAnyAttribute && schema.anyAttributeProcessContents === "strict";
+  if (!schema.allowAnyAttribute || strictWildcard) {
     Array.from(node.attributes).forEach((attr) => {
       // Allow xmlns namespace declarations and xsi:* attributes
       if (attr.namespaceURI === XMLNS_NAMESPACE) return;
