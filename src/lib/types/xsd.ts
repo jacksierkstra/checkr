@@ -10,6 +10,8 @@ export interface XSDSchema {
   attributeGroups?: { [name: string]: XSDAttribute[] };
   /** Top-level xs:attribute declarations, keyed by name */
   globalAttributes?: { [name: string]: XSDAttribute };
+  /** xs:notation declarations, stored as a set of declared notation names */
+  notations?: string[];
 }
 
 export interface XSDElement {
@@ -63,6 +65,8 @@ export interface XSDElement {
   /** namespace constraint from xs:anyAttribute — "##any", "##local", "##other:{targetNS}", or a specific URI */
   anyAttributeNamespace?: string;
   whiteSpace?: "preserve" | "replace" | "collapse";
+  /** xs:notation names declared in the schema, propagated to each element for NOTATION type validation */
+  notations?: string[];
   /** Default value for this element (used when element is absent) */
   default?: string;
   /** Fixed value constraint — element content must equal this if present */

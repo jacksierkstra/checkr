@@ -33,7 +33,8 @@ export class DocumentExtractor {
           el.localName === "simpleType" ||
           el.localName === "group" ||
           el.localName === "attributeGroup" ||
-          el.localName === "attribute")
+          el.localName === "attribute" ||
+          el.localName === "notation")
       );
     }) as Element[];
   }

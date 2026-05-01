@@ -541,6 +541,28 @@ export const validateType: NodeValidationStep = (node, schema) => {
         });
       }
       break;
+    case "xs:NOTATION": {
+      const isQName = /^([a-zA-Z_][\w.-]*:)?[a-zA-Z_][\w.-]*$/.test(text);
+      if (!isQName) {
+        errors.push({
+          code: "TYPE_MISMATCH",
+          message: `Element <${schema.name}> must be a valid QName for xs:NOTATION, but found "${text}".`,
+          element: schema.name,
+        });
+      } else if (schema.notations && schema.notations.length > 0) {
+        const localValue = text.replace(/^.*:/, "");
+        if (!schema.notations.includes(localValue) && !schema.notations.includes(text)) {
+          errors.push({
+            code: "TYPE_MISMATCH",
+            message: `Element <${schema.name}> references undeclared notation '${text}'.`,
+            element: schema.name,
+            expected: schema.notations.join(", "),
+            actual: text,
+          });
+        }
+      }
+      break;
+    }
     case "xs:hexBinary":
       if (!/^([0-9A-Fa-f]{2})*$/.test(text)) {
         errors.push({

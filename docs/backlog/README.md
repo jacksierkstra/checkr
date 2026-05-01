@@ -90,7 +90,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-inline-simpletype-attribute](./feat-inline-simpletype-attribute.md) | 🟡 medium | done | Inline xs:simpleType child of xs:attribute |
 | [feat-simplecontent-restriction-facets](./feat-simplecontent-restriction-facets.md) | 🟡 medium | done | xs:simpleContent > xs:restriction facet extraction |
 | [feat-block-final](./feat-block-final.md) | 🟢 low | done | block/final/blockDefault/finalDefault derivation control |
-| [feat-notation-declaration](./feat-notation-declaration.md) | 🟡 medium | backlog | xs:notation declaration parsing and NOTATION value validation |
+| [feat-notation-declaration](./feat-notation-declaration.md) | 🟡 medium | done | xs:notation declaration parsing and NOTATION value validation |
 | [feat-any-processcontents](./feat-any-processcontents.md) | 🟡 medium | done | xs:any processContents enforcement (strict/lax/skip) |
 | [feat-anyattribute-processcontents](./feat-anyattribute-processcontents.md) | 🟡 medium | done | xs:anyAttribute processContents enforcement |
 | [feat-wildcard-namespace](./feat-wildcard-namespace.md) | 🟡 medium | done | xs:any/xs:anyAttribute namespace attribute enforcement |

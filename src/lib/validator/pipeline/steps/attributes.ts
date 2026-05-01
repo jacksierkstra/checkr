@@ -21,8 +21,23 @@ function validateAttrType(
   elementName: string,
   value: string,
   type: string | undefined,
+  notations?: string[],
 ): ValidationError | null {
   if (!type || !value.trim()) return null;
+  if (type === "xs:NOTATION" && notations && notations.length > 0) {
+    // Strip namespace prefix for comparison (notation names are local)
+    const localValue = value.replace(/^.*:/, "");
+    if (!notations.includes(localValue) && !notations.includes(value)) {
+      return {
+        code: "ATTRIBUTE_INVALID",
+        message: `Attribute '${attrName}' in element <${elementName}> references undeclared notation '${value}'.`,
+        element: elementName,
+        expected: notations.join(", "),
+        actual: value,
+      };
+    }
+    return null; // QName format already validated by isValidBuiltinType
+  }
   if (isValidBuiltinType(value, type)) return null;
   return {
     code: "ATTRIBUTE_INVALID",
@@ -181,7 +196,7 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
 
     // Type validation for present, non-empty values
     if (effectiveValue !== null && effectiveValue.trim() !== "") {
-      const typeError = validateAttrType(attr.name, schema.name, effectiveValue, attr.type);
+      const typeError = validateAttrType(attr.name, schema.name, effectiveValue, attr.type, schema.notations);
       if (typeError) attrErrors.push(typeError);
       attrErrors.push(...validateAttrFacets(attr.name, schema.name, effectiveValue, attr));
     }

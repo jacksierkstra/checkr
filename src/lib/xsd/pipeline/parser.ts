@@ -112,6 +112,12 @@ export class XSDPipelineParserImpl implements XSDParser {
       }
     }
 
+    // Parse xs:notation declarations — capture notation names for NOTATION type validation.
+    const notationNodes = schemaNodes.filter((node) => node.localName === "notation");
+    const notations: string[] = notationNodes
+      .map((node) => node.getAttribute("name"))
+      .filter((name): name is string => name !== null && name !== "");
+
     const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
     const elementFormDefault =
       (doc.documentElement.getAttribute("elementFormDefault") as "qualified" | "unqualified") ||
@@ -136,6 +142,7 @@ export class XSDPipelineParserImpl implements XSDParser {
       groups: groupsMap,
       attributeGroups: attributeGroupsMap,
       globalAttributes: globalAttributesMap,
+      ...(notations.length > 0 ? { notations } : {}),
     };
 
     // Resolve type references now that we have global types available.
@@ -216,6 +223,11 @@ export class XSDPipelineParserImpl implements XSDParser {
     }
     if (resolved.anyAttributeNamespace) {
       resolved.anyAttributeNamespace = this.resolveNamespaceToken(resolved.anyAttributeNamespace, schema.targetNamespace);
+    }
+
+    // Propagate schema-level notation declarations so validators can access them
+    if (schema.notations && schema.notations.length > 0) {
+      resolved.notations = schema.notations;
     }
 
     if (resolved.attributes) {
