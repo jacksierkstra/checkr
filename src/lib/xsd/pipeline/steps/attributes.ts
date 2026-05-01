@@ -81,7 +81,7 @@ export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDEle
     return { attributes, allowAnyAttribute };
   }
 
-  private parseAttribute(attr: Element): XSDAttribute | null {
+  parseAttribute(attr: Element): XSDAttribute | null {
     const name = attr.getAttribute("name");
     const ref = attr.getAttribute("ref");
 
@@ -89,7 +89,10 @@ export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDEle
 
     if (name === null && ref !== null) {
       const localName = ref.replace(/^.*:/, "");
-      return { name: localName, ref: localName, use: "optional" };
+      const useAttr = attr.getAttribute("use");
+      const refAttr: XSDAttribute = { name: localName, ref: localName };
+      if (useAttr) refAttr.use = useAttr as "required" | "optional" | "prohibited";
+      return refAttr;
     }
 
     const result: XSDAttribute = {

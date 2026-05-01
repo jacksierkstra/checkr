@@ -78,6 +78,20 @@ export class ElementResolver implements IElementResolver {
       resolvedElement = this.groupResolver.resolveGroups(resolvedElement);
     }
 
+    // Resolve xs:attribute ref= placeholders on this element's attributes
+    if (resolvedElement.attributes && this.refResolver) {
+      resolvedElement = {
+        ...resolvedElement,
+        attributes: resolvedElement.attributes.map((attr) => {
+          if (attr.ref && this.refResolver) {
+            const resolved = this.refResolver.resolveAttributeRef(attr.ref, attr.use);
+            if (resolved) return resolved;
+          }
+          return attr;
+        }),
+      };
+    }
+
     // Now recursively resolve children
     if (resolvedElement.children && resolvedElement.children.length > 0) {
       resolvedElement = {

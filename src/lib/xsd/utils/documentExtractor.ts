@@ -30,7 +30,10 @@ export class DocumentExtractor {
         el.namespaceURI === xsdNamespace &&
         (el.localName === "element" ||
           el.localName === "complexType" ||
-          el.localName === "simpleType")
+          el.localName === "simpleType" ||
+          el.localName === "group" ||
+          el.localName === "attributeGroup" ||
+          el.localName === "attribute")
       );
     }) as Element[];
   }

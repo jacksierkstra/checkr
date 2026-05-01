@@ -8,6 +8,8 @@ export interface XSDSchema {
   types: { [typeName: string]: XSDElement }; // Global complexType definitions
   groups?: { [name: string]: XSDElement[] };
   attributeGroups?: { [name: string]: XSDAttribute[] };
+  /** Top-level xs:attribute declarations, keyed by name */
+  globalAttributes?: { [name: string]: XSDAttribute };
 }
 
 export interface XSDElement {

@@ -131,6 +131,15 @@ export interface IRefResolver {
    * @returns The resolved element, or undefined if the ref target is not found
    */
   resolveElementRef(ref: string, minOccurs?: number, maxOccurs?: number | "unbounded"): XSDElement | undefined;
+
+  /**
+   * Resolves an xs:attribute ref= placeholder to the global attribute definition.
+   * The calling site may override `use`; all other properties are inherited from the global def.
+   * @param ref The local name of the referenced global attribute
+   * @param useOverride Optional `use` value from the reference site
+   * @returns The resolved attribute, or undefined if the ref target is not found
+   */
+  resolveAttributeRef(ref: string, useOverride?: string): XSDAttribute | undefined;
 }
 
 /**

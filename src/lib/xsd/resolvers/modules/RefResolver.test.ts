@@ -106,3 +106,67 @@ describe("xs:element ref= support", () => {
     expect(validate(xml, schema).valid).toBe(true);
   });
 });
+
+describe("xs:attribute ref= support", () => {
+  function validate(xml: string, xsd: string) {
+    return new Checkr().validate(xml, xsd);
+  }
+
+  const schemaWithAttrRef = `
+    <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+      <xs:attribute name="lang" type="xs:language"/>
+
+      <xs:element name="text">
+        <xs:complexType>
+          <xs:attribute ref="lang"/>
+        </xs:complexType>
+      </xs:element>
+    </xs:schema>
+  `;
+
+  it("allows valid attribute value when ref is resolved", () => {
+    const xml = `<text lang="en"/>`;
+    expect(validate(xml, schemaWithAttrRef).valid).toBe(true);
+  });
+
+  it("inherits required use from global attribute declaration", () => {
+    const schemaRequired = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:attribute name="id" type="xs:integer" use="required"/>
+
+        <xs:element name="item">
+          <xs:complexType>
+            <xs:attribute ref="id"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    expect(validate(`<item/>`, schemaRequired).valid).toBe(false);
+    expect(validate(`<item id="42"/>`, schemaRequired).valid).toBe(true);
+  });
+
+  it("inherits facets (enumeration) from global attribute declaration", () => {
+    const schemaEnum = `
+      <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+        <xs:attribute name="status">
+          <xs:simpleType>
+            <xs:restriction base="xs:string">
+              <xs:enumeration value="active"/>
+              <xs:enumeration value="inactive"/>
+            </xs:restriction>
+          </xs:simpleType>
+        </xs:attribute>
+
+        <xs:element name="user">
+          <xs:complexType>
+            <xs:attribute ref="status"/>
+          </xs:complexType>
+        </xs:element>
+      </xs:schema>
+    `;
+    expect(validate(`<user status="active"/>`, schemaEnum).valid).toBe(true);
+    const bad = validate(`<user status="deleted"/>`, schemaEnum);
+    expect(bad.valid).toBe(false);
+    expect(bad.errors.some((e) => e.code === "PATTERN_MISMATCH")).toBe(true);
+  });
+});

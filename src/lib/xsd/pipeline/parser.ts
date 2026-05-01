@@ -54,6 +54,7 @@ export class XSDPipelineParserImpl implements XSDParser {
     const simpleTypeNodes = schemaNodes.filter((node) => node.localName === "simpleType");
     const groupNodes = schemaNodes.filter((node) => node.localName === "group");
     const attributeGroupNodes = schemaNodes.filter((node) => node.localName === "attributeGroup");
+    const globalAttributeNodes = schemaNodes.filter((node) => node.localName === "attribute");
 
     // Process global elements via your pipeline.
     const elementPartials = elementNodes.map((el) => this.pipeline.execute(el));
@@ -102,6 +103,15 @@ export class XSDPipelineParserImpl implements XSDParser {
         attributeGroupsMap[groupDef.name] = groupDef.attributes || [];
       });
 
+    const attrParser = new ParseAttributesStep();
+    const globalAttributesMap: { [name: string]: XSDAttribute } = {};
+    for (const attrNode of globalAttributeNodes) {
+      const parsed = attrParser.parseAttribute(attrNode);
+      if (parsed && parsed.name) {
+        globalAttributesMap[parsed.name] = parsed;
+      }
+    }
+
     const targetNamespace = doc.documentElement.getAttribute("targetNamespace") || undefined;
     const elementFormDefault =
       (doc.documentElement.getAttribute("elementFormDefault") as "qualified" | "unqualified") ||
@@ -125,6 +135,7 @@ export class XSDPipelineParserImpl implements XSDParser {
       types: typesMap,
       groups: groupsMap,
       attributeGroups: attributeGroupsMap,
+      globalAttributes: globalAttributesMap,
     };
 
     // Resolve type references now that we have global types available.
