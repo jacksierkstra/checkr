@@ -6,6 +6,8 @@
 | Priority | medium  |
 | Status   | done    |
 
+> **Note:** This item covers `xs:length`, `xs:minLength`, and `xs:maxLength` list-level facets. `xs:enumeration` and `xs:pattern` on the full list value are tracked separately in [feat-list-enum-pattern](./feat-list-enum-pattern.md).
+
 ## Problem
 
 XSD 1.0 allows restricting a `xs:list` type using `xs:restriction` with list-level facets:

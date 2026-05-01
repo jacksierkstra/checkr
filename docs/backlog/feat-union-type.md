@@ -4,7 +4,9 @@
 |----------|---------|
 | Type     | feature |
 | Priority | medium  |
-| Status   | done |
+| Status   | done    |
+
+> **Note:** This item covers the `memberTypes=` attribute form of `xs:union`. Inline `<xs:simpleType>` children inside `<xs:union>` are tracked separately in [feat-union-inline-members](./feat-union-inline-members.md).
 
 ## Problem
 

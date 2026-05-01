@@ -70,7 +70,7 @@ The validation process consists of multiple pipeline stages:
 ## Supported XSD Features
 
 - ✅ `xs:sequence`, `xs:choice`
-- ✅ `xs:all` — order-independent children, each allowed at most once; per-child `minOccurs`/`maxOccurs` enforced
+- ✅ `xs:all` — order-independent children, each allowed at most once; per-child `minOccurs`/`maxOccurs` enforced (XSD 1.0: element-only children, no nesting)
 - ✅ `xs:element`, `xs:complexType`, `xs:simpleType`
 - ✅ `xs:simpleContent` with extension and restriction
 - ✅ `xs:enumeration`, `xs:pattern`
@@ -93,8 +93,8 @@ The validation process consists of multiple pipeline stages:
 - ✅ `xs:abstract` element declarations
 - ✅ `block` / `final` / `blockDefault` / `finalDefault` derivation control
 - ✅ `xs:ID` uniqueness and `xs:IDREF` referential integrity
-- 🚧 **Out of scope** (explicitly deferred — see ADR-009):
-  - Namespaced imports (`xs:import`, `xs:include`, `xs:redefine`)
+- 🚧 **Out of scope** (explicitly deferred — see [ADR-009](docs/adr/ADR-009-deferred-xsd-features.md)):
+  - Namespaced imports (`xs:import`, `xs:include`, `xs:redefine`) — single-document schemas only; multi-document composition is not supported
 
 ## Running Tests
 
