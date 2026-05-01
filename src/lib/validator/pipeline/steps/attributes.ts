@@ -81,6 +81,46 @@ function validateAttrFacets(
     });
   }
 
+  const numVal = parseFloat(value);
+  if (!isNaN(numVal)) {
+    if (attr.minInclusive != null && numVal < attr.minInclusive) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Attribute '${attrName}' in element <${elementName}> must be >= ${attr.minInclusive}, but found ${numVal}.`,
+        element: elementName,
+        expected: attr.minInclusive,
+        actual: numVal,
+      });
+    }
+    if (attr.maxInclusive != null && numVal > attr.maxInclusive) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Attribute '${attrName}' in element <${elementName}> must be <= ${attr.maxInclusive}, but found ${numVal}.`,
+        element: elementName,
+        expected: attr.maxInclusive,
+        actual: numVal,
+      });
+    }
+    if (attr.minExclusive != null && numVal <= attr.minExclusive) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Attribute '${attrName}' in element <${elementName}> must be > ${attr.minExclusive}, but found ${numVal}.`,
+        element: elementName,
+        expected: attr.minExclusive,
+        actual: numVal,
+      });
+    }
+    if (attr.maxExclusive != null && numVal >= attr.maxExclusive) {
+      errors.push({
+        code: "RANGE_VIOLATION",
+        message: `Attribute '${attrName}' in element <${elementName}> must be < ${attr.maxExclusive}, but found ${numVal}.`,
+        element: elementName,
+        expected: attr.maxExclusive,
+        actual: numVal,
+      });
+    }
+  }
+
   return errors;
 }
 

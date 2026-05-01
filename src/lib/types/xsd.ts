@@ -116,6 +116,12 @@ export interface XSDAttribute {
   minLength?: number;
   maxLength?: number;
   length?: number;
+  minInclusive?: number;
+  maxInclusive?: number;
+  minExclusive?: number;
+  maxExclusive?: number;
+  totalDigits?: number;
+  fractionDigits?: number;
 }
 
 export interface XSDIdentityConstraint {

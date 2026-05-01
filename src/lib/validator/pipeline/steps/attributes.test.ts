@@ -247,6 +247,35 @@ describe("validateAttributes", () => {
     );
   });
 
+  it("should enforce minInclusive/maxInclusive on inline simpleType attributes", () => {
+    const schema: XSDElement = {
+      name: "score",
+      attributes: [
+        { name: "value", type: "xs:integer", use: "required", minInclusive: 0, maxInclusive: 100 },
+      ],
+    };
+    // In-range value passes
+    expect(validateAttributes(createElement("score", { value: "50" }), schema)).toEqual([]);
+    // Below min fails
+    const errLow = validateAttributes(createElement("score", { value: "-1" }), schema);
+    expect(errLow.some((e) => e.code === "RANGE_VIOLATION")).toBe(true);
+    // Above max fails
+    const errHigh = validateAttributes(createElement("score", { value: "150" }), schema);
+    expect(errHigh.some((e) => e.code === "RANGE_VIOLATION")).toBe(true);
+  });
+
+  it("should enforce minExclusive/maxExclusive on inline simpleType attributes", () => {
+    const schema: XSDElement = {
+      name: "temp",
+      attributes: [
+        { name: "celsius", type: "xs:decimal", minExclusive: -273.15, maxExclusive: 1000 },
+      ],
+    };
+    expect(validateAttributes(createElement("temp", { celsius: "0" }), schema)).toEqual([]);
+    const errBoundary = validateAttributes(createElement("temp", { celsius: "-273.15" }), schema);
+    expect(errBoundary.some((e) => e.code === "RANGE_VIOLATION")).toBe(true);
+  });
+
   it("should validate inline simpleType facets on attributes", () => {
     const element = createElement("Item", { code: "C" });
     const schema: XSDElement = {
