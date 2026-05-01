@@ -52,6 +52,8 @@ export interface XSDElement {
   inAll?: boolean;
   /** True when the element's content model includes xs:any (wildcard child elements allowed) */
   allowAnyChild?: boolean;
+  /** processContents value from xs:any — "strict" validates against declarations, "lax" validates if found */
+  anyProcessContents?: "strict" | "lax" | "skip";
   /** True when the element's schema includes xs:anyAttribute (wildcard attributes allowed) */
   allowAnyAttribute?: boolean;
   whiteSpace?: "preserve" | "replace" | "collapse";

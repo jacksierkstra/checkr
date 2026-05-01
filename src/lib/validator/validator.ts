@@ -157,6 +157,26 @@ export class ValidatorImpl implements Validator {
       errors.push(...childrenErrors);
     }
 
+    // xs:any processContents enforcement for wildcard child elements
+    if (schemaElement.allowAnyChild) {
+      const pc = schemaElement.anyProcessContents;
+      if (pc === "strict" || pc === "lax") {
+        for (const childEl of directChildElements(node)) {
+          const childName = (childEl.localName || childEl.tagName || "").toLowerCase();
+          const globalSchema = elementsByName?.get(childName);
+          if (globalSchema) {
+            errors.push(...this.validateNode(childEl, globalSchema, elementsByName));
+          } else if (pc === "strict") {
+            errors.push({
+              code: "UNEXPECTED_ELEMENT",
+              message: `Element <${childName}> must be declared in the schema (processContents="strict").`,
+              element: childName,
+            });
+          }
+        }
+      }
+    }
+
     return errors;
   }
 

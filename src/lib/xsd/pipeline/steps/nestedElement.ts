@@ -5,7 +5,7 @@ const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
 export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {
-    let result = { children: [] as XSDElement[], choices: [] as XSDChoice[], allowAnyChild: false };
+    let result = { children: [] as XSDElement[], choices: [] as XSDChoice[], allowAnyChild: false, anyProcessContents: undefined as "strict" | "lax" | "skip" | undefined };
 
     if (this.isXsdElement(el, "group") && !el.getAttribute("ref")) {
       const res = this.parseContainer(el, false, false);
@@ -13,14 +13,14 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       if (res.choices.length > 0) {
         result.choices.push(...res.choices);
       }
-      if (res.allowAnyChild) result.allowAnyChild = true;
+      if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; }
     } else if (this.isXsdElement(el, "complexType")) {
       const res = this.parseContainer(el, false);
       result.children.push(...res.children);
       if (res.choices.length > 0) {
         result.choices.push(...res.choices);
       }
-      if (res.allowAnyChild) result.allowAnyChild = true;
+      if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; }
     } else {
       const complexTypes = Array.from(el.childNodes)
         .filter((node) => {
@@ -35,12 +35,12 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         if (res.choices.length > 0) {
           result.choices.push(...res.choices);
         }
-        if (res.allowAnyChild) result.allowAnyChild = true;
+        if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; }
       });
     }
 
     return result.allowAnyChild
-      ? { children: result.children, choices: result.choices, allowAnyChild: true }
+      ? { children: result.children, choices: result.choices, allowAnyChild: true, anyProcessContents: result.anyProcessContents }
       : { children: result.children, choices: result.choices };
   }
 
@@ -48,10 +48,11 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     el: Element,
     isInChoice: boolean = false,
     isInAll: boolean = false,
-  ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean } {
+  ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean; anyProcessContents?: "strict" | "lax" | "skip" } {
     let children: XSDElement[] = [];
     let choices: XSDChoice[] = [];
     let allowAnyChild = false;
+    let anyProcessContents: "strict" | "lax" | "skip" | undefined;
 
     Array.from(el.childNodes).forEach((node) => {
       if (node.nodeType !== 1) return;
@@ -118,10 +119,14 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         children.push({ name: localRef, groupRef: localRef, minOccurs, maxOccurs: effectiveMaxOccurs });
       } else if (this.isXsdElement(child, "any")) {
         allowAnyChild = true;
+        const pc = child.getAttribute("processContents");
+        if (pc === "strict" || pc === "lax" || pc === "skip") {
+          anyProcessContents = pc;
+        }
       }
     });
 
-    return { children, choices, allowAnyChild };
+    return { children, choices, allowAnyChild, anyProcessContents };
   }
 
   private parseOccurrence(attr: string | null, defaultVal: number): number {
@@ -213,7 +218,10 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       const res = this.parseContainer(inlineComplexType, false);
       if (res.children.length > 0) xsdElement.children = res.children;
       if (res.choices.length > 0) xsdElement.choices = res.choices;
-      if (res.allowAnyChild) xsdElement.allowAnyChild = true;
+      if (res.allowAnyChild) {
+        xsdElement.allowAnyChild = true;
+        if (res.anyProcessContents) xsdElement.anyProcessContents = res.anyProcessContents;
+      }
     }
     return xsdElement;
   }
