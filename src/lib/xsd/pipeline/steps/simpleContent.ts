@@ -70,12 +70,19 @@ export class ParseSimpleContentStep implements PipelineStep<Element, Partial<XSD
 
     if (base.startsWith("xs:")) {
       result.type = base;
+    } else {
+      // Named base type — store as restriction so TypeRestrictor can resolve attributes + facets
+      result.restriction = { base, simpleContent: true, ...parseRestrictionFacets(restriction) };
     }
 
-    // Extract attributes defined in the restriction
+    // Extract attributes defined in the restriction (stored in restriction.attributes for merging)
     const attrsResult = this.attributeParser.execute(restriction);
     if (attrsResult.attributes && attrsResult.attributes.length > 0) {
-      result.attributes = attrsResult.attributes;
+      if (result.restriction) {
+        result.restriction.attributes = attrsResult.attributes;
+      } else {
+        result.attributes = attrsResult.attributes;
+      }
     }
 
     return result;

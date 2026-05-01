@@ -279,6 +279,62 @@ describe("TypeRestrictor", () => {
       expect(resolved.restriction).toBeUndefined();
     });
 
+    it("should inherit base attributes in simpleContent restriction (only override declared attrs)", () => {
+      const mockResolver = new MockElementResolver((element) => {
+        if (element.name === "MoneyBase") {
+          return {
+            ...element,
+            type: "xs:integer",
+            attributes: [
+              { name: "currency", type: "xs:string", use: "required" },
+              { name: "unit", type: "xs:string" },
+            ],
+          };
+        }
+        return element;
+      });
+
+      const schemaWithBase: XSDSchema = {
+        elements: [],
+        types: {
+          MoneyBase: {
+            name: "MoneyBase",
+            type: "xs:integer",
+            attributes: [
+              { name: "currency", type: "xs:string", use: "required" },
+              { name: "unit", type: "xs:string" },
+            ],
+          },
+        },
+      };
+      const reg = new TypeRegistry(schemaWithBase);
+      const cch = new ResolutionCache(reg);
+      const restrictor = new TypeRestrictor(reg, cch, mockResolver);
+      cch.clear();
+
+      const element: XSDElement = {
+        name: "RestrictedMoney",
+        restriction: {
+          base: "MoneyBase",
+          simpleContent: true,
+          maxInclusive: 1000,
+          // Only restrict 'currency' to required; 'unit' should be inherited unchanged
+          attributes: [{ name: "currency", type: "xs:string", use: "required" }],
+        },
+      };
+
+      const resolved = restrictor.resolveRestriction(element);
+
+      // Both attributes should be present: currency from restriction + unit inherited from base
+      expect(resolved.attributes).toHaveLength(2);
+      const names = resolved.attributes!.map((a) => a.name);
+      expect(names).toContain("currency");
+      expect(names).toContain("unit");
+      // restriction's version of currency wins
+      expect(resolved.attributes!.find((a) => a.name === "currency")?.use).toBe("required");
+      expect(resolved.maxInclusive).toBe(1000);
+    });
+
     it("should use restriction attributes instead of base type attributes", () => {
       const mockResolver = new MockElementResolver((element) => {
         if (element.name === "ItemBase") {

@@ -83,8 +83,23 @@ export class TypeRestrictor implements ITypeRestrictor {
     if (element.restriction!.choices !== undefined) {
       result.choices = element.restriction!.choices;
     }
-    if (element.restriction!.attributes !== undefined) {
-      result.attributes = element.restriction!.attributes;
+    // Merge attributes:
+    // - For simpleContent restriction: inherit base attrs + override/add from restriction
+    // - For complexContent restriction: restriction replaces base attrs (spec §3.4.6)
+    const baseAttrs = result.attributes || [];
+    const restrictionAttrs = element.restriction!.attributes;
+    if (restrictionAttrs !== undefined) {
+      if (element.restriction!.simpleContent) {
+        // simpleContent: inherit base attrs not in restriction, apply restriction attrs (minus prohibited)
+        const overrideMap = new Map(restrictionAttrs.map((a) => [a.name, a]));
+        const inherited = baseAttrs.filter((a) => !overrideMap.has(a.name));
+        const overrides = restrictionAttrs.filter((a) => a.use !== "prohibited");
+        result.attributes = [...inherited, ...overrides];
+        if (result.attributes.length === 0) result.attributes = undefined;
+      } else {
+        // complexContent: restriction explicitly replaces base attrs
+        result.attributes = restrictionAttrs;
+      }
     }
 
     return {

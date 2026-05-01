@@ -76,6 +76,8 @@ export interface XSDExtension {
 
 export interface XSDRestriction {
   base: string;
+  /** True when this restriction comes from xs:simpleContent — attributes are inherited from base */
+  simpleContent?: boolean;
   enumeration?: string[];
   pattern?: string;
   minLength?: number;
