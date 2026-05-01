@@ -87,6 +87,17 @@ describe("validateType — xs:list restriction facets", () => {
     });
   });
 
+  it("returns PATTERN_MISMATCH when full list value does not match pattern", () => {
+    const schema: XSDElement = {
+      ...baseListSchema,
+      pattern: "^\\d+ \\d+$", // exactly two numbers separated by space
+    };
+    expect(validateType(makeNode("1 2"), schema)).toEqual([]);
+    const errors = validateType(makeNode("1 2 3"), schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("PATTERN_MISMATCH");
+  });
+
   it("still validates item types when list-level facets are also present", () => {
     const schema: XSDElement = { ...baseListSchema, minLength: 2, maxLength: 5 };
     const errors = validateType(makeNode("1 abc 3"), schema);

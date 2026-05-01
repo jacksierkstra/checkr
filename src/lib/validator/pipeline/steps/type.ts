@@ -107,6 +107,16 @@ export const validateType: NodeValidationStep = (node, schema) => {
         });
       }
     }
+    if (schema.pattern) {
+      const regex = new RegExp(schema.pattern);
+      if (!regex.test(text.trim())) {
+        errors.push({
+          code: "PATTERN_MISMATCH",
+          message: `Element <${schema.name}> list value "${text.trim()}" does not match the pattern /${schema.pattern}/.`,
+          element: schema.name,
+        });
+      }
+    }
     return errors;
   }
 
