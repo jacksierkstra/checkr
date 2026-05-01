@@ -247,6 +247,34 @@ describe("ParseExtensionStep", () => {
     expect(result.extension?.attributes?.[1].default).toBe("defaultValue");
   });
 
+  it("should parse extension with mixed content on xs:complexContent (overrides complexType)", () => {
+    const xml = `
+        <xs:element xmlns:xs="http://www.w3.org/2001/XMLSchema" name="extended">
+            <xs:complexType>
+                <xs:complexContent mixed="true">
+                    <xs:extension base="BaseType">
+                        <xs:sequence>
+                            <xs:element name="child1" type="xs:string" />
+                        </xs:sequence>
+                    </xs:extension>
+                </xs:complexContent>
+            </xs:complexType>
+        </xs:element>
+        `;
+
+    const doc = domParser.parseFromString(xml, "text/xml");
+    const element = doc.documentElement;
+
+    if (!element) {
+      throw new Error("Failed to parse XML element");
+    }
+
+    const result = parser.execute(element);
+
+    expect(result.extension).toBeDefined();
+    expect(result.mixed).toBe(true);
+  });
+
   it("should parse extension with all element", () => {
     const xml = `
         <xs:element xmlns:xs="http://www.w3.org/2001/XMLSchema" name="extended">

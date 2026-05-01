@@ -28,6 +28,14 @@ export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElem
     const content = complexType.getElementsByTagNameNS(this.XSD_NAMESPACE, "complexContent")[0];
     if (!content) return result;
 
+    // xs:complexContent mixed= overrides xs:complexType mixed= per XSD 1.0 §3.8.3
+    const contentMixed = content.getAttribute("mixed");
+    if (contentMixed === "true") {
+      result.mixed = true;
+    } else if (contentMixed === "false") {
+      result.mixed = false;
+    }
+
     const extension = content.getElementsByTagNameNS(this.XSD_NAMESPACE, "extension")[0];
     if (!extension) return result;
 

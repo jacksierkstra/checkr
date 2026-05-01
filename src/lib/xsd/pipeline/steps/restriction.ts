@@ -18,9 +18,14 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
 
     const complexType = el.getElementsByTagNameNS(XSD_NAMESPACE, "complexType")[0];
     if (complexType) {
+      const complexContent = complexType.getElementsByTagNameNS(XSD_NAMESPACE, "complexContent")[0];
       const restriction = complexType.getElementsByTagNameNS(XSD_NAMESPACE, "restriction")[0];
       if (restriction) {
-        return this.parseComplexTypeRestriction(restriction);
+        const parsed = this.parseComplexTypeRestriction(restriction);
+        // xs:complexContent mixed= overrides xs:complexType mixed= per XSD 1.0 §3.8.3
+        const mixedAttr = complexContent?.getAttribute("mixed") ?? complexType.getAttribute("mixed");
+        if (mixedAttr === "true") parsed.mixed = true;
+        return parsed;
       }
     }
 
