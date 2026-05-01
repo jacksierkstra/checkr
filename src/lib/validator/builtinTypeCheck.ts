@@ -1,4 +1,16 @@
 /**
+ * Validates that a timezone suffix embedded in a date/time string has a valid offset (±14:00 max).
+ * Returns true if no timezone is present or if the timezone offset is within range.
+ */
+function isValidTimezone(value: string): boolean {
+  const match = value.match(/([+-])(\d{2}):(\d{2})$/);
+  if (!match) return true; // Z or no timezone — always valid
+  const hours = parseInt(match[2], 10);
+  const minutes = parseInt(match[3], 10);
+  return hours < 14 || (hours === 14 && minutes === 0);
+}
+
+/**
  * Checks whether a string value is valid for the given XSD built-in type.
  * Returns true if valid, false if invalid. Unknown types return true (skip).
  */
@@ -77,33 +89,42 @@ export function isValidBuiltinType(value: string, type: string): boolean {
       return /^-?\d+$/.test(value) && v <= 0;
     }
     case "xs:decimal":
+      // XSD spec §3.2.3: optional leading sign, integer and/or fractional part, no scientific notation
+      return /^[+-]?(\d+\.?\d*|\.\d+)$/.test(value);
     case "xs:float":
     case "xs:double":
-      return /^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(value);
+      // XSD spec §3.2.4–3.2.5: numeric values plus IEEE 754 specials INF, -INF, NaN
+      return (
+        value === "INF" ||
+        value === "-INF" ||
+        value === "NaN" ||
+        /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(value)
+      );
     case "xs:date":
-      return /^\d{4}-\d{2}-\d{2}$/.test(value);
+      // XSD spec §3.2.9: YYYY-MM-DD with optional timezone (Z or ±hh:mm)
+      return /^\d{4}-\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value);
     case "xs:dateTime":
       return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/.test(value);
     case "xs:time":
       return /^\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})?$/.test(value);
     case "xs:duration":
+      // XSD spec §3.2.6: must have at least one duration field; T must be followed by time fields
       return (
-        /^-?P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$/.test(
-          value,
-        ) &&
+        /^-?P(?:\d+Y)?(?:\d+M)?(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?(?:\d+(?:\.\d+)?S)?)?$/.test(value) &&
         value !== "P" &&
-        value !== "-P"
+        value !== "-P" &&
+        !value.endsWith("T")
       );
     case "xs:gYear":
-      return /^-?\d{4,}(Z|[+-]\d{2}:\d{2})?$/.test(value);
+      return /^-?\d{4,}(Z|[+-]\d{2}:\d{2})?$/.test(value) && isValidTimezone(value);
     case "xs:gYearMonth":
-      return /^-?\d{4,}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value);
+      return /^-?\d{4,}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value) && isValidTimezone(value);
     case "xs:gMonth":
-      return /^--\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value);
+      return /^--\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value) && isValidTimezone(value);
     case "xs:gDay":
-      return /^---\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value);
+      return /^---\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value) && isValidTimezone(value);
     case "xs:gMonthDay":
-      return /^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value);
+      return /^--\d{2}-\d{2}(Z|[+-]\d{2}:\d{2})?$/.test(value) && isValidTimezone(value);
     case "xs:hexBinary":
       return /^([0-9A-Fa-f]{2})*$/.test(value);
     case "xs:base64Binary":

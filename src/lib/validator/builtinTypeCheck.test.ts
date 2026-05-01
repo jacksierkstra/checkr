@@ -7,14 +7,54 @@ describe("isValidBuiltinType", () => {
     ["xs:boolean", "yes", false],
     ["xs:integer", "42", true],
     ["xs:integer", "3.14", false],
+    // xs:decimal — sign, leading zeros, dot-only forms (§3.2.3)
     ["xs:decimal", "3.14", true],
+    ["xs:decimal", "-3.14", true],
+    ["xs:decimal", "+1.5", true],
+    ["xs:decimal", ".5", true],
+    ["xs:decimal", "001.23", true],
+    ["xs:decimal", "1.500", true],
     ["xs:decimal", "abc", false],
+    ["xs:decimal", "1E2", false], // scientific notation not valid for xs:decimal
+    // xs:float / xs:double — IEEE 754 specials (§3.2.4–3.2.5)
+    ["xs:float", "3.14", true],
+    ["xs:float", "+3.14", true],
+    ["xs:float", "INF", true],
+    ["xs:float", "-INF", true],
+    ["xs:float", "NaN", true],
+    ["xs:float", "inf", false], // case-sensitive
+    ["xs:float", "nan", false],
+    ["xs:double", "INF", true],
+    ["xs:double", "-INF", true],
+    ["xs:double", "NaN", true],
+    ["xs:double", "1.5E10", true],
+    // xs:date — optional timezone (§3.2.9)
     ["xs:date", "2024-01-15", true],
+    ["xs:date", "2024-01-15Z", true],
+    ["xs:date", "2024-01-15+05:30", true],
+    ["xs:date", "2024-01-15-08:00", true],
     ["xs:date", "24-01-15", false],
     ["xs:dateTime", "2024-01-15T10:30:00Z", true],
     ["xs:dateTime", "2024-01-15", false],
     ["xs:time", "10:30:00", true],
     ["xs:time", "abc", false],
+    // xs:duration — bare T must be rejected (§3.2.6)
+    ["xs:duration", "P1Y", true],
+    ["xs:duration", "PT1H", true],
+    ["xs:duration", "P1Y2M3DT4H5M6.789S", true],
+    ["xs:duration", "-P1M", true],
+    ["xs:duration", "P", false],
+    ["xs:duration", "-P", false],
+    ["xs:duration", "PT", false], // T with no time fields
+    // xs:gYear timezone offset range (§3.2.10)
+    ["xs:gYear", "2024", true],
+    ["xs:gYear", "2024Z", true],
+    ["xs:gYear", "2024+14:00", true],
+    ["xs:gYear", "2024+15:00", false], // offset out of range
+    // xs:gMonthDay
+    ["xs:gMonthDay", "--01-15", true],
+    ["xs:gMonthDay", "--01-15Z", true],
+    ["xs:gMonthDay", "--01-15+25:00", false], // offset out of range
     ["xs:NCName", "valid", true],
     ["xs:NCName", "1invalid", false],
     ["xs:ID", "myId", true],
