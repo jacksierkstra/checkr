@@ -26,10 +26,15 @@ export const parseRestrictionFacets = (restriction: Element): Partial<Restrictio
     facets.enumeration = Array.from(enumNodes).map((enumNode) => enumNode.getAttribute("value") || "");
   }
 
-  const patternEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "pattern")[0];
-  if (patternEl) {
-    const regex = patternEl.getAttribute("value");
-    if (regex) facets.pattern = regex;
+  const patternEls = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "pattern");
+  if (patternEls.length > 0) {
+    // Multiple xs:pattern facets are a union (OR) — join as alternation per XSD 1.0 §4.3.4
+    const patterns = Array.from(patternEls)
+      .map((el) => el.getAttribute("value"))
+      .filter((v): v is string => v !== null && v.length > 0);
+    if (patterns.length > 0) {
+      facets.pattern = patterns.length === 1 ? patterns[0] : patterns.map((p) => `(?:${p})`).join("|");
+    }
   }
 
   const minLenEl = restriction.getElementsByTagNameNS(XSD_NAMESPACE, "minLength")[0];
