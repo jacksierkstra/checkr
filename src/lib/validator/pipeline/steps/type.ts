@@ -120,18 +120,45 @@ export const validateType: NodeValidationStep = (node, schema) => {
     return errors;
   }
 
-  // Handle xs:union validation — value is valid if it matches any member type
-  if (schema.unionMemberTypes && schema.unionMemberTypes.length > 0) {
-    const valid = schema.unionMemberTypes.some((memberType) => {
-      const fakeSchema: XSDElement = { name: schema.name, type: memberType };
-      const fakeNode = node.ownerDocument!.createElement("__union__");
-      fakeNode.textContent = text;
-      return validateType(fakeNode as unknown as Element, fakeSchema).length === 0;
-    });
-    if (!valid) {
+  // Handle xs:union validation — value is valid if it matches any member type (named or inline)
+  const hasNamedMembers = schema.unionMemberTypes && schema.unionMemberTypes.length > 0;
+  const hasInlineMembers = schema.unionInlineMembers && schema.unionInlineMembers.length > 0;
+  if (hasNamedMembers || hasInlineMembers) {
+    const validNamed = hasNamedMembers
+      ? schema.unionMemberTypes!.some((memberType) => {
+          const fakeSchema: XSDElement = { name: schema.name, type: memberType };
+          const fakeNode = node.ownerDocument!.createElement("__union__");
+          fakeNode.textContent = text;
+          return validateType(fakeNode as unknown as Element, fakeSchema).length === 0;
+        })
+      : false;
+
+    const validInline = hasInlineMembers
+      ? schema.unionInlineMembers!.some((member) => {
+          const fakeSchema: XSDElement = {
+            name: schema.name,
+            type: member.type,
+            enumeration: member.enumeration,
+            pattern: member.pattern,
+            minInclusive: member.minInclusive,
+            maxInclusive: member.maxInclusive,
+            minExclusive: member.minExclusive,
+            maxExclusive: member.maxExclusive,
+          };
+          const fakeNode = node.ownerDocument!.createElement("__union__");
+          fakeNode.textContent = text;
+          return validateType(fakeNode as unknown as Element, fakeSchema).length === 0;
+        })
+      : false;
+
+    if (!validNamed && !validInline) {
+      const memberDesc = [
+        ...(schema.unionMemberTypes ?? []),
+        ...(schema.unionInlineMembers ?? []).map((m) => m.type ?? "anonymous"),
+      ].join(", ");
       errors.push({
         code: "TYPE_MISMATCH",
-        message: `Element <${schema.name}> value "${text}" does not match any of the union member types [${schema.unionMemberTypes.join(", ")}].`,
+        message: `Element <${schema.name}> value "${text}" does not match any of the union member types [${memberDesc}].`,
         element: schema.name,
       });
     }

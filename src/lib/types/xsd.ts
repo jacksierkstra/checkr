@@ -34,6 +34,8 @@ export interface XSDElement {
   nillable?: boolean;
   listItemType?: string;
   unionMemberTypes?: string[];
+  /** Inline xs:simpleType members inside xs:union (anonymous types) */
+  unionInlineMembers?: Array<{ type?: string; enumeration?: string[]; pattern?: string; minInclusive?: number; maxInclusive?: number; minExclusive?: number; maxExclusive?: number }>;
   /** When set, this element is a placeholder for a globally declared element with this name */
   ref?: string;
   /** When set, this element is a placeholder for a globally declared group with this name */
