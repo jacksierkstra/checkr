@@ -43,17 +43,17 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [fix-occurrence-per-parent](./fix-occurrence-per-parent.md) | 🔴 critical | done | Occurrence counting is document-global, not per-parent |
 | [fix-global-simpletype](./fix-global-simpletype.md) | 🔴 critical | done | Global xs:simpleType nodes are silently discarded |
 | [fix-attribute-type-parity](./fix-attribute-type-parity.md) | 🟠 high | done | Attribute type validation covers only 4 types vs ~25 for elements |
-| [fix-attribute-ref-resolution](./fix-attribute-ref-resolution.md) | 🟠 high | backlog | xs:attribute ref= type and facet resolution |
+| [fix-attribute-ref-resolution](./fix-attribute-ref-resolution.md) | 🟠 high | done | xs:attribute ref= type and facet resolution |
 | [fix-complex-restriction-content](./fix-complex-restriction-content.md) | 🟠 high | done | xs:complexContent restriction discards children and facets |
 | [fix-all-order-independence](./fix-all-order-independence.md) | 🟡 medium | done | xs:all children incorrectly enforce sequence order |
-| [fix-pattern-non-string](./fix-pattern-non-string.md) | 🟡 medium | backlog | Pattern facet applied only to xs:string type |
-| [fix-decimal-edge-cases](./fix-decimal-edge-cases.md) | 🟢 low | backlog | xs:decimal rejects valid lexical forms (+1.5, .5, 001.23) |
-| [fix-float-double-special](./fix-float-double-special.md) | 🟢 low | backlog | xs:float/xs:double missing INF, -INF, NaN |
-| [fix-date-timezone](./fix-date-timezone.md) | 🟢 low | backlog | xs:date missing optional timezone suffix |
-| [fix-duration-completeness](./fix-duration-completeness.md) | 🟢 low | backlog | xs:duration edge-case validation (bare T, fractional non-seconds) |
-| [fix-partial-date-timezone](./fix-partial-date-timezone.md) | 🟢 low | backlog | xs:gYear etc. timezone offset range not validated |
-| [fix-restriction-anytype](./fix-restriction-anytype.md) | 🟢 low | backlog | xs:restriction base="xs:anyType" not handled |
-| [fix-simplecontent-restriction-merge](./fix-simplecontent-restriction-merge.md) | 🟢 low | backlog | xs:simpleContent restriction: facet and attribute merge incomplete |
+| [fix-pattern-non-string](./fix-pattern-non-string.md) | 🟡 medium | done | Pattern facet applied only to xs:string type |
+| [fix-decimal-edge-cases](./fix-decimal-edge-cases.md) | 🟢 low | done | xs:decimal rejects valid lexical forms (+1.5, .5, 001.23) |
+| [fix-float-double-special](./fix-float-double-special.md) | 🟢 low | done | xs:float/xs:double missing INF, -INF, NaN |
+| [fix-date-timezone](./fix-date-timezone.md) | 🟢 low | done | xs:date missing optional timezone suffix |
+| [fix-duration-completeness](./fix-duration-completeness.md) | 🟢 low | done | xs:duration edge-case validation (bare T, fractional non-seconds) |
+| [fix-partial-date-timezone](./fix-partial-date-timezone.md) | 🟢 low | done | xs:gYear etc. timezone offset range not validated |
+| [fix-restriction-anytype](./fix-restriction-anytype.md) | 🟢 low | done | xs:restriction base="xs:anyType" not handled |
+| [fix-simplecontent-restriction-merge](./fix-simplecontent-restriction-merge.md) | 🟢 low | done | xs:simpleContent restriction: facet and attribute merge incomplete |
 
 ## Feature Tracker
 
@@ -64,7 +64,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-unexpected-attributes](./feat-unexpected-attributes.md) | 🟠 high | done | Validate unexpected attributes in XML |
 | [feat-attribute-constraints](./feat-attribute-constraints.md) | 🟠 high | done | Full attribute constraint validation |
 | [feat-sequence-order](./feat-sequence-order.md) | 🟠 high | done | Enforce xs:sequence child ordering |
-| [feat-sequence-choice-occurrences](./feat-sequence-choice-occurrences.md) | 🟠 high | backlog | xs:sequence and xs:choice group-level minOccurs/maxOccurs |
+| [feat-sequence-choice-occurrences](./feat-sequence-choice-occurrences.md) | 🟠 high | done | xs:sequence and xs:choice group-level minOccurs/maxOccurs |
 | [feat-attribute-defaults](./feat-attribute-defaults.md) | 🟡 medium | done | Apply default attribute values |
 | [feat-length-facet](./feat-length-facet.md) | 🟡 medium | done | xs:length restriction facet |
 | [feat-total-fraction-digits](./feat-total-fraction-digits.md) | 🟡 medium | done | xs:totalDigits / xs:fractionDigits facets |
@@ -91,12 +91,12 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-simplecontent-restriction-facets](./feat-simplecontent-restriction-facets.md) | 🟡 medium | done | xs:simpleContent > xs:restriction facet extraction |
 | [feat-block-final](./feat-block-final.md) | 🟢 low | done | block/final/blockDefault/finalDefault derivation control |
 | [feat-notation-declaration](./feat-notation-declaration.md) | 🟡 medium | backlog | xs:notation declaration parsing and NOTATION value validation |
-| [feat-any-processcontents](./feat-any-processcontents.md) | 🟡 medium | backlog | xs:any processContents enforcement (strict/lax/skip) |
-| [feat-anyattribute-processcontents](./feat-anyattribute-processcontents.md) | 🟡 medium | backlog | xs:anyAttribute processContents enforcement |
-| [feat-wildcard-namespace](./feat-wildcard-namespace.md) | 🟡 medium | backlog | xs:any/xs:anyAttribute namespace attribute enforcement |
-| [feat-union-inline-members](./feat-union-inline-members.md) | 🟡 medium | backlog | xs:union with inline xs:simpleType member children |
-| [feat-attr-numeric-facets](./feat-attr-numeric-facets.md) | 🟡 medium | backlog | Numeric facets on xs:attribute inline xs:simpleType |
-| [feat-type-final-block](./feat-type-final-block.md) | 🟡 medium | backlog | final/block on named xs:complexType propagation |
-| [feat-multiple-patterns](./feat-multiple-patterns.md) | 🟡 medium | backlog | Multiple xs:pattern facets treated as OR union |
-| [feat-list-enum-pattern](./feat-list-enum-pattern.md) | 🟢 low | backlog | xs:list enumeration and pattern facets on full list value |
-| [feat-complexcontent-mixed](./feat-complexcontent-mixed.md) | 🟢 low | backlog | xs:complexContent mixed attribute override |
+| [feat-any-processcontents](./feat-any-processcontents.md) | 🟡 medium | done | xs:any processContents enforcement (strict/lax/skip) |
+| [feat-anyattribute-processcontents](./feat-anyattribute-processcontents.md) | 🟡 medium | done | xs:anyAttribute processContents enforcement |
+| [feat-wildcard-namespace](./feat-wildcard-namespace.md) | 🟡 medium | done | xs:any/xs:anyAttribute namespace attribute enforcement |
+| [feat-union-inline-members](./feat-union-inline-members.md) | 🟡 medium | done | xs:union with inline xs:simpleType member children |
+| [feat-attr-numeric-facets](./feat-attr-numeric-facets.md) | 🟡 medium | done | Numeric facets on xs:attribute inline xs:simpleType |
+| [feat-type-final-block](./feat-type-final-block.md) | 🟡 medium | done | final/block on named xs:complexType propagation |
+| [feat-multiple-patterns](./feat-multiple-patterns.md) | 🟡 medium | done | Multiple xs:pattern facets treated as OR union |
+| [feat-list-enum-pattern](./feat-list-enum-pattern.md) | 🟢 low | done | xs:list enumeration and pattern facets on full list value |
+| [feat-complexcontent-mixed](./feat-complexcontent-mixed.md) | 🟢 low | done | xs:complexContent mixed attribute override |

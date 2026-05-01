@@ -54,10 +54,14 @@ export interface XSDElement {
   allowAnyChild?: boolean;
   /** processContents value from xs:any — "strict" validates against declarations, "lax" validates if found */
   anyProcessContents?: "strict" | "lax" | "skip";
+  /** namespace constraint from xs:any — "##any", "##local", "##other:{targetNS}", or a specific URI */
+  anyNamespace?: string;
   /** True when the element's schema includes xs:anyAttribute (wildcard attributes allowed) */
   allowAnyAttribute?: boolean;
   /** processContents value from xs:anyAttribute — "strict" validates against declarations, "lax" validates if found */
   anyAttributeProcessContents?: "strict" | "lax" | "skip";
+  /** namespace constraint from xs:anyAttribute — "##any", "##local", "##other:{targetNS}", or a specific URI */
+  anyAttributeNamespace?: string;
   whiteSpace?: "preserve" | "replace" | "collapse";
   /** Default value for this element (used when element is absent) */
   default?: string;

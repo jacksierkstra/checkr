@@ -6,6 +6,16 @@ import { matchesSchemaAttribute } from "@lib/validator/utils/schemaMatch";
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 
+function matchesNamespaceConstraint(ns: string | null | undefined, constraint: string | undefined): boolean {
+  if (!constraint) return true;
+  if (constraint === "##local") return !ns;
+  if (constraint.startsWith("##other:")) {
+    const targetNs = constraint.slice(8);
+    return !!ns && ns !== targetNs;
+  }
+  return ns === constraint; // specific URI
+}
+
 function validateAttrType(
   attrName: string,
   elementName: string,
@@ -125,8 +135,10 @@ function validateAttrFacets(
 }
 
 export const validateAttributes: NodeValidationStep = (node, schema) => {
-  if (!schema.attributes || schema.attributes.length === 0) return [];
-  const declaredAttributes = schema.attributes;
+  const hasAttributes = schema.attributes && schema.attributes.length > 0;
+  const hasWildcard = schema.allowAnyAttribute;
+  if (!hasAttributes && !hasWildcard) return [];
+  const declaredAttributes = schema.attributes ?? [];
 
   const errors: ValidationError[] = declaredAttributes.flatMap((attr: XSDAttribute) => {
     const value = attr.namespace ? node.getAttributeNS(attr.namespace, attr.name) : node.getAttribute(attr.name);
@@ -192,6 +204,25 @@ export const validateAttributes: NodeValidationStep = (node, schema) => {
           code: "ATTRIBUTE_INVALID",
           message: `Attribute '${attr.localName || attr.name}' in element <${schema.name}> is not declared in the schema.`,
           element: schema.name,
+        });
+      }
+    });
+  } else if (schema.allowAnyAttribute && schema.anyAttributeNamespace) {
+    // Namespace constraint for wildcard attributes
+    Array.from(node.attributes).forEach((attr) => {
+      if (attr.namespaceURI === XMLNS_NAMESPACE) return;
+      if (attr.namespaceURI === XSI_NAMESPACE) return;
+      if (attr.name === "xmlns" || attr.name.startsWith("xmlns:")) return;
+      // Check if declared (declared attrs are always allowed)
+      const declared = declaredAttributes.some((declaredAttr) => matchesSchemaAttribute(attr, declaredAttr));
+      if (declared) return;
+      if (!matchesNamespaceConstraint(attr.namespaceURI, schema.anyAttributeNamespace)) {
+        errors.push({
+          code: "ATTRIBUTE_INVALID",
+          message: `Attribute '${attr.localName || attr.name}' with namespace "${attr.namespaceURI ?? ""}" does not match xs:anyAttribute namespace constraint "${schema.anyAttributeNamespace}" in <${schema.name}>.`,
+          element: schema.name,
+          expected: schema.anyAttributeNamespace,
+          actual: attr.namespaceURI ?? "",
         });
       }
     });

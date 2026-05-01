@@ -9,11 +9,12 @@ const directChildElements = (node: Element): Element[] =>
 
 export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {
-    const { attributes, allowAnyAttribute, anyAttributeProcessContents } = this.parseAttributeContainer(el);
+    const { attributes, allowAnyAttribute, anyAttributeProcessContents, anyAttributeNamespace } = this.parseAttributeContainer(el);
     const result: Partial<XSDElement> = { attributes };
     if (allowAnyAttribute) {
       result.allowAnyAttribute = true;
       if (anyAttributeProcessContents) result.anyAttributeProcessContents = anyAttributeProcessContents;
+      if (anyAttributeNamespace) result.anyAttributeNamespace = anyAttributeNamespace;
     }
     return result;
   }
@@ -22,10 +23,12 @@ export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDEle
     attributes: XSDAttribute[];
     allowAnyAttribute: boolean;
     anyAttributeProcessContents?: "strict" | "lax" | "skip";
+    anyAttributeNamespace?: string;
   } {
     const attributes: XSDAttribute[] = [];
     let allowAnyAttribute = false;
     let anyAttributeProcessContents: "strict" | "lax" | "skip" | undefined;
+    let anyAttributeNamespace: string | undefined;
 
     for (const child of directChildElements(container)) {
       if (!this.isXsdElement(child)) continue;
@@ -54,6 +57,10 @@ export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDEle
           if (pc === "strict" || pc === "lax" || pc === "skip") {
             anyAttributeProcessContents = pc;
           }
+          const ns = child.getAttribute("namespace");
+          if (ns && ns !== "##any") {
+            anyAttributeNamespace = ns;
+          }
           break;
         }
         case "simpleContent":
@@ -68,27 +75,27 @@ export class ParseAttributesStep implements PipelineStep<Element, Partial<XSDEle
           if (content) {
             const nested = this.parseAttributeContainer(content);
             attributes.push(...nested.attributes);
-            if (nested.allowAnyAttribute) { allowAnyAttribute = true; anyAttributeProcessContents = nested.anyAttributeProcessContents; }
+            if (nested.allowAnyAttribute) { allowAnyAttribute = true; anyAttributeProcessContents = nested.anyAttributeProcessContents; anyAttributeNamespace = nested.anyAttributeNamespace; }
           }
           break;
         }
         case "complexType": {
           const nested = this.parseAttributeContainer(child);
           attributes.push(...nested.attributes);
-          if (nested.allowAnyAttribute) { allowAnyAttribute = true; anyAttributeProcessContents = nested.anyAttributeProcessContents; }
+          if (nested.allowAnyAttribute) { allowAnyAttribute = true; anyAttributeProcessContents = nested.anyAttributeProcessContents; anyAttributeNamespace = nested.anyAttributeNamespace; }
           break;
         }
         case "extension":
         case "restriction": {
           const nested = this.parseAttributeContainer(child);
           attributes.push(...nested.attributes);
-          if (nested.allowAnyAttribute) { allowAnyAttribute = true; anyAttributeProcessContents = nested.anyAttributeProcessContents; }
+          if (nested.allowAnyAttribute) { allowAnyAttribute = true; anyAttributeProcessContents = nested.anyAttributeProcessContents; anyAttributeNamespace = nested.anyAttributeNamespace; }
           break;
         }
       }
     }
 
-    return { attributes, allowAnyAttribute, anyAttributeProcessContents };
+    return { attributes, allowAnyAttribute, anyAttributeProcessContents, anyAttributeNamespace };
   }
 
   parseAttribute(attr: Element): XSDAttribute | null {

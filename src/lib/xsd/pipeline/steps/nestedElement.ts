@@ -5,7 +5,13 @@ const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 
 export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XSDElement>> {
   execute(el: Element): Partial<XSDElement> {
-    let result = { children: [] as XSDElement[], choices: [] as XSDChoice[], allowAnyChild: false, anyProcessContents: undefined as "strict" | "lax" | "skip" | undefined };
+    let result = {
+      children: [] as XSDElement[],
+      choices: [] as XSDChoice[],
+      allowAnyChild: false,
+      anyProcessContents: undefined as "strict" | "lax" | "skip" | undefined,
+      anyNamespace: undefined as string | undefined,
+    };
 
     if (this.isXsdElement(el, "group") && !el.getAttribute("ref")) {
       const res = this.parseContainer(el, false, false);
@@ -13,14 +19,14 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       if (res.choices.length > 0) {
         result.choices.push(...res.choices);
       }
-      if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; }
+      if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; result.anyNamespace = res.anyNamespace; }
     } else if (this.isXsdElement(el, "complexType")) {
       const res = this.parseContainer(el, false);
       result.children.push(...res.children);
       if (res.choices.length > 0) {
         result.choices.push(...res.choices);
       }
-      if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; }
+      if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; result.anyNamespace = res.anyNamespace; }
     } else {
       const complexTypes = Array.from(el.childNodes)
         .filter((node) => {
@@ -35,12 +41,12 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         if (res.choices.length > 0) {
           result.choices.push(...res.choices);
         }
-        if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; }
+        if (res.allowAnyChild) { result.allowAnyChild = true; result.anyProcessContents = res.anyProcessContents; result.anyNamespace = res.anyNamespace; }
       });
     }
 
     return result.allowAnyChild
-      ? { children: result.children, choices: result.choices, allowAnyChild: true, anyProcessContents: result.anyProcessContents }
+      ? { children: result.children, choices: result.choices, allowAnyChild: true, anyProcessContents: result.anyProcessContents, anyNamespace: result.anyNamespace }
       : { children: result.children, choices: result.choices };
   }
 
@@ -48,11 +54,12 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     el: Element,
     isInChoice: boolean = false,
     isInAll: boolean = false,
-  ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean; anyProcessContents?: "strict" | "lax" | "skip" } {
+  ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean; anyProcessContents?: "strict" | "lax" | "skip"; anyNamespace?: string } {
     let children: XSDElement[] = [];
     let choices: XSDChoice[] = [];
     let allowAnyChild = false;
     let anyProcessContents: "strict" | "lax" | "skip" | undefined;
+    let anyNamespace: string | undefined;
 
     Array.from(el.childNodes).forEach((node) => {
       if (node.nodeType !== 1) return;
@@ -123,10 +130,14 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
         if (pc === "strict" || pc === "lax" || pc === "skip") {
           anyProcessContents = pc;
         }
+        const ns = child.getAttribute("namespace");
+        if (ns && ns !== "##any") {
+          anyNamespace = ns;
+        }
       }
     });
 
-    return { children, choices, allowAnyChild, anyProcessContents };
+    return { children, choices, allowAnyChild, anyProcessContents, anyNamespace };
   }
 
   private parseOccurrence(attr: string | null, defaultVal: number): number {
@@ -221,6 +232,7 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
       if (res.allowAnyChild) {
         xsdElement.allowAnyChild = true;
         if (res.anyProcessContents) xsdElement.anyProcessContents = res.anyProcessContents;
+        if (res.anyNamespace) xsdElement.anyNamespace = res.anyNamespace;
       }
     }
     return xsdElement;

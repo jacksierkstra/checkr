@@ -210,6 +210,14 @@ export class XSDPipelineParserImpl implements XSDParser {
     const effectiveForm = resolved.form ?? (isTopLevel ? "qualified" : schema.elementFormDefault ?? "unqualified");
     resolved.namespace = this.resolveNamespace(effectiveForm, schema.targetNamespace, isTopLevel);
 
+    // Resolve namespace tokens for xs:any wildcard constraint
+    if (resolved.anyNamespace) {
+      resolved.anyNamespace = this.resolveNamespaceToken(resolved.anyNamespace, schema.targetNamespace);
+    }
+    if (resolved.anyAttributeNamespace) {
+      resolved.anyAttributeNamespace = this.resolveNamespaceToken(resolved.anyAttributeNamespace, schema.targetNamespace);
+    }
+
     if (resolved.attributes) {
       resolved.attributes = resolved.attributes.map((attr) => this.applyNamespaceToAttribute(attr, schema, false));
     }
@@ -270,6 +278,12 @@ export class XSDPipelineParserImpl implements XSDParser {
       resolved.form ?? (isTopLevel ? "qualified" : schema.attributeFormDefault ?? "unqualified");
     resolved.namespace = this.resolveNamespace(effectiveForm, schema.targetNamespace, isTopLevel);
     return resolved;
+  }
+
+  private resolveNamespaceToken(token: string, targetNs: string | undefined): string {
+    if (token === "##targetNamespace") return targetNs ?? "";
+    if (token === "##other") return `##other:${targetNs ?? ""}`;
+    return token; // "##local" or specific URI
   }
 
   private resolveNamespace(
