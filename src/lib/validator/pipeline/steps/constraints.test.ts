@@ -13,6 +13,18 @@ describe("validateConstraints step", () => {
     return parser.parseFromString(xml, "application/xml").documentElement;
   }
 
+  it("should apply pattern to non-string types (xs:integer)", () => {
+    const node = createElementWithText("Count", "abc"); // fails pattern
+    const schema: XSDElement = {
+      name: "Count",
+      type: "xs:integer",
+      pattern: "^\\d+$",
+    };
+    const errors = validateConstraints(node!, schema);
+    expect(errors).toHaveLength(1);
+    expect(errors[0].code).toBe("PATTERN_MISMATCH");
+  });
+
   it("should skip validation if no pattern/minLength/maxLength is set", () => {
     const node = createElementWithText("Test", "any content");
     const schema: XSDElement = {
@@ -24,16 +36,15 @@ describe("validateConstraints step", () => {
     expect(errors).toEqual([]);
   });
 
-  it("should skip validation if type is not xs:string", () => {
-    const node = createElementWithText("Test", "any content");
+  it("should apply length constraints to non-string types when set", () => {
+    const node = createElementWithText("Test", "abc");
     const schema: XSDElement = {
       name: "Test",
       type: "xs:integer",
-      pattern: "^\\d+$",
       minLength: 2,
       maxLength: 5,
     };
-    // Because it's xs:integer, no string checks apply
+    // length = 3 — within bounds, no errors
     const errors = validateConstraints(node!, schema);
     expect(errors).toHaveLength(0);
   });

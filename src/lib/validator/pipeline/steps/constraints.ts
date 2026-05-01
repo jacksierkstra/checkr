@@ -1,7 +1,8 @@
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 
 /**
- * Checks pattern, minLength, maxLength for string-like values in an element.
+ * Checks pattern, minLength, maxLength for element text content.
+ * Per XSD 1.0 §4.3.4, xs:pattern applies to ALL simple types (not just strings).
  */
 export const validateConstraints: NodeValidationStep = (node, schema) => {
   const errors: ValidationError[] = [];
@@ -11,15 +12,9 @@ export const validateConstraints: NodeValidationStep = (node, schema) => {
     return errors;
   }
 
-  // We only apply this if the type is something like xs:string
-  // (or if you want to apply pattern to everything, skip this check)
-  if (schema.type !== "xs:string") {
-    return errors;
-  }
-
   const text = node.textContent?.trim() || "";
 
-  // Pattern check
+  // Pattern check — applies to any simple type, matched against lexical value
   if (schema.pattern) {
     const regex = new RegExp(schema.pattern);
     if (!regex.test(text)) {
