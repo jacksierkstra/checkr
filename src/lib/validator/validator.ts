@@ -112,16 +112,20 @@ export class ValidatorImpl implements Validator {
 
     // If choices exist, validate them
     if (schemaElement.choices && schemaElement.choices.length > 0) {
-      // For simplicity, assume 1 XSDChoice
-      const [choiceDef] = schemaElement.choices;
-      errors.push(...this.validateChoice(node, choiceDef));
+      for (const choiceDef of schemaElement.choices) {
+        errors.push(...this.validateChoice(node, choiceDef));
+      }
     }
 
     // Recursively validate direct children only if they exist in the XML
     // The requiredChildren validation step already handles missing required children
-    if (schemaElement.children && schemaElement.children.length > 0) {
-      const childrenErrors = schemaElement.children.flatMap((childSchema) => {
-        const childNodes = node.hasChildNodes() ? Array.from(node.childNodes) : [];
+    const allChildSchemas = [
+      ...(schemaElement.children ?? []),
+      // Also include elements from sequence groups stored in choices
+      ...(schemaElement.choices?.filter((c) => c.isSequence).flatMap((c) => c.elements) ?? []),
+    ];
+    if (allChildSchemas.length > 0) {
+      const childrenErrors = allChildSchemas.flatMap((childSchema) => {
         const acceptedNames = new Set([
           ...(childSchema.allowedSubstitutes ?? []).map((s) => s.toLowerCase()),
         ]);
@@ -157,7 +161,14 @@ export class ValidatorImpl implements Validator {
   }
 
   private validateChoice(node: Element, choice: XSDChoice): ValidationError[] {
-    // Sum how many total child elements from the choice are present
+    const minOccurs = choice.minOccurs ?? 1;
+    const maxOccurs = choice.maxOccurs ?? 1;
+
+    if (choice.isSequence) {
+      return this.validateSequenceGroup(node, choice.elements, minOccurs, maxOccurs);
+    }
+
+    // Count how many total child elements from the choice alternatives are present
     const matches = choice.elements.reduce((count, el) => {
       return (
         count +
@@ -165,14 +176,48 @@ export class ValidatorImpl implements Validator {
       );
     }, 0);
 
-    // If exactly 1 is found, good
-    if (matches === 1) return [];
+    const maxOk = maxOccurs === "unbounded" || matches <= maxOccurs;
+    if (matches >= minOccurs && maxOk) return [];
 
-    // Otherwise, produce an error
+    if (maxOccurs === 1 && minOccurs === 1) {
+      return [
+        {
+          code: "CHOICE_VIOLATION",
+          message: `Choice error: Expected exactly one of [${choice.elements.map((x) => x.name).join(", ")}], but found ${matches}.`,
+        },
+      ];
+    }
+
     return [
       {
         code: "CHOICE_VIOLATION",
-        message: `Choice error: Expected exactly one of [${choice.elements.map((x) => x.name).join(", ")}], but found ${matches}.`,
+        message: `Choice error: Expected ${minOccurs}–${maxOccurs === "unbounded" ? "∞" : maxOccurs} selections from [${choice.elements.map((x) => x.name).join(", ")}], but found ${matches}.`,
+      },
+    ];
+  }
+
+  private validateSequenceGroup(
+    node: Element,
+    elements: XSDElement[],
+    minOccurs: number,
+    maxOccurs: number | "unbounded",
+  ): ValidationError[] {
+    const childEls = directChildElements(node);
+    // Count how many times the first required element appears — this is the "group count"
+    const firstRequired = elements.find((e) => (e.minOccurs ?? 1) >= 1);
+    if (!firstRequired) return [];
+
+    const groupCount = childEls.filter((c) => matchesSchemaElement(c, firstRequired)).length;
+
+    const maxOk = maxOccurs === "unbounded" || groupCount <= maxOccurs;
+    if (groupCount >= minOccurs && maxOk) return [];
+
+    return [
+      {
+        code: "OCCURRENCE_VIOLATION",
+        message: `Sequence group must occur ${minOccurs}–${maxOccurs === "unbounded" ? "∞" : maxOccurs} times, but found ${groupCount}.`,
+        expected: minOccurs,
+        actual: groupCount,
       },
     ];
   }

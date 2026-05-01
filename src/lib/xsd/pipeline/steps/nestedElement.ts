@@ -63,14 +63,34 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
           children.push(element);
         }
       } else if (this.isXsdElement(child, "sequence")) {
+        const seqMinOccurs = this.parseOccurrence(child.getAttribute("minOccurs"), 1);
+        const seqMaxOccurs = this.parseMaxOccurrence(child.getAttribute("maxOccurs"), 1);
+        const hasGroupOccurrence = seqMinOccurs !== 1 || seqMaxOccurs !== 1;
+
         const res = this.parseContainer(child, false, isInAll);
-        children.push(...res.children);
-        choices.push(...res.choices);
+        if (hasGroupOccurrence && res.children.length > 0) {
+          // Represent as a sequence group with its own occurrence constraints
+          choices.push({
+            elements: res.children,
+            minOccurs: seqMinOccurs,
+            maxOccurs: seqMaxOccurs,
+            isSequence: true,
+          });
+        } else {
+          children.push(...res.children);
+          choices.push(...res.choices);
+        }
         if (res.allowAnyChild) allowAnyChild = true;
       } else if (this.isXsdElement(child, "choice")) {
+        const choiceMinOccurs = this.parseOccurrence(child.getAttribute("minOccurs"), 1);
+        const choiceMaxOccurs = this.parseMaxOccurrence(child.getAttribute("maxOccurs"), 1);
+
         const res = this.parseContainer(child, true, isInAll);
         if (res.children.length > 0) {
-          choices.push({ elements: res.children });
+          const entry: XSDChoice = { elements: res.children };
+          if (choiceMinOccurs !== 1) entry.minOccurs = choiceMinOccurs;
+          if (choiceMaxOccurs !== 1) entry.maxOccurs = choiceMaxOccurs;
+          choices.push(entry);
         }
         choices.push(...res.choices);
         if (res.allowAnyChild) allowAnyChild = true;
@@ -102,6 +122,19 @@ export class ParseNestedElementsStep implements PipelineStep<Element, Partial<XS
     });
 
     return { children, choices, allowAnyChild };
+  }
+
+  private parseOccurrence(attr: string | null, defaultVal: number): number {
+    if (!attr || attr.trim() === "") return defaultVal;
+    const parsed = parseInt(attr, 10);
+    return isNaN(parsed) ? defaultVal : parsed;
+  }
+
+  private parseMaxOccurrence(attr: string | null, defaultVal: number | "unbounded"): number | "unbounded" {
+    if (!attr || attr.trim() === "") return defaultVal;
+    if (attr === "unbounded") return "unbounded";
+    const parsed = parseInt(attr, 10);
+    return isNaN(parsed) ? defaultVal : parsed;
   }
 
   private parseElement(el: Element, isInChoice: boolean = false, isInAll: boolean = false): XSDElement | null {

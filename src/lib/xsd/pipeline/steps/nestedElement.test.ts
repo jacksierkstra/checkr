@@ -195,4 +195,56 @@ describe("ParseNestedElementsStep", () => {
       { name: "addressGroup", groupRef: "addressGroup", minOccurs: 1, maxOccurs: 1, inAll: true },
     ]);
   });
+
+  it("should capture group-level minOccurs/maxOccurs on xs:sequence as isSequence choice", () => {
+    const xsdElement = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType>
+                <xs:sequence minOccurs="0" maxOccurs="3">
+                    <xs:element name="a" />
+                    <xs:element name="b" />
+                </xs:sequence>
+            </xs:complexType>
+        </xs:schema>
+    `;
+    const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
+    const result = step.execute(element!);
+    expect(result.children).toEqual([]);
+    expect(result.choices).toEqual([
+      {
+        elements: [
+          { name: "a", minOccurs: 1, maxOccurs: 1 },
+          { name: "b", minOccurs: 1, maxOccurs: 1 },
+        ],
+        minOccurs: 0,
+        maxOccurs: 3,
+        isSequence: true,
+      },
+    ]);
+  });
+
+  it("should capture group-level minOccurs/maxOccurs on xs:choice", () => {
+    const xsdElement = `
+        <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+            <xs:complexType>
+                <xs:choice minOccurs="2" maxOccurs="unbounded">
+                    <xs:element name="a" />
+                    <xs:element name="b" />
+                </xs:choice>
+            </xs:complexType>
+        </xs:schema>
+    `;
+    const element = new DOMParser().parseFromString(xsdElement, "text/xml").documentElement;
+    const result = step.execute(element!);
+    expect(result.choices).toEqual([
+      {
+        elements: [
+          { name: "a", minOccurs: 0, maxOccurs: 1 },
+          { name: "b", minOccurs: 0, maxOccurs: 1 },
+        ],
+        minOccurs: 2,
+        maxOccurs: "unbounded",
+      },
+    ]);
+  });
 });

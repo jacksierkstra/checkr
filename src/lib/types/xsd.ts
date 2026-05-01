@@ -138,4 +138,6 @@ export interface XSDChoice {
   elements: XSDElement[];
   minOccurs?: number;
   maxOccurs?: number | "unbounded";
+  /** true when this group was a xs:sequence with non-default group-level occurrence */
+  isSequence?: boolean;
 }
