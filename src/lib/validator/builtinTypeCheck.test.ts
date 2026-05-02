@@ -57,6 +57,18 @@ describe("isValidBuiltinType", () => {
     ["xs:gMonthDay", "--01-15+25:00", false], // offset out of range
     ["xs:NCName", "valid", true],
     ["xs:NCName", "1invalid", false],
+    // xs:long — 64-bit signed range
+    ["xs:long", "0", true],
+    ["xs:long", "9223372036854775807", true],   // INT64_MAX
+    ["xs:long", "-9223372036854775808", true],  // INT64_MIN
+    ["xs:long", "9223372036854775808", false],  // INT64_MAX + 1
+    ["xs:long", "-9223372036854775809", false], // INT64_MIN - 1
+    ["xs:long", "3.14", false],
+    // xs:unsignedLong — 64-bit unsigned range
+    ["xs:unsignedLong", "0", true],
+    ["xs:unsignedLong", "18446744073709551615", true],  // UINT64_MAX
+    ["xs:unsignedLong", "18446744073709551616", false], // UINT64_MAX + 1
+    ["xs:unsignedLong", "-1", false],
     ["xs:ID", "myId", true],
     ["xs:ID", "123bad", false],
     ["xs:IDREF", "ref1", true],

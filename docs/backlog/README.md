@@ -39,7 +39,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 
 | ID | Priority | Status | Title |
 |----|----------|--------|-------|
-| [fix-long-range](./fix-long-range.md) | 🟢 low | backlog | xs:long / xs:unsignedLong missing value-range bounds |
+| [fix-long-range](./fix-long-range.md) | 🟢 low | done | xs:long / xs:unsignedLong missing value-range bounds |
 | [fix-numeric-facets](./fix-numeric-facets.md) | 🔴 critical | done | Numeric facets dropped for xs: base restrictions |
 | [fix-occurrence-per-parent](./fix-occurrence-per-parent.md) | 🔴 critical | done | Occurrence counting is document-global, not per-parent |
 | [fix-global-simpletype](./fix-global-simpletype.md) | 🔴 critical | done | Global xs:simpleType nodes are silently discarded |

@@ -50,8 +50,11 @@ export function isValidBuiltinType(value: string, type: string): boolean {
       return ["true", "false", "1", "0"].includes(value);
     case "xs:integer":
       return /^-?\d+$/.test(value);
-    case "xs:long":
-      return /^-?\d+$/.test(value);
+    case "xs:long": {
+      if (!/^-?\d+$/.test(value)) return false;
+      const n = BigInt(value);
+      return n >= BigInt("-9223372036854775808") && n <= BigInt("9223372036854775807");
+    }
     case "xs:int": {
       const v = parseInt(value, 10);
       return /^-?\d+$/.test(value) && v >= -2147483648 && v <= 2147483647;
@@ -64,8 +67,10 @@ export function isValidBuiltinType(value: string, type: string): boolean {
       const v = parseInt(value, 10);
       return /^-?\d+$/.test(value) && v >= -128 && v <= 127;
     }
-    case "xs:unsignedLong":
-      return /^\d+$/.test(value);
+    case "xs:unsignedLong": {
+      if (!/^\d+$/.test(value)) return false;
+      return BigInt(value) <= BigInt("18446744073709551615");
+    }
     case "xs:unsignedInt": {
       const v = parseInt(value, 10);
       return /^\d+$/.test(value) && v <= 4294967295;
