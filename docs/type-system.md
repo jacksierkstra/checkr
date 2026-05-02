@@ -161,12 +161,22 @@ The type system is integrated into the validation pipeline architecture:
 2. The type resolver processes references and inheritance
 3. The validator uses the resolved types for validation
 
+## Additional Simple Type Constructs
+
+### List types (`xs:list`)
+
+An element can have `listItemType` set to an XSD built-in type. The validator splits the text content on whitespace and validates each token against the item type. Length facets (`xs:length`, `xs:minLength`, `xs:maxLength`) apply to the token count; `xs:enumeration` and `xs:pattern` apply to the full whitespace-joined value.
+
+### Union types (`xs:union`)
+
+An element can carry `unionMemberTypes` (a list of named types from `memberTypes=`) or `unionInlineMembers` (anonymous inline `xs:simpleType` children). The validator tries each member in order and passes if any member type accepts the value.
+
+### `xs:simpleContent` restriction
+
+When an element uses `xs:simpleContent > xs:restriction`, the facets declared in the restriction (pattern, enumeration, length, range, whiteSpace) are extracted and merged with inherited attributes from the base type.
+
 ## Known Limitations
 
-- Circular type references may cause performance issues
-
-## Out of Scope
-
-The following features are explicitly deferred and will not be implemented (see [ADR-009](./adr/ADR-009-deferred-xsd-features.md)):
-
-- `xs:import`, `xs:include`, `xs:redefine` (external schema loading)
+- **`xsi:type` runtime type override is not supported.** When an XML element carries `xsi:type="T"`, the validator does not switch to the named type. The element is validated against its declared schema type only. See [feat-xsi-type](./backlog/feat-xsi-type.md) in the backlog.
+- **`xs:long` / `xs:unsignedLong` range bounds not enforced.** These types only validate the lexical integer pattern, not the exact 64-bit value bounds. See [fix-long-range](./backlog/fix-long-range.md) in the backlog.
+- `xs:import`, `xs:include`, `xs:redefine` (external schema loading) — explicitly deferred. See [ADR-009](./adr/ADR-009-deferred-xsd-features.md).

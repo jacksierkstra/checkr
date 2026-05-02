@@ -69,32 +69,55 @@ The validation process consists of multiple pipeline stages:
 
 ## Supported XSD Features
 
+### Structure and content models
 - ✅ `xs:sequence`, `xs:choice`
 - ✅ `xs:all` — order-independent children, each allowed at most once; per-child `minOccurs`/`maxOccurs` enforced (XSD 1.0: element-only children, no nesting)
 - ✅ `xs:element`, `xs:complexType`, `xs:simpleType`
 - ✅ `xs:simpleContent` with extension and restriction
-- ✅ `xs:enumeration`, `xs:pattern`
+- ✅ `xs:group` and `xs:attributeGroup` — named model groups and attribute groups with `ref` expansion
+- ✅ `xs:substitutionGroup` — element substitution including transitive chains
+- ✅ `xs:abstract` element declarations
+- ✅ `xs:sequence` child-order enforcement
+- ✅ Unexpected element and attribute detection
+
+### Type system and inheritance
+- ✅ Type inheritance (`xs:extension`, `xs:restriction`) for both simple and complex types
+- ✅ `xs:list` — whitespace-separated lists with per-item type validation
+- ✅ `xs:union` — simple type unions, both `memberTypes=` and inline `xs:simpleType` member children
+- ✅ `block` / `final` / `blockDefault` / `finalDefault` derivation control
+
+### Facets and constraints
+- ✅ `xs:enumeration`, `xs:pattern` (multiple patterns treated as OR union)
 - ✅ `xs:minLength`, `xs:maxLength`, `xs:length`
 - ✅ `xs:totalDigits`, `xs:fractionDigits`
 - ✅ `xs:whiteSpace` facet (`preserve`, `replace`, `collapse`)
-- ✅ Attribute validation (`xs:attribute`) — required, optional, fixed, default, prohibited
-- ✅ Type inheritance (`xs:extension`, `xs:restriction`)
 - ✅ Numeric constraints (`minInclusive`, `maxInclusive`, `minExclusive`, `maxExclusive`)
-- ✅ `xs:list` and `xs:union` simple types
+
+### Attributes
+- ✅ Attribute validation (`xs:attribute`) — required, optional, fixed, default, prohibited (`use="prohibited"`)
+- ✅ Inline `xs:simpleType` child of `xs:attribute` with full facet support
+
+### Built-in simple types
+All 44 XSD 1.0 built-in types are validated — 19 primitives (`xs:string`, `xs:boolean`, `xs:decimal`, `xs:float`, `xs:double`, `xs:dateTime`, `xs:date`, `xs:time`, `xs:duration`, `xs:gYear`, `xs:gYearMonth`, `xs:gMonth`, `xs:gMonthDay`, `xs:gDay`, `xs:hexBinary`, `xs:base64Binary`, `xs:anyURI`, `xs:QName`, `xs:NOTATION`) plus 25 derived integer, string, and token types.
+
+### Element-level features
 - ✅ `xs:nillable` elements with `xsi:nil` support
-- ✅ `xs:any` and `xs:anyAttribute` wildcards
-- ✅ `xs:sequence` child-order enforcement
-- ✅ Unexpected element and attribute detection
 - ✅ Element `default` and `fixed` value constraints
-- ✅ Namespace support and resolution (`elementFormDefault`, `attributeFormDefault`, `form`)
-- ✅ `xs:substitutionGroup` — element substitution including transitive chains
-- ✅ `xs:group` and `xs:attributeGroup` — named model groups and attribute groups with `ref` expansion
 - ✅ `xs:key`, `xs:unique`, `xs:keyref` — identity constraint validation
-- ✅ `xs:abstract` element declarations
-- ✅ `block` / `final` / `blockDefault` / `finalDefault` derivation control
 - ✅ `xs:ID` uniqueness and `xs:IDREF` referential integrity
-- 🚧 **Out of scope** (explicitly deferred — see [ADR-009](docs/adr/ADR-009-deferred-xsd-features.md)):
-  - Namespaced imports (`xs:import`, `xs:include`, `xs:redefine`) — single-document schemas only; multi-document composition is not supported
+- ✅ Namespace support and resolution (`elementFormDefault`, `attributeFormDefault`, `form`)
+
+### Wildcards and notation
+- ✅ `xs:any` and `xs:anyAttribute` wildcards with `processContents` enforcement (strict / lax / skip)
+- ✅ `xs:any` / `xs:anyAttribute` `namespace` constraint (`##any`, `##local`, `##other`, specific URI)
+- ✅ `xs:notation` declaration parsing and `xs:NOTATION` value validation
+
+### Annotation elements
+`xs:annotation`, `xs:documentation`, and `xs:appinfo` are silently ignored — they are purely informational and carry no validation semantics.
+
+### Out of scope
+- 🚧 **`xsi:type` runtime type override** — when an XML element carries `xsi:type="T"`, the validator does not currently switch to the named type. See [feat-xsi-type](docs/backlog/feat-xsi-type.md).
+- 🚧 **`xs:import`, `xs:include`, `xs:redefine`** — single-document schemas only; multi-document composition is not supported. See [ADR-009](docs/adr/ADR-009-deferred-xsd-features.md).
 
 ## Running Tests
 

@@ -39,6 +39,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 
 | ID | Priority | Status | Title |
 |----|----------|--------|-------|
+| [fix-long-range](./fix-long-range.md) | 🟢 low | backlog | xs:long / xs:unsignedLong missing value-range bounds |
 | [fix-numeric-facets](./fix-numeric-facets.md) | 🔴 critical | done | Numeric facets dropped for xs: base restrictions |
 | [fix-occurrence-per-parent](./fix-occurrence-per-parent.md) | 🔴 critical | done | Occurrence counting is document-global, not per-parent |
 | [fix-global-simpletype](./fix-global-simpletype.md) | 🔴 critical | done | Global xs:simpleType nodes are silently discarded |
@@ -100,3 +101,4 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-multiple-patterns](./feat-multiple-patterns.md) | 🟡 medium | done | Multiple xs:pattern facets treated as OR union |
 | [feat-list-enum-pattern](./feat-list-enum-pattern.md) | 🟢 low | done | xs:list enumeration and pattern facets on full list value |
 | [feat-complexcontent-mixed](./feat-complexcontent-mixed.md) | 🟢 low | done | xs:complexContent mixed attribute override |
+| [feat-xsi-type](./feat-xsi-type.md) | 🟠 high | backlog | xsi:type runtime type substitution |
