@@ -101,4 +101,4 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [feat-multiple-patterns](./feat-multiple-patterns.md) | 🟡 medium | done | Multiple xs:pattern facets treated as OR union |
 | [feat-list-enum-pattern](./feat-list-enum-pattern.md) | 🟢 low | done | xs:list enumeration and pattern facets on full list value |
 | [feat-complexcontent-mixed](./feat-complexcontent-mixed.md) | 🟢 low | done | xs:complexContent mixed attribute override |
-| [feat-xsi-type](./feat-xsi-type.md) | 🟠 high | backlog | xsi:type runtime type substitution |
+| [feat-xsi-type](./feat-xsi-type.md) | 🟠 high | done | xsi:type runtime type substitution |

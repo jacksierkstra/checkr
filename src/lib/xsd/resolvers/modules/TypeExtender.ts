@@ -88,7 +88,7 @@ export class TypeExtender implements ITypeExtender {
       extension: undefined, // Clear processing flags
       restriction: undefined,
       type: resolvedBaseElement.type,
-      abstract: element.abstract !== undefined ? element.abstract : resolvedBaseElement.abstract,
+      abstract: element.abstract !== undefined ? element.abstract : undefined,
     };
   }
 

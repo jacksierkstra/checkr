@@ -11,7 +11,13 @@ export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElem
   }
 
   execute(el: Element): Partial<XSDElement> {
-    const complexType = el.getElementsByTagNameNS(this.XSD_NAMESPACE, "complexType")[0];
+    // Support both:
+    //   1. xs:element containing an inline xs:complexType
+    //   2. xs:complexType as the top-level element (named type)
+    const complexType: Element | undefined =
+      el.localName === "complexType" && el.namespaceURI === this.XSD_NAMESPACE
+        ? el
+        : (el.getElementsByTagNameNS(this.XSD_NAMESPACE, "complexType")[0] as Element | undefined);
     if (!complexType) return {};
 
     const mixed = complexType.getAttribute("mixed");

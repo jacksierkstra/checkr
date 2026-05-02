@@ -21,8 +21,10 @@ import { validateUnexpectedElements } from "@lib/validator/pipeline/steps/unexpe
 import { validateSequenceOrder } from "@lib/validator/pipeline/steps/sequenceOrder";
 import { validateIdentityConstraints } from "@lib/validator/pipeline/steps/identityConstraints";
 import { validateIdSemantics } from "@lib/validator/pipeline/steps/idSemantics";
+import { resolveXsiType } from "@lib/validator/pipeline/steps/xsiType";
 import { XMLParser } from "@lib/xml/parser";
 import { XSDParser } from "@lib/xsd/parser";
+import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
 import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
 
 export interface Validator {
@@ -56,7 +58,11 @@ export class ValidatorImpl implements Validator {
     this.globalPipeline = new GlobalValidationPipelineImpl().addStep(validateOccurrence);
   }
 
-  private validateElements(xmlDoc: XMLDocument, elements: XSDElement[]): ValidationError[] {
+  private validateElements(
+    xmlDoc: XMLDocument,
+    elements: XSDElement[],
+    schema: XSDSchema,
+  ): ValidationError[] {
     const errors: ValidationError[] = [];
     const elementsByName = new Map(elements.map((e) => [e.name.toLowerCase(), e]));
 
@@ -92,7 +98,7 @@ export class ValidatorImpl implements Validator {
 
       // Node-level checks for each instance of this element
       for (const node of nodes) {
-        const nodeErrors = this.validateNode(node, schemaElement, elementsByName);
+        const nodeErrors = this.validateNode(node, schemaElement, schema, elementsByName);
         errors.push(...nodeErrors);
       }
     }
@@ -103,16 +109,32 @@ export class ValidatorImpl implements Validator {
   private validateNode(
     node: Element,
     schemaElement: XSDElement,
+    schema: XSDSchema,
     elementsByName?: Map<string, XSDElement>,
   ): ValidationError[] {
     const errors: ValidationError[] = [];
 
+    // Resolve xsi:type substitution if present on this node.
+    // When valid, the declared schema is replaced with the fully-resolved substituted type
+    // for all node-level checks. The global pipeline (occurrence counts) always uses the
+    // declared schema so occurrence counts are unaffected.
+    let effectiveSchema = schemaElement;
+    const xsiResult = resolveXsiType(node, schemaElement, schema);
+    if (xsiResult !== null) {
+      if ("errors" in xsiResult) {
+        return xsiResult.errors;
+      }
+      // Fully resolve the substituted type (walk extension/restriction chains).
+      const resolver = new ModularTypeReferenceResolver(schema);
+      effectiveSchema = resolver.execute(xsiResult.resolved);
+    }
+
     // Node-level validation pipeline
-    errors.push(...this.nodePipeline.execute(node, schemaElement));
+    errors.push(...this.nodePipeline.execute(node, effectiveSchema));
 
     // If choices exist, validate them
-    if (schemaElement.choices && schemaElement.choices.length > 0) {
-      for (const choiceDef of schemaElement.choices) {
+    if (effectiveSchema.choices && effectiveSchema.choices.length > 0) {
+      for (const choiceDef of effectiveSchema.choices) {
         errors.push(...this.validateChoice(node, choiceDef));
       }
     }
@@ -120,9 +142,9 @@ export class ValidatorImpl implements Validator {
     // Recursively validate direct children only if they exist in the XML
     // The requiredChildren validation step already handles missing required children
     const allChildSchemas = [
-      ...(schemaElement.children ?? []),
+      ...(effectiveSchema.children ?? []),
       // Also include elements from sequence groups stored in choices
-      ...(schemaElement.choices?.filter((c) => c.isSequence).flatMap((c) => c.elements) ?? []),
+      ...(effectiveSchema.choices?.filter((c) => c.isSequence).flatMap((c) => c.elements) ?? []),
     ];
     if (allChildSchemas.length > 0) {
       const childrenErrors = allChildSchemas.flatMap((childSchema) => {
@@ -144,11 +166,11 @@ export class ValidatorImpl implements Validator {
                 // If this child is a substitute (different name), look up its own schema
                 const childName = (childNode.localName || childNode.tagName || "").toLowerCase();
                 const isSubstitute = childName !== childSchema.name.toLowerCase();
-                const effectiveSchema =
+                const resolvedChildSchema =
                   isSubstitute && elementsByName
                     ? (elementsByName.get(childName) ?? childSchema)
                     : childSchema;
-                return this.validateNode(childNode, effectiveSchema, elementsByName);
+                return this.validateNode(childNode, resolvedChildSchema, schema, elementsByName);
               }),
             ]
           : [];
@@ -158,14 +180,14 @@ export class ValidatorImpl implements Validator {
     }
 
     // xs:any processContents enforcement for wildcard child elements
-    if (schemaElement.allowAnyChild) {
-      const pc = schemaElement.anyProcessContents;
+    if (effectiveSchema.allowAnyChild) {
+      const pc = effectiveSchema.anyProcessContents;
       if (pc === "strict" || pc === "lax") {
         for (const childEl of directChildElements(node)) {
           const childName = (childEl.localName || childEl.tagName || "").toLowerCase();
           const globalSchema = elementsByName?.get(childName);
           if (globalSchema) {
-            errors.push(...this.validateNode(childEl, globalSchema, elementsByName));
+            errors.push(...this.validateNode(childEl, globalSchema, schema, elementsByName));
           } else if (pc === "strict") {
             errors.push({
               code: "UNEXPECTED_ELEMENT",
@@ -191,8 +213,7 @@ export class ValidatorImpl implements Validator {
     // Count how many total child elements from the choice alternatives are present
     const matches = choice.elements.reduce((count, el) => {
       return (
-        count +
-        directChildElements(node).filter((child) => matchesSchemaElement(child, el)).length
+        count + directChildElements(node).filter((child) => matchesSchemaElement(child, el)).length
       );
     }, 0);
 
@@ -277,7 +298,7 @@ export class ValidatorImpl implements Validator {
 
     // Programmer errors (bugs in pipeline steps) propagate — do NOT catch
     const rootElementErrors = validateRootElements(xmlDoc, schema);
-    const elementErrors = this.validateElements(xmlDoc, schema.elements);
+    const elementErrors = this.validateElements(xmlDoc, schema.elements, schema);
     const identityErrors = validateIdentityConstraints(xmlDoc, schema);
     const idErrors = validateIdSemantics(xmlDoc, schema);
     const errors = [...rootElementErrors, ...elementErrors, ...identityErrors, ...idErrors];

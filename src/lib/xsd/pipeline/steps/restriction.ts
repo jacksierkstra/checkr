@@ -11,6 +11,19 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       return this.parseSimpleTypeRestriction(el);
     }
 
+    // Handle a top-level xs:complexType element (named type with complex content restriction)
+    if (el.localName === "complexType" && el.namespaceURI === XSD_NAMESPACE) {
+      const complexContent = el.getElementsByTagNameNS(XSD_NAMESPACE, "complexContent")[0];
+      const restriction = el.getElementsByTagNameNS(XSD_NAMESPACE, "restriction")[0];
+      if (restriction) {
+        const parsed = this.parseComplexTypeRestriction(restriction);
+        const mixedAttr = complexContent?.getAttribute("mixed") ?? el.getAttribute("mixed");
+        if (mixedAttr === "true") parsed.mixed = true;
+        return parsed;
+      }
+      return {};
+    }
+
     const simpleType = el.getElementsByTagNameNS(XSD_NAMESPACE, "simpleType")[0];
     if (simpleType) {
       return this.parseSimpleTypeRestriction(simpleType);
@@ -23,7 +36,8 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
       if (restriction) {
         const parsed = this.parseComplexTypeRestriction(restriction);
         // xs:complexContent mixed= overrides xs:complexType mixed= per XSD 1.0 §3.8.3
-        const mixedAttr = complexContent?.getAttribute("mixed") ?? complexType.getAttribute("mixed");
+        const mixedAttr =
+          complexContent?.getAttribute("mixed") ?? complexType.getAttribute("mixed");
         if (mixedAttr === "true") parsed.mixed = true;
         return parsed;
       }
@@ -71,9 +85,11 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
     return { restriction: restrictionDef, ...(allowAnyChild ? { allowAnyChild: true } : {}) };
   }
 
-  private parseRestrictionContainer(
-    el: Element,
-  ): { children: XSDElement[]; choices: XSDChoice[]; allowAnyChild: boolean } {
+  private parseRestrictionContainer(el: Element): {
+    children: XSDElement[];
+    choices: XSDChoice[];
+    allowAnyChild: boolean;
+  } {
     const children: XSDElement[] = [];
     const choices: XSDChoice[] = [];
     let allowAnyChild = false;
@@ -143,9 +159,7 @@ export class ParseRestrictionsStep implements PipelineStep<Element, Partial<XSDE
     return { children, choices, allowAnyChild };
   }
 
-  private parseRestrictionAttributes(
-    restriction: Element,
-  ): Array<{
+  private parseRestrictionAttributes(restriction: Element): Array<{
     name: string;
     type?: string;
     use?: "required" | "optional" | "prohibited";
