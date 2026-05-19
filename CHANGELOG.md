@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.2.3](https://github.com/jacksierkstra/checkr/compare/v0.2.2...v0.2.3) (2026-05-19)
+
+
+### Bug Fixes
+
+* add fallback domparser on node envs. ([dc118de](https://github.com/jacksierkstra/checkr/commit/dc118de674ca949e95fdb07abf3deea1dc334695))
+* Merge branch 'main' of github.com:jacksierkstra/checkr ([ec29e1d](https://github.com/jacksierkstra/checkr/commit/ec29e1d71d02eb87aa9e355ca8aaa5e1508c8e8e))
+* removed unneccessary build step in prepare. ([ca0c810](https://github.com/jacksierkstra/checkr/commit/ca0c8101d4a0b16783c06f156708bfddcc0e3eea))
+
 ## [0.2.2](https://github.com/jacksierkstra/checkr/compare/v0.2.1...v0.2.2) (2026-05-19)
 
 
