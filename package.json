@@ -1,6 +1,6 @@
 {
   "name": "@jacksierkstra/checkr",
-  "version": "0.0.18",
+  "version": "0.1.0",
   "description": "A pure validation library.",
   "type": "module",
   "main": "./dist/index.js",
