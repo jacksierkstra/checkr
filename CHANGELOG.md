@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.1](https://github.com/jacksierkstra/checkr/compare/v0.1.0...v0.1.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* trigger npm publish release ([4457449](https://github.com/jacksierkstra/checkr/commit/4457449612e82dda2f10f6c3d6655f619a210e30))
+
 ## [0.1.0](https://github.com/jacksierkstra/checkr/compare/0.0.18...v0.1.0) (2026-05-19)
 
 
