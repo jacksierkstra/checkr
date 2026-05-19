@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.2](https://github.com/jacksierkstra/checkr/compare/v0.2.1...v0.2.2) (2026-05-19)
+
+
+### Bug Fixes
+
+* removed yalc and including sources into the tarball. ([d3a10e7](https://github.com/jacksierkstra/checkr/commit/d3a10e7f92c76ede91c352c4da9ec59455cdbaae))
+
 ## [0.2.1](https://github.com/jacksierkstra/checkr/compare/v0.2.0...v0.2.1) (2026-05-19)
 
 
