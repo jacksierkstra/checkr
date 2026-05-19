@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/jacksierkstra/checkr/compare/v0.2.0...v0.2.1) (2026-05-19)
+
+
+### Bug Fixes
+
+* remove old npm publish pipeline. ([84ad7c1](https://github.com/jacksierkstra/checkr/commit/84ad7c1b3f2c06ef0d8fdf918d87a063f84d8a33))
+
 ## [0.2.0](https://github.com/jacksierkstra/checkr/compare/v0.1.1...v0.2.0) (2026-05-19)
 
 
