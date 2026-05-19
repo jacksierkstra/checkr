@@ -15,7 +15,6 @@
     "clean": "rimraf dist",
     "build": "tspc -p tsconfig.build.json",
     "publish:local": "npm run clean && npm run build && npm pack",
-    "prepare": "npm run build",
     "prepack": "npm run build",
     "prepublishOnly": "npm run build",
     "lint": "eslint \"src/**/*.ts\" --max-warnings 0",
