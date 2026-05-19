@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/jacksierkstra/checkr/compare/v0.1.1...v0.2.0) (2026-05-19)
+
+
+### Features
+
+* release commit. ([31b5e74](https://github.com/jacksierkstra/checkr/commit/31b5e7482b9fb6fb52ecd5c3c564467316c34e95))
+
 ## [0.1.1](https://github.com/jacksierkstra/checkr/compare/v0.1.0...v0.1.1) (2026-05-19)
 
 
