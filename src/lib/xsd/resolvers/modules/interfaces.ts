@@ -1,4 +1,4 @@
-import { XSDElement, XSDAttribute } from "@lib/types/xsd";
+import { XSDElement, XSDAttribute } from "@lib/types/xsd.js";
 
 /**
  * Interface for type registries that manage schema type definitions

@@ -1,4 +1,4 @@
-import { XSDElement } from "@lib/types/xsd";
+import { XSDElement } from "@lib/types/xsd.js";
 
 export type ValidationErrorCode =
   | "MISSING_REQUIRED_ELEMENT"

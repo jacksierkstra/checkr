@@ -1,5 +1,5 @@
-import { NodeValidationStep, ValidationError } from "@lib/types/validation";
-import { matchesSchemaElement, directChildElements } from "@lib/validator/utils/schemaMatch";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation.js";
+import { matchesSchemaElement, directChildElements } from "@lib/validator/utils/schemaMatch.js";
 
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 

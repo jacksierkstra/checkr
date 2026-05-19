@@ -1,5 +1,5 @@
-import { ValidationError } from "@lib/types/validation";
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
+import { ValidationError } from "@lib/types/validation.js";
+import { XSDElement, XSDSchema } from "@lib/types/xsd.js";
 
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 

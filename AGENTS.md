@@ -26,8 +26,8 @@ npm test                                         # full test suite + coverage
 npm run build                                    # compile → dist/ (use tspc, not tsc)
 npm run clean                                    # delete dist/
 
-npx jest src/lib/xsd/parser.test.ts             # single test file — fastest feedback
-npx jest --testNamePattern="validates type"     # tests matching a name pattern
+npx vitest run src/lib/xsd/parser.test.ts       # single test file — fastest feedback
+npx vitest run -t "validates type"              # tests matching a name pattern
 
 npm run lint                                     # ESLint (must pass with 0 warnings)
 npm run lint:fix                                 # auto-fix lint violations
@@ -138,7 +138,7 @@ Do not add retry logic or Promise rejection handling around the public `validate
 
 ### Test environment
 
-The test environment is `jest-environment-jsdom`. Do not change it. The library targets both Node.js and browsers, and tests must exercise the browser `DOMParser` path that `jest-environment-jsdom` provides as a spec-compliant global.
+The test environment is `jsdom` under Vitest. Do not change it. The library targets both Node.js and browsers, and tests must exercise the browser `DOMParser` path that jsdom provides as a spec-compliant global.
 
 ## How to add support for a new XSD feature
 
@@ -204,7 +204,7 @@ private isXsdElement(el: Element, name: string): boolean {
 
 ### Path alias
 
-Use `@lib/*` for all imports within `src/`. It maps to `src/lib/*` and is configured in both `tsconfig.json` and `jest.config.ts`. Never use deep relative paths like `../../../lib/types/xsd`.
+Use `@lib/*` for all imports within `src/`. It maps to `src/lib/*` and is configured in both `tsconfig.json` and `vitest.config.ts`. Never use deep relative paths like `../../../lib/types/xsd`.
 
 ### Type definitions belong in `src/lib/types/`
 

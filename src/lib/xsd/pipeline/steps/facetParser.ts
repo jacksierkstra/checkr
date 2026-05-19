@@ -1,4 +1,4 @@
-import { XSDRestriction } from "@lib/types/xsd";
+import { XSDRestriction } from "@lib/types/xsd.js";
 
 const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 

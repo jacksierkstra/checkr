@@ -1,4 +1,4 @@
-import { XSDElement, XSDChoice } from "@lib/types/xsd";
+import { XSDElement, XSDChoice } from "@lib/types/xsd.js";
 import {
   IElementResolver,
   ITypeResolver,
@@ -6,7 +6,7 @@ import {
   ITypeRestrictor,
   IRefResolver,
   IGroupResolver,
-} from "./interfaces";
+} from "./interfaces.js";
 
 /**
  * Core resolver that orchestrates the complete element resolution process

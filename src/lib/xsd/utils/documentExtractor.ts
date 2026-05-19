@@ -1,5 +1,5 @@
-import { XMLDocument } from "@lib/types/xml";
-import { XMLParser } from "@lib/xml/parser";
+import { XMLDocument } from "@lib/types/xml.js";
+import { XMLParser } from "@lib/xml/parser.js";
 
 export class DocumentExtractor {
   private readonly elementNode = 1;

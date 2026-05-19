@@ -1,4 +1,4 @@
-import { GlobalValidationStep, ValidationError } from "@lib/types/validation";
+import { GlobalValidationStep, ValidationError } from "@lib/types/validation.js";
 
 export const validateOccurrence: GlobalValidationStep = (nodes, schema) => {
   const errors: ValidationError[] = [];

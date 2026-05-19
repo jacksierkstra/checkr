@@ -1,4 +1,4 @@
-import { XMLDocument } from "@lib/types/xml";
+import { XMLDocument } from "@lib/types/xml.js";
 
 export interface XMLParser {
   parse(xml: string): XMLDocument;

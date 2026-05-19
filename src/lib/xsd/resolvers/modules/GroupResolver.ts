@@ -1,5 +1,5 @@
-import { XSDElement, XSDAttribute } from "@lib/types/xsd";
-import { IGroupResolver } from "./interfaces";
+import { XSDElement, XSDAttribute } from "@lib/types/xsd.js";
+import { IGroupResolver } from "./interfaces.js";
 
 export class GroupResolver implements IGroupResolver {
   constructor(private schema: { groups?: Record<string, XSDElement[]>; attributeGroups?: Record<string, XSDAttribute[]> }) {}

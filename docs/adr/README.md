@@ -25,7 +25,7 @@ All ADRs follow the [Michael Nygard template](https://cognitect.com/blog/2011/11
 | [ADR-005](./ADR-005-error-as-values.md) | `validate()` never throws — errors as values ¹ | Superseded by [ADR-018](./ADR-018-throw-on-programmer-errors.md) |
 | [ADR-006](./ADR-006-modular-type-resolver.md) | Modular, interface-backed type resolver | Accepted |
 | [ADR-007](./ADR-007-dual-namespace-lookup.md) | Dual namespace lookup pattern for DOM queries | Superseded by [ADR-017](./ADR-017-native-domparser.md) |
-| [ADR-008](./ADR-008-jsdom-test-environment.md) | Use `jest-environment-jsdom` as the test environment ¹ | Accepted |
+| [ADR-008](./ADR-008-jsdom-test-environment.md) | Use `jsdom` as the test environment ¹ | Accepted |
 | [ADR-009](./ADR-009-deferred-xsd-features.md) | Explicitly defer `xs:all`, `xs:key`, `xs:import`, `xs:group` | Partially Superseded by [ADR-025](./ADR-025-xs-all-full-semantics.md), [ADR-026](./ADR-026-xs-group-attribute-group.md), [ADR-027](./ADR-027-substitution-group.md) |
 | [ADR-010](./ADR-010-tspc-build.md) | Use `ts-patch` (`tspc`) instead of plain `tsc` for builds | Accepted |
 | [ADR-011](./ADR-011-async-api.md) | `validate()` returns a `Promise` despite a synchronous pipeline | Superseded by [ADR-019](./ADR-019-sync-and-async-api.md) |

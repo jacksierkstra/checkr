@@ -1,6 +1,6 @@
-import { ValidationError } from "@lib/types/validation";
-import { XSDSchema } from "@lib/types/xsd";
-import { XMLDocument } from "@lib/types/xml";
+import { ValidationError } from "@lib/types/validation.js";
+import { XSDSchema } from "@lib/types/xsd.js";
+import { XMLDocument } from "@lib/types/xml.js";
 
 /**
  * Validates that all required root elements are present in the document

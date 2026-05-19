@@ -1,4 +1,4 @@
-import { NodeValidationStep } from "@lib/types/validation";
+import { NodeValidationStep } from "@lib/types/validation.js";
 
 export const validateAbstract: NodeValidationStep = (node, schema) => {
   if (schema.abstract === true) {

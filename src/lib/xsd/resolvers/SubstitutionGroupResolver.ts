@@ -1,4 +1,4 @@
-import { XSDElement, XSDChoice } from "@lib/types/xsd";
+import { XSDElement, XSDChoice } from "@lib/types/xsd.js";
 
 type SubstitutionMap = { [head: string]: string[] };
 

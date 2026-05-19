@@ -1,6 +1,6 @@
-import { NodeValidationStep } from "@lib/types/validation";
-import { XSDElement } from "@lib/types/xsd";
-import { directChildElements } from "@lib/validator/utils/schemaMatch";
+import { NodeValidationStep } from "@lib/types/validation.js";
+import { XSDElement } from "@lib/types/xsd.js";
+import { directChildElements } from "@lib/validator/utils/schemaMatch.js";
 
 export const validateSequenceOrder: NodeValidationStep = (
   node: Element,

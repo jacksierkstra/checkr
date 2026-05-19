@@ -1,8 +1,8 @@
 // benchmark/validateBooksBenchmark.ts
 import fs from "fs";
 import path from "path";
-import { Checkr } from "@lib/core/main";
-import { runWithResourceUsage } from "@benchmark/utils";
+import { Checkr } from "@lib/core/main.js";
+import { runWithResourceUsage } from "@benchmark/utils.js";
 
 const schemaPath = path.join(__dirname, "fixtures", "books.xsd");
 const xmlPath = path.join(__dirname, "fixtures", "books.xml");

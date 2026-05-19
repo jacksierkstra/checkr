@@ -1,5 +1,5 @@
-import { XSDSchema, XSDElement } from "@lib/types/xsd";
-import { ITypeRegistry } from "./interfaces";
+import { XSDSchema, XSDElement } from "@lib/types/xsd.js";
+import { ITypeRegistry } from "./interfaces.js";
 
 /**
  * Registry that manages schema type definitions and namespace resolution

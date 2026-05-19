@@ -1,11 +1,11 @@
-import { XSDElement } from "@lib/types/xsd";
+import { XSDElement } from "@lib/types/xsd.js";
 import {
   ITypeResolver,
   ITypeRegistry,
   IResolutionCache,
   IPropertyMerger,
   IElementResolver,
-} from "./interfaces";
+} from "./interfaces.js";
 
 /**
  * Resolves element type references to their definitions

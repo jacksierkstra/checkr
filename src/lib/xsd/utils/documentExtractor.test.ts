@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { DocumentExtractor } from "./documentExtractor";
 import { XMLParser } from "@lib/xml/parser";
 
@@ -23,7 +24,7 @@ describe("DocumentExtractor", () => {
   beforeEach(() => {
     // Create a mock for XMLParser.
     xmlParserMock = {
-      parse: jest.fn().mockImplementation((xsd: string) => {
+      parse: vi.fn().mockImplementation((xsd: string) => {
         // For the test, we can use DOMParser. If you're using Jest with jsdom (the default),
         // DOMParser is available in the global scope.
         return new DOMParser().parseFromString(xsd, "text/xml");

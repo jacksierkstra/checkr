@@ -1,5 +1,5 @@
-import { XSDElement, XSDAttribute } from "@lib/types/xsd";
-import { IPropertyMerger } from "./interfaces";
+import { XSDElement, XSDAttribute } from "@lib/types/xsd.js";
+import { IPropertyMerger } from "./interfaces.js";
 
 /**
  * Handles merging of properties from type definitions into elements

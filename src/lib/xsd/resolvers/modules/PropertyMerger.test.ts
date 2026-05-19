@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { XSDElement, XSDAttribute } from "@lib/types/xsd";
 import { PropertyMerger } from "./PropertyMerger";
 
@@ -151,7 +152,7 @@ describe("PropertyMerger", () => {
       };
 
       // Spy on the mergeAttributes method
-      const mergeAttributesSpy = jest.spyOn(merger, "mergeAttributes");
+      const mergeAttributesSpy = vi.spyOn(merger, "mergeAttributes");
 
       merger.mergeTypeDefinition(element, typeDef);
 

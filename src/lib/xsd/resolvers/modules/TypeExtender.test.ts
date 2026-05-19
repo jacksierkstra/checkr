@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { XSDElement, XSDSchema } from "@lib/types/xsd";
 import { TypeExtender } from "./TypeExtender";
 import { TypeRegistry } from "./TypeRegistry";
@@ -124,7 +125,7 @@ describe("TypeExtender", () => {
       const extender = new TypeExtender(registry, cache, merger, mockResolver);
 
       // Spy on the mergeAttributes method
-      const mergeAttributesSpy = jest.spyOn(merger, "mergeAttributes");
+      const mergeAttributesSpy = vi.spyOn(merger, "mergeAttributes");
 
       const element: XSDElement = {
         name: "WithExtension",

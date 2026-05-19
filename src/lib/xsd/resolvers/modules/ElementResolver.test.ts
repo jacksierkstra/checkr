@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { XSDElement } from "@lib/types/xsd";
 import { ElementResolver } from "./ElementResolver";
 import { ITypeResolver, ITypeExtender, ITypeRestrictor } from "./interfaces";
@@ -169,7 +170,7 @@ describe("ElementResolver", () => {
       const resolver = new ElementResolver(mockTypeResolver, mockTypeExtender, mockTypeRestrictor);
 
       // Spy on resolveElement to count recursive calls
-      const resolveElementSpy = jest.spyOn(resolver, "resolveElement");
+      const resolveElementSpy = vi.spyOn(resolver, "resolveElement");
 
       const element: XSDElement = {
         name: "Parent",
@@ -192,7 +193,7 @@ describe("ElementResolver", () => {
       const resolver = new ElementResolver(mockTypeResolver, mockTypeExtender, mockTypeRestrictor);
 
       // Spy on resolveElement to count recursive calls
-      const resolveElementSpy = jest.spyOn(resolver, "resolveElement");
+      const resolveElementSpy = vi.spyOn(resolver, "resolveElement");
 
       const element: XSDElement = {
         name: "Parent",

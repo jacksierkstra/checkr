@@ -19,7 +19,7 @@ The `@xmldom/xmldom` dependency introduced its own problems:
 - Any bug in `@xmldom/xmldom` is a bug in Checkr.
 - The library is pinned to `^0.9.x` to limit breakage, but security patches in a newer major would require a manual migration.
 
-The test environment (`jest-environment-jsdom`, ADR-008) already provides `DOMParser` as a global, so tests continue to work without changes to the test configuration.
+The test environment (`jsdom`, ADR-008) already provides `DOMParser` as a global, so tests continue to work without changes to the test configuration.
 
 ---
 

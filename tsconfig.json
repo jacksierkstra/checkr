@@ -103,9 +103,18 @@
     /* Completeness */
     // "skipDefaultLibCheck": true,                      /* Skip type checking .d.ts files that are included with TypeScript. */
     "skipLibCheck": false, /* Skip type checking all .d.ts files. */
+    "types": [
+      "vitest/globals"
+    ],
     "paths": {
+      "@lib/*.js": [
+        "./src/lib/*.ts"
+      ],
       "@lib/*": [
         "./src/lib/*"
+      ],
+      "@benchmark/*.js": [
+        "./src/benchmark/*.ts"
       ],
       "@benchmark/*": [
         "./src/benchmark/*"

@@ -1,7 +1,7 @@
-import { NodeValidationStep, ValidationError } from "@lib/types/validation";
-import { XSDAttribute } from "@lib/types/xsd";
-import { isValidBuiltinType } from "@lib/validator/builtinTypeCheck";
-import { matchesSchemaAttribute } from "@lib/validator/utils/schemaMatch";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation.js";
+import { XSDAttribute } from "@lib/types/xsd.js";
+import { isValidBuiltinType } from "@lib/validator/builtinTypeCheck.js";
+import { matchesSchemaAttribute } from "@lib/validator/utils/schemaMatch.js";
 
 const XMLNS_NAMESPACE = "http://www.w3.org/2000/xmlns/";
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";

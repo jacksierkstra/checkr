@@ -1,5 +1,5 @@
-import { ValidationError } from "@lib/types/validation";
-import { XSDElement } from "@lib/types/xsd";
+import { ValidationError } from "@lib/types/validation.js";
+import { XSDElement } from "@lib/types/xsd.js";
 
 export abstract class AbstractPipeline<TInput, TStep> {
   protected steps: TStep[] = [];

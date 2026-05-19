@@ -1,8 +1,8 @@
-import { ValidationResult } from "@lib/types/validation";
-import { Validator, ValidatorImpl } from "@lib/validator/validator";
-import { XMLParser, XMLParserImpl } from "@lib/xml/parser";
-import { XSDParser } from "@lib/xsd/parser";
-import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
+import { ValidationResult } from "@lib/types/validation.js";
+import { Validator, ValidatorImpl } from "@lib/validator/validator.js";
+import { XMLParser, XMLParserImpl } from "@lib/xml/parser.js";
+import { XSDParser } from "@lib/xsd/parser.js";
+import { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser.js";
 
 export class Checkr {
   private xmlParser: XMLParser;

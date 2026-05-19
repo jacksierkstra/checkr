@@ -5,6 +5,12 @@
       "outDir": "dist",
       "target": "ESNext",
       "moduleResolution": "NodeNext",
+      "paths": {
+        "@lib/*.js": ["./src/lib/*.ts"],
+        "@lib/*": ["./src/lib/*.ts"],
+        "@benchmark/*.js": ["./src/benchmark/*.ts"],
+        "@benchmark/*": ["./src/benchmark/*.ts"]
+      }
     },
     "exclude": [
       "src/**/*.test.ts",

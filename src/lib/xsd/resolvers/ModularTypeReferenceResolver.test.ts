@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { XSDElement, XSDSchema } from "@lib/types/xsd";
 import { ModularTypeReferenceResolver } from "./ModularTypeReferenceResolver";
 
@@ -6,7 +7,7 @@ describe("ModularTypeReferenceResolver", () => {
   const suppressConsoleWarning = () => {
     const originalWarn = console.warn;
     beforeEach(() => {
-      console.warn = jest.fn();
+      console.warn = vi.fn();
     });
     afterEach(() => {
       console.warn = originalWarn;

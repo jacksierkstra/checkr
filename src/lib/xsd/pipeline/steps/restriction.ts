@@ -1,6 +1,6 @@
-import { XSDElement, XSDRestriction, XSDChoice } from "@lib/types/xsd";
-import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
-import { parseRestrictionFacets } from "./facetParser";
+import { XSDElement, XSDRestriction, XSDChoice } from "@lib/types/xsd.js";
+import { PipelineStep } from "@lib/xsd/pipeline/pipeline.js";
+import { parseRestrictionFacets } from "./facetParser.js";
 
 const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 

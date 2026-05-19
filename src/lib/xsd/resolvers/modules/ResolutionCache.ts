@@ -1,5 +1,5 @@
-import { XSDElement } from "@lib/types/xsd";
-import { IResolutionCache, ITypeRegistry } from "./interfaces";
+import { XSDElement } from "@lib/types/xsd.js";
+import { IResolutionCache, ITypeRegistry } from "./interfaces.js";
 
 /**
  * Cache for storing resolved type definitions to prevent redundant resolution

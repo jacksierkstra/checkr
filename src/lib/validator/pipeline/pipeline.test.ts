@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { NodeValidationStep, ValidationError } from "@lib/types/validation";
 import { XSDElement } from "@lib/types/xsd";
 import { NodeValidationPipelineImpl } from "@lib/validator/pipeline/node";
@@ -9,8 +10,8 @@ describe("ValidationPipeline", () => {
 
   beforeEach(() => {
     pipeline = new NodeValidationPipelineImpl();
-    element = jest.fn() as unknown as Element;
-    xsdElement = jest.fn() as unknown as XSDElement;
+    element = vi.fn() as unknown as Element;
+    xsdElement = vi.fn() as unknown as XSDElement;
   });
 
   it("should return an empty array when no steps are added", () => {
@@ -21,8 +22,8 @@ describe("ValidationPipeline", () => {
   it("should call validation steps in order and collect errors", () => {
     const error1: ValidationError = { code: "TYPE_MISMATCH", message: "error1" };
     const error2: ValidationError = { code: "TYPE_MISMATCH", message: "error2" };
-    const step1: NodeValidationStep = jest.fn().mockReturnValue([error1]);
-    const step2: NodeValidationStep = jest.fn().mockReturnValue([error2]);
+    const step1: NodeValidationStep = vi.fn().mockReturnValue([error1]);
+    const step2: NodeValidationStep = vi.fn().mockReturnValue([error2]);
 
     pipeline.addStep(step1).addStep(step2);
     const errors = pipeline.execute(element, xsdElement);
@@ -40,8 +41,8 @@ describe("ValidationPipeline", () => {
   it("should call validation steps in different order and collect errors", () => {
     const error1: ValidationError = { code: "TYPE_MISMATCH", message: "error1" };
     const error2: ValidationError = { code: "TYPE_MISMATCH", message: "error2" };
-    const step1: NodeValidationStep = jest.fn().mockReturnValue([error1]);
-    const step2: NodeValidationStep = jest.fn().mockReturnValue([error2]);
+    const step1: NodeValidationStep = vi.fn().mockReturnValue([error1]);
+    const step2: NodeValidationStep = vi.fn().mockReturnValue([error2]);
 
     pipeline.addStep(step2).addStep(step1);
     const errors = pipeline.execute(element, xsdElement);
@@ -59,8 +60,8 @@ describe("ValidationPipeline", () => {
   it("should override steps when setSteps is called", () => {
     const error1: ValidationError = { code: "TYPE_MISMATCH", message: "error1" };
     const error2: ValidationError = { code: "TYPE_MISMATCH", message: "error2" };
-    const step1: NodeValidationStep = jest.fn().mockReturnValue([error1]);
-    const step2: NodeValidationStep = jest.fn().mockReturnValue([error2]);
+    const step1: NodeValidationStep = vi.fn().mockReturnValue([error1]);
+    const step2: NodeValidationStep = vi.fn().mockReturnValue([error2]);
 
     // First set the step then override it.
     pipeline.addStep(step1);

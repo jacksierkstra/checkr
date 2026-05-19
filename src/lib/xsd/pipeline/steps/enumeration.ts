@@ -1,5 +1,5 @@
-import { XSDElement } from "@lib/types/xsd";
-import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
+import { XSDElement } from "@lib/types/xsd.js";
+import { PipelineStep } from "@lib/xsd/pipeline/pipeline.js";
 
 const XSD_NAMESPACE = "http://www.w3.org/2001/XMLSchema";
 

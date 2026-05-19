@@ -1,5 +1,5 @@
-import { NodeValidationStep, ValidationError } from "@lib/types/validation";
-import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation.js";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch.js";
 
 function matchesNamespaceConstraint(ns: string | null | undefined, constraint: string | undefined): boolean {
   if (!constraint) return true; // default is ##any

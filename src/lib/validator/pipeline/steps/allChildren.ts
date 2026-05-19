@@ -1,5 +1,5 @@
-import { NodeValidationStep, ValidationError } from "@lib/types/validation";
-import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation.js";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch.js";
 
 /**
  * Enforces full xs:all semantics on a parent element.

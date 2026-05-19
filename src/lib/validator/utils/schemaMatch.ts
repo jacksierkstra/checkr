@@ -1,4 +1,4 @@
-import { XSDAttribute, XSDElement } from "@lib/types/xsd";
+import { XSDAttribute, XSDElement } from "@lib/types/xsd.js";
 
 const normalizeNamespace = (namespace: string | null | undefined): string | undefined =>
   namespace === null || namespace === undefined || namespace === "" ? undefined : namespace;

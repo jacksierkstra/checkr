@@ -1,31 +1,31 @@
-import { ValidationError, ValidationResult } from "@lib/types/validation";
-import { XMLDocument } from "@lib/types/xml";
-import { XSDChoice, XSDElement, XSDSchema } from "@lib/types/xsd";
+import { ValidationError, ValidationResult } from "@lib/types/validation.js";
+import { XMLDocument } from "@lib/types/xml.js";
+import { XSDChoice, XSDElement, XSDSchema } from "@lib/types/xsd.js";
 import {
   GlobalValidationPipeline,
   GlobalValidationPipelineImpl,
-} from "@lib/validator/pipeline/global";
-import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validator/pipeline/node";
-import { validateAttributes } from "@lib/validator/pipeline/steps/attributes";
-import { validateConstraints } from "@lib/validator/pipeline/steps/constraints";
-import { validateElementFixed } from "@lib/validator/pipeline/steps/elementFixed";
-import { validateAllChildren } from "@lib/validator/pipeline/steps/allChildren";
-import { validateMixedContent } from "@lib/validator/pipeline/steps/mixedContent";
-import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence";
-import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren";
-import { validateType } from "@lib/validator/pipeline/steps/type";
-import { validateAbstract } from "@lib/validator/pipeline/steps/abstract";
-import { validateDerivationBlocked } from "@lib/validator/pipeline/steps/derivationBlocked";
-import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements";
-import { validateUnexpectedElements } from "@lib/validator/pipeline/steps/unexpectedElements";
-import { validateSequenceOrder } from "@lib/validator/pipeline/steps/sequenceOrder";
-import { validateIdentityConstraints } from "@lib/validator/pipeline/steps/identityConstraints";
-import { validateIdSemantics } from "@lib/validator/pipeline/steps/idSemantics";
-import { resolveXsiType } from "@lib/validator/pipeline/steps/xsiType";
-import { XMLParser } from "@lib/xml/parser";
-import { XSDParser } from "@lib/xsd/parser";
-import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
-import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
+} from "@lib/validator/pipeline/global.js";
+import { NodeValidationPipeline, NodeValidationPipelineImpl } from "@lib/validator/pipeline/node.js";
+import { validateAttributes } from "@lib/validator/pipeline/steps/attributes.js";
+import { validateConstraints } from "@lib/validator/pipeline/steps/constraints.js";
+import { validateElementFixed } from "@lib/validator/pipeline/steps/elementFixed.js";
+import { validateAllChildren } from "@lib/validator/pipeline/steps/allChildren.js";
+import { validateMixedContent } from "@lib/validator/pipeline/steps/mixedContent.js";
+import { validateOccurrence } from "@lib/validator/pipeline/steps/occurence.js";
+import { validateRequiredChildren } from "@lib/validator/pipeline/steps/requiredChildren.js";
+import { validateType } from "@lib/validator/pipeline/steps/type.js";
+import { validateAbstract } from "@lib/validator/pipeline/steps/abstract.js";
+import { validateDerivationBlocked } from "@lib/validator/pipeline/steps/derivationBlocked.js";
+import { validateRootElements } from "@lib/validator/pipeline/steps/rootElements.js";
+import { validateUnexpectedElements } from "@lib/validator/pipeline/steps/unexpectedElements.js";
+import { validateSequenceOrder } from "@lib/validator/pipeline/steps/sequenceOrder.js";
+import { validateIdentityConstraints } from "@lib/validator/pipeline/steps/identityConstraints.js";
+import { validateIdSemantics } from "@lib/validator/pipeline/steps/idSemantics.js";
+import { resolveXsiType } from "@lib/validator/pipeline/steps/xsiType.js";
+import { XMLParser } from "@lib/xml/parser.js";
+import { XSDParser } from "@lib/xsd/parser.js";
+import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver.js";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch.js";
 
 export interface Validator {
   validate(xml: string, xsd: string): ValidationResult;

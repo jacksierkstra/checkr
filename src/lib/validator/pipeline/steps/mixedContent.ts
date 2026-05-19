@@ -1,4 +1,4 @@
-import { NodeValidationStep, ValidationError } from "@lib/types/validation";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation.js";
 
 /**
  * Enforces xs:complexType mixed content rules.

@@ -1,5 +1,5 @@
-import { XSDElement } from "@lib/types/xsd";
-import { ITypeRestrictor, ITypeRegistry, IResolutionCache, IElementResolver } from "./interfaces";
+import { XSDElement } from "@lib/types/xsd.js";
+import { ITypeRestrictor, ITypeRegistry, IResolutionCache, IElementResolver } from "./interfaces.js";
 
 /**
  * Handles resolution of type restrictions

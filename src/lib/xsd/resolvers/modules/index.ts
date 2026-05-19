@@ -1,16 +1,16 @@
 // Export interfaces
-export * from "./interfaces";
+export * from "./interfaces.js";
 
 // Export components
-export { TypeRegistry } from "./TypeRegistry";
-export { ResolutionCache } from "./ResolutionCache";
-export { PropertyMerger } from "./PropertyMerger";
-export { TypeResolver } from "./TypeResolver";
-export { TypeExtender } from "./TypeExtender";
-export { TypeRestrictor } from "./TypeRestrictor";
-export { RefResolver } from "./RefResolver";
-export { GroupResolver } from "./GroupResolver";
-export { ElementResolver } from "./ElementResolver";
+export { TypeRegistry } from "./TypeRegistry.js";
+export { ResolutionCache } from "./ResolutionCache.js";
+export { PropertyMerger } from "./PropertyMerger.js";
+export { TypeResolver } from "./TypeResolver.js";
+export { TypeExtender } from "./TypeExtender.js";
+export { TypeRestrictor } from "./TypeRestrictor.js";
+export { RefResolver } from "./RefResolver.js";
+export { GroupResolver } from "./GroupResolver.js";
+export { ElementResolver } from "./ElementResolver.js";
 
 // Export the main facade
-export { ModularTypeReferenceResolver } from "../ModularTypeReferenceResolver";
+export { ModularTypeReferenceResolver } from "../ModularTypeReferenceResolver.js";

@@ -1,2 +1,2 @@
-export { Checkr } from "@lib/core/main";
-export type { ValidationResult, ValidationError, ValidationErrorCode } from "@lib/types/validation";
+export { Checkr } from "@lib/core/main.js";
+export type { ValidationResult, ValidationError, ValidationErrorCode } from "@lib/types/validation.js";

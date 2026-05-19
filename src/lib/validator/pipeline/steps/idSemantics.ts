@@ -1,8 +1,8 @@
-import { ValidationError } from "@lib/types/validation";
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
-import { XMLDocument } from "@lib/types/xml";
-import { isValidBuiltinType } from "@lib/validator/builtinTypeCheck";
-import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
+import { ValidationError } from "@lib/types/validation.js";
+import { XSDElement, XSDSchema } from "@lib/types/xsd.js";
+import { XMLDocument } from "@lib/types/xml.js";
+import { isValidBuiltinType } from "@lib/validator/builtinTypeCheck.js";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch.js";
 
 type RefValue = {
   value: string;

@@ -1,4 +1,4 @@
-import { NodeValidationStep, ValidationError } from "@lib/types/validation";
+import { NodeValidationStep, ValidationError } from "@lib/types/validation.js";
 
 const XSI_NAMESPACE = "http://www.w3.org/2001/XMLSchema-instance";
 

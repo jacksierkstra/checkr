@@ -1,4 +1,4 @@
-import { NodeValidationStep } from "@lib/types/validation";
+import { NodeValidationStep } from "@lib/types/validation.js";
 
 export const validateDerivationBlocked: NodeValidationStep = (_node, schema) => {
   if (!schema.derivationBlocked) return [];

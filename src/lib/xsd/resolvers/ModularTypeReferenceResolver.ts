@@ -1,13 +1,13 @@
-import { XSDSchema, XSDElement } from "@lib/types/xsd";
-import { TypeRegistry } from "./modules/TypeRegistry";
-import { ResolutionCache } from "./modules/ResolutionCache";
-import { PropertyMerger } from "./modules/PropertyMerger";
-import { TypeExtender } from "./modules/TypeExtender";
-import { TypeRestrictor } from "./modules/TypeRestrictor";
-import { TypeResolver } from "./modules/TypeResolver";
-import { ElementResolver } from "./modules/ElementResolver";
-import { RefResolver } from "./modules/RefResolver";
-import { GroupResolver } from "./modules/GroupResolver";
+import { XSDSchema, XSDElement } from "@lib/types/xsd.js";
+import { TypeRegistry } from "./modules/TypeRegistry.js";
+import { ResolutionCache } from "./modules/ResolutionCache.js";
+import { PropertyMerger } from "./modules/PropertyMerger.js";
+import { TypeExtender } from "./modules/TypeExtender.js";
+import { TypeRestrictor } from "./modules/TypeRestrictor.js";
+import { TypeResolver } from "./modules/TypeResolver.js";
+import { ElementResolver } from "./modules/ElementResolver.js";
+import { RefResolver } from "./modules/RefResolver.js";
+import { GroupResolver } from "./modules/GroupResolver.js";
 import {
   ITypeRegistry,
   IResolutionCache,
@@ -17,7 +17,7 @@ import {
   ITypeRestrictor,
   IElementResolver,
   IRefResolver,
-} from "./modules/interfaces";
+} from "./modules/interfaces.js";
 
 /**
  * A modular implementation of TypeReferenceResolver that uses composition

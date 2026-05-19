@@ -1,5 +1,5 @@
-import { XSDElement, XSDAttribute, XSDSchema } from "@lib/types/xsd";
-import { IRefResolver } from "./interfaces";
+import { XSDElement, XSDAttribute, XSDSchema } from "@lib/types/xsd.js";
+import { IRefResolver } from "./interfaces.js";
 
 /**
  * Resolves xs:element ref= and xs:attribute ref= placeholders against globally declared schema items.

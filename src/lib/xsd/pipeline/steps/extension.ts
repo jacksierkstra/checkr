@@ -1,6 +1,6 @@
-import { XSDElement, XSDExtension } from "@lib/types/xsd";
-import { PipelineStep } from "@lib/xsd/pipeline/pipeline";
-import { ParseAttributesStep } from "./attributes";
+import { XSDElement, XSDExtension } from "@lib/types/xsd.js";
+import { PipelineStep } from "@lib/xsd/pipeline/pipeline.js";
+import { ParseAttributesStep } from "./attributes.js";
 
 export class ParseExtensionStep implements PipelineStep<Element, Partial<XSDElement>> {
   private attributeParser: ParseAttributesStep;

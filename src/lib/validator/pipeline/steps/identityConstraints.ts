@@ -1,7 +1,7 @@
-import { ValidationError } from "@lib/types/validation";
-import { XSDElement, XSDSchema } from "@lib/types/xsd";
-import { XMLDocument } from "@lib/types/xml";
-import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch";
+import { ValidationError } from "@lib/types/validation.js";
+import { XSDElement, XSDSchema } from "@lib/types/xsd.js";
+import { XMLDocument } from "@lib/types/xml.js";
+import { directChildElements, matchesSchemaElement } from "@lib/validator/utils/schemaMatch.js";
 
 function evaluateXPathNodes(context: Node, expression: string): Node[] {
   const doc = context.ownerDocument ?? (context as Document);

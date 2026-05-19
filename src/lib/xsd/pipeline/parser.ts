@@ -1,20 +1,20 @@
-import { XSDElement, XSDAttribute, XSDSchema } from "@lib/types/xsd";
-import { XMLParser } from "@lib/xml/parser";
-import { ElementAssembler } from "@lib/xsd/pipeline/elementAssembler";
-import { Pipeline, PipelineImpl } from "@lib/xsd/pipeline/pipeline";
-import { ParseAttributesStep } from "@lib/xsd/pipeline/steps/attributes";
-import { ParseEnumerationStep } from "@lib/xsd/pipeline/steps/enumeration";
-import { ParseExtensionStep } from "@lib/xsd/pipeline/steps/extension";
-import { ParseNestedElementsStep } from "@lib/xsd/pipeline/steps/nestedElement";
-import { ParseIdentityConstraintsStep } from "@lib/xsd/pipeline/steps/identityConstraints";
-import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction";
-import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement";
-import { ParseSimpleContentStep } from "@lib/xsd/pipeline/steps/simpleContent";
-import { ParseListStep } from "@lib/xsd/pipeline/steps/list";
-import { ParseUnionStep } from "@lib/xsd/pipeline/steps/union";
-import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver";
-import { SubstitutionGroupResolver } from "@lib/xsd/resolvers/SubstitutionGroupResolver";
-import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor";
+import { XSDElement, XSDAttribute, XSDSchema } from "@lib/types/xsd.js";
+import { XMLParser } from "@lib/xml/parser.js";
+import { ElementAssembler } from "@lib/xsd/pipeline/elementAssembler.js";
+import { Pipeline, PipelineImpl } from "@lib/xsd/pipeline/pipeline.js";
+import { ParseAttributesStep } from "@lib/xsd/pipeline/steps/attributes.js";
+import { ParseEnumerationStep } from "@lib/xsd/pipeline/steps/enumeration.js";
+import { ParseExtensionStep } from "@lib/xsd/pipeline/steps/extension.js";
+import { ParseNestedElementsStep } from "@lib/xsd/pipeline/steps/nestedElement.js";
+import { ParseIdentityConstraintsStep } from "@lib/xsd/pipeline/steps/identityConstraints.js";
+import { ParseRestrictionsStep } from "@lib/xsd/pipeline/steps/restriction.js";
+import { ParseRootElementStep } from "@lib/xsd/pipeline/steps/rootElement.js";
+import { ParseSimpleContentStep } from "@lib/xsd/pipeline/steps/simpleContent.js";
+import { ParseListStep } from "@lib/xsd/pipeline/steps/list.js";
+import { ParseUnionStep } from "@lib/xsd/pipeline/steps/union.js";
+import { ModularTypeReferenceResolver } from "@lib/xsd/resolvers/ModularTypeReferenceResolver.js";
+import { SubstitutionGroupResolver } from "@lib/xsd/resolvers/SubstitutionGroupResolver.js";
+import { DocumentExtractor } from "@lib/xsd/utils/documentExtractor.js";
 export interface XSDParser {
   parse(xsd: string): XSDSchema;
 }
