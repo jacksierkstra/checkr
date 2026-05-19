@@ -25,13 +25,11 @@ The test environment (`jsdom`, ADR-008) already provides `DOMParser` as a global
 
 ## Decision
 
-Replace `@xmldom/xmldom` with the **native `DOMParser`** API available in Node.js 18+ and all modern browsers.
+Prefer the **native `DOMParser`** API when it is available, and fall back to `@xmldom/xmldom` in runtimes that do not expose a global `DOMParser` (notably plain Node.js).
 
-- `XMLParserImpl` will call `new DOMParser().parseFromString(xml, 'application/xml')`.
-- `XSDPipelineParserImpl` will call `new DOMParser().parseFromString(xsd, 'application/xml')` (or delegate to `XMLParserImpl`).
-- The `@xmldom/xmldom` package is removed from `dependencies`.
-- All imports of `Element`, `Document`, and related types from `@xmldom/xmldom` are replaced with the native DOM types from TypeScript's `lib.dom.d.ts`.
-- The minimum supported Node.js version is raised to **18**.
+- `XMLParserImpl` will use `globalThis.DOMParser` when present.
+- When `DOMParser` is missing, `XMLParserImpl` falls back to `@xmldom/xmldom` so Node.js consumers can parse XML without injecting their own DOM implementation.
+- The fallback keeps the public API unchanged while preserving browser behaviour.
 
 The dual-lookup pattern (ADR-007) is removed in full. All DOM queries use `getElementsByTagNameNS` with the XSD namespace URI directly, as namespace handling in native parsers is correct.
 
@@ -39,10 +37,10 @@ The dual-lookup pattern (ADR-007) is removed in full. All DOM queries use `getEl
 
 ## Consequences
 
-- **Positive:** Zero runtime dependencies — eliminates supply-chain risk entirely.
-- **Positive:** Namespace handling is correct; ADR-007's dual-lookup boilerplate is removed from every pipeline step and resolver.
+- **Positive:** Browser and jsdom consumers still use the native DOMParser path.
+- **Positive:** Node.js consumers get a working XML parser path instead of a runtime `ReferenceError`.
+- **Positive:** Namespace handling remains consistent with the existing native-parser code path.
 - **Positive:** Native DOM types (`Element`, `Document`) from `lib.dom.d.ts` are used directly — no third-party type stubs required.
-- **Positive:** `@xmldom/xmldom` version pinning and upgrade anxiety goes away.
-- **Negative:** Minimum Node.js version rises from 14 to 18. Consumers on older Node.js must upgrade before using this version of Checkr.
+- **Negative:** The package now carries a small runtime XML DOM dependency for Node fallback support.
 - **Negative:** jsdom's `DOMParser` (used in tests) may have subtle differences from real browser `DOMParser`. Edge cases specific to Chrome, Firefox, or Safari may not surface in the test suite.
 - **Constraint:** All pipeline steps that previously imported `Element` from `@xmldom/xmldom` must switch to `Element` from the global DOM type. No import needed — it is a global type in `lib.dom.d.ts`.

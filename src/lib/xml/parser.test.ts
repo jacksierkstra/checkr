@@ -14,4 +14,26 @@ describe("XML parsing", () => {
     const parser = new XMLParserImpl();
     expect(() => parser["parse"](xml)).toThrow();
   });
+
+  it("should fall back to xmldom when DOMParser is not available.", () => {
+    const originalDomParser = globalThis.DOMParser;
+    // Simulate a Node.js runtime without a native DOMParser global.
+    Object.defineProperty(globalThis, "DOMParser", {
+      configurable: true,
+      value: undefined,
+    });
+
+    try {
+      const parser = new XMLParserImpl();
+      const result = parser["parse"](`<root><child>value</child></root>`);
+
+      expect(result.documentElement?.localName).toBe("root");
+      expect(result.getElementsByTagName("child")[0]?.textContent).toBe("value");
+    } finally {
+      Object.defineProperty(globalThis, "DOMParser", {
+        configurable: true,
+        value: originalDomParser,
+      });
+    }
+  });
 });

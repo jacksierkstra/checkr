@@ -55,6 +55,7 @@ This index tracks all known gaps, bugs, and planned features for the Checkr XSD 
 | [fix-partial-date-timezone](./fix-partial-date-timezone.md) | 🟢 low | done | xs:gYear etc. timezone offset range not validated |
 | [fix-restriction-anytype](./fix-restriction-anytype.md) | 🟢 low | done | xs:restriction base="xs:anyType" not handled |
 | [fix-simplecontent-restriction-merge](./fix-simplecontent-restriction-merge.md) | 🟢 low | done | xs:simpleContent restriction: facet and attribute merge incomplete |
+| [fix-node-domparser-fallback](./fix-node-domparser-fallback.md) | 🟠 high | done | Node runtime lacks a DOMParser fallback |
 
 ## Feature Tracker
 

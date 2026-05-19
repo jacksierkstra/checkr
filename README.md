@@ -8,7 +8,7 @@ Checkr is a **TypeScript-based XML validation library** for validating XML docum
 
 ## Features
 
-- **Pure TypeScript**: No native dependencies, works in Node.js and browsers.
+- **Pure TypeScript**: Works in Node.js and browsers, using the native `DOMParser` path when available and a Node fallback otherwise.
 - **Extensible Architecture**: Supports plugin-like extensibility.
 - **Comprehensive Validation**: Handles global elements, complex types, attributes, constraints, and more.
 - **XSD 1.0 Support**: Covers basic to advanced features like `xs:sequence`, `xs:choice`, `xs:extension`, `xs:restriction`, enumerations, and pattern constraints.
