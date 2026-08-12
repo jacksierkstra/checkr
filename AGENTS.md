@@ -100,3 +100,17 @@ If a task exposes stale instructions, a broken command, or a missing guardrail, 
 ## Backlog conventions
 
 See `docs/backlog/AGENTS.md` for how task briefs are read, written, and archived.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as task briefs in `docs/backlog/` (frontmatter + `ledger.json`). Wayfinder maps and tickets follow the brief template with extra sections. No external PR triage surface. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Five canonical roles map to status values in the brief frontmatter (default strings). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root, created lazily by `/domain-modeling`. See `docs/agents/domain.md`.
