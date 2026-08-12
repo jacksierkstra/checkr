@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# POSIX shim — delegates to the real script.
+exec node "$(dirname "$0")/agent-check.mjs" "$@"

@@ -1,0 +1,7 @@
+{
+  "prefix": "CHK",
+  "repo": "@jacksierkstra/checkr",
+  "description": "Ledger of all task briefs. Active briefs live in active/, terminal briefs live in archive/. Both are listed here.",
+  "briefs": [
+  ]
+}
