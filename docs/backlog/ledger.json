@@ -15,8 +15,8 @@
     {
       "id": "CHK-002",
       "title": "Research the XSTS structure and acquisition",
-      "file": "docs/backlog/active/CHK-002-xsts-research.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-002-xsts-research.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

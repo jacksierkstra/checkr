@@ -6,7 +6,7 @@ wayfinder_type: "research"
 parent: "CHK-001"
 area: "meta"
 priority: "high"
-status: "draft"
+status: "done"
 depends_on: []
 required_context: []
 optional_context: []
@@ -74,4 +74,16 @@ What is the exact structure, format, and acquisition path for the W3C XML Schema
 
 ## Answer
 
-*(to be filled on resolution)*
+Full research findings are documented in [docs/research/xsts-structure-acquisition.md](../../research/xsts-structure-acquisition.md).
+
+### Summary
+
+- **Acquisition**: Download the 2006-11-06 release tar.gz (4.2 MB) from W3C, plus check out CVS for post-release metadata changes. The canonical URL is `https://www.w3.org/XML/2004/xml-schema-test-suite/xmlschema2006-11-06/xsts-2007-06-20.tar.gz`.
+- **Structure**: Organized by contributor (NIST, Sun, Microsoft, Boeing) with separate `*Meta/` (metadata XML) and `*Data/` (`.xsd` + `.xml` test files) directories. Root entry point is `suite.xml`.
+- **Manifest format**: XML files conforming to a TS-specific XSD schema. Three-level hierarchy: `testSuite` → `testSet` → `testGroup` containing `schemaTest` and `instanceTest` elements. All paths are relative `xlink:href` references.
+- **Expected results**: Boolean `valid`/`invalid` plus extended values (`notKnown`, `runtime-schema-error`, `implementation-defined`, `implementation-dependent`, `indeterminate`). No error codes or messages. Schema tests and instance tests are independent within each group.
+- **Counts**: ~14,383 test groups, ~14,328 schema tests, ~25,092 instance tests, ~40,395 total files. NIST contributes the most (Part 2 Datatypes focus); Microsoft and Sun cover Structures (Part 1).
+- **License**: W3C Document Notice and License. Can be vendored with attribution; modifications are not permitted under the document license.
+- **Known issues**: Tracked via W3C Bugzilla. Notable: complex-type restriction with `all`-groups has three implementation-defined behaviors; Unicode version sensitivity affects some datatype tests.
+
+All seven questions are answered in the full document.
