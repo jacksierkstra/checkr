@@ -7,7 +7,7 @@
       "id": "CHK-001",
       "title": "XSD 1.0 Spec Compliance — Wayfinder Map",
       "file": "docs/backlog/active/CHK-001-map-xsd-spec-compliance.md",
-      "status": "draft",
+      "status": "in-progress",
       "area": "meta",
       "priority": "high",
       "type": "map"
@@ -24,7 +24,16 @@
     {
       "id": "CHK-003",
       "title": "Research reference XSD validator architectures",
-      "file": "docs/backlog/active/CHK-003-reference-architectures.md",
+      "file": "docs/backlog/archive/CHK-003-reference-architectures.md",
+      "status": "done",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-004",
+      "title": "Decide checkr's XSD component model architecture",
+      "file": "docs/backlog/active/CHK-004-architecture-decision.md",
       "status": "draft",
       "area": "meta",
       "priority": "high",

@@ -6,11 +6,11 @@ wayfinder_type: "research"
 parent: "CHK-001"
 area: "meta"
 priority: "high"
-status: "draft"
+status: "done"
 depends_on: []
 required_context: []
 optional_context: []
-assignee: null
+assignee: "jacks"
 estimate: null
 ---
 
@@ -72,4 +72,16 @@ What are the component-model architectures used by reference XSD validators (Xer
 
 ## Answer
 
-*(to be filled on resolution)*
+Full research findings are documented in [docs/research/reference-xsd-validator-architectures.md](../../research/reference-xsd-validator-architectures.md).
+
+### Summary
+
+**Xerces-J** (Apache) uses a **grammar-per-namespace** component model driven by the `XSDHandler` class. Key components: `SchemaGrammar` (namespace-scoped container), `XSElementDeclaration`, `XSTypeDefinition` (simple/complex), `XSModelGroupDefinition`, `XSAttributeDeclaration`, `XSAttributeGroupDefinition`, `XSIdentityConstraintDefinition`, `XSWildcard`. Schema compilation is multi-pass: parse → include/import/redefine resolution → component assembly → QName reference resolution → schema validation. Instance validation is driven by `SchemaValidator` with `ValueStore` for identity constraints.
+
+**libxml2** (C) uses a **flat struct-based** model with `xmlSchemaPtr` as the top-level container. Key structs: `xmlSchemaTypePtr`, `xmlSchemaElementPtr`, `xmlSchemaParticlePtr`, `xmlSchemaIDCPtr`. Compilation is a single monolithic function (`xmlSchemaParse()`) with two-pass resolution. Simpler than Xerces but lacks PSVI support and thread safety.
+
+**Common pattern**: Both implement a **two-phase architecture** — schema compilation (build typed component graph with cross-references, validate schema) then instance validation (walk XML tree, look up declarations, check type/particle/attribute/identity constraints). Both use eager multi-pass reference resolution. Both validate schemas at compile time. Both continue after errors.
+
+**Key design decisions** for an XSD processor: (1) lazy vs eager reference resolution, (2) grammar-per-namespace vs flat model, (3) schema component identity (QName + anonymous), (4) type derivation rules (restriction/extension), (5) substitution group hierarchy, (6) identity constraint state machine, (7) schema-for-schemas validation, (8) PSVI, (9) thread safety/caching, (10) error recovery.
+
+All seven questions are answered in the full document.
