@@ -3,5 +3,32 @@
   "repo": "@jacksierkstra/checkr",
   "description": "Ledger of all task briefs. Active briefs live in active/, terminal briefs live in archive/. Both are listed here.",
   "briefs": [
+    {
+      "id": "CHK-001",
+      "title": "XSD 1.0 Spec Compliance — Wayfinder Map",
+      "file": "docs/backlog/active/CHK-001-map-xsd-spec-compliance.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "map"
+    },
+    {
+      "id": "CHK-002",
+      "title": "Research the XSTS structure and acquisition",
+      "file": "docs/backlog/active/CHK-002-xsts-research.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-003",
+      "title": "Research reference XSD validator architectures",
+      "file": "docs/backlog/active/CHK-003-reference-architectures.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    }
   ]
 }
