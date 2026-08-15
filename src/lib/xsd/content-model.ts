@@ -68,7 +68,7 @@ function wildcardMatchesNs(ns: WildcardNamespaceSet, nsURI: string | null): bool
         case "any": return true;
         case "other": return nsURI !== null && nsURI !== ns.target;
         case "local": return nsURI === null;
-        case "uris": return nsURI !== null && ns.uris.has(nsURI);
+        case "uris": return nsURI === null ? ns.uris.has("") : ns.uris.has(nsURI);
     }
 }
 
@@ -90,7 +90,7 @@ function collectCandidateNs(a: WildcardNamespaceSet, b: WildcardNamespaceSet): (
         if (ns.type === "any") { out.add(null); out.add("urn:test"); }
         else if (ns.type === "other") { out.add(null); out.add("urn:other"); }
         else if (ns.type === "local") { out.add(null); }
-        else if (ns.type === "uris") { for (const u of ns.uris) out.add(u); }
+        else if (ns.type === "uris") { for (const u of ns.uris) out.add(u === "" ? null : u); }
     };
     addFrom(a);
     addFrom(b);
@@ -230,13 +230,14 @@ function createPosition(particle: Particle, term: ParticleTerm): Position {
 }
 
 function nsSetLabel(wc: Wildcard): WildcardNamespaceSet {
-    // For now, we don't have wildcard namespace attributes parsed from the schema.
-    // We'll use a conservative "any" for all wildcards, which is safe for UPA detection
-    // (may cause false positives but not false negatives).
-    // This will be refined in CHK-021.
-    // Actually, the XSD compiler's buildWildcard doesn't parse namespace attributes yet.
-    // For now, treat all wildcards as "any" to be conservative.
-    return { type: "any" };
+    // Use the parsed namespace constraint (CHK-021): the normalized form maps
+    // directly onto the UPA symbol representation — `##targetNamespace` and
+    // `##local` were already resolved by the compiler (`""` = absent
+    // namespace), and `##other` carries its target.
+    const c = wc.namespaceConstraint;
+    if (c.kind === "any") return { type: "any" };
+    if (c.kind === "other") return { type: "other", target: c.target };
+    return { type: "uris", uris: c.uris };
 }
 
 function addFollow(follow: Map<Position, Set<Position>>, from: Position, to: Position): void {

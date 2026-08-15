@@ -158,6 +158,7 @@ function builtinAnyType(): ComplexTypeDefinition {
         simpleType: null,
         baseType: null,
         derivationMethod: null,
+        attributeWildcard: null,
     };
 }
 

@@ -1864,3 +1864,296 @@ describe("complex content derivation — end to end (CHK-020)", () => {
     });
 
 });
+
+describe("wildcards — xs:any and xs:anyAttribute (CHK-021)", () => {
+
+    describe("xs:any namespace constraints", () => {
+
+        const ANY_SCHEMA = (ns: string) => `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                <xsd:element name="root">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                            <xsd:any namespace="${ns}" processContents="skip"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+
+        it("##any (default) accepts elements from any namespace and no namespace", () => {
+            const schema = compile(ANY_SCHEMA("##any"));
+            expect(check(`<t:root xmlns:t="urn:t"><a/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:other"/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t" xmlns=""><a/></t:root>`, schema).valid).toBe(true);
+        });
+
+        it("##other accepts namespaced elements except the target namespace", () => {
+            const schema = compile(ANY_SCHEMA("##other"));
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:other"/></t:root>`, schema).valid).toBe(true);
+            // No namespace: not matched by ##other (absent never matches a negation, §3.10.4).
+            expect(check(`<t:root xmlns:t="urn:t"><a/></t:root>`, schema).valid).toBe(false);
+            // Target namespace: rejected.
+            const bad = check(`<t:root xmlns:t="urn:t"><t:a/></t:root>`, schema);
+            expect(bad.valid).toBe(false);
+            expect(bad.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+        });
+
+        it("##targetNamespace accepts only elements in the target namespace", () => {
+            const schema = compile(ANY_SCHEMA("##targetNamespace"));
+            expect(check(`<t:root xmlns:t="urn:t"><t:a/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:other"/></t:root>`, schema).valid).toBe(false);
+            expect(check(`<t:root xmlns:t="urn:t"><a/></t:root>`, schema).valid).toBe(false);
+        });
+
+        it("##local accepts only elements in no namespace", () => {
+            const schema = compile(ANY_SCHEMA("##local"));
+            expect(check(`<t:root xmlns:t="urn:t"><a/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><t:a/></t:root>`, schema).valid).toBe(false);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:other"/></t:root>`, schema).valid).toBe(false);
+        });
+
+        it("an explicit list accepts only the listed namespaces", () => {
+            const schema = compile(ANY_SCHEMA("urn:a urn:b"));
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:a"/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:b"/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:c"/></t:root>`, schema).valid).toBe(false);
+        });
+
+        it("an explicit list may mix ##targetNamespace and ##local", () => {
+            const schema = compile(ANY_SCHEMA("##targetNamespace ##local"));
+            expect(check(`<t:root xmlns:t="urn:t"><t:a/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:other"/></t:root>`, schema).valid).toBe(false);
+        });
+
+    });
+
+    describe("xs:any processContents", () => {
+
+        const GLOBAL = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                <xsd:element name="known" type="xsd:int"/>
+                <xsd:element name="root">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                            <xsd:any processContents="%PC%" namespace="##any"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+
+        it("strict validates wildcard-matched elements against their declaration and rejects undeclared ones", () => {
+            const schema = compile(GLOBAL.replace("%PC%", "strict"));
+            expect(check(`<t:root xmlns:t="urn:t"><t:known>42</t:known></t:root>`, schema).valid).toBe(true);
+            const undeclared = check(`<t:root xmlns:t="urn:t"><t:ghost/></t:root>`, schema);
+            expect(undeclared.valid).toBe(false);
+            expect(undeclared.errors.some((e) => e.code === "UNDECLARED_ELEMENT")).toBe(true);
+            // Declared element with a bad value is validated.
+            const badValue = check(`<t:root xmlns:t="urn:t"><t:known>not-an-int</t:known></t:root>`, schema);
+            expect(badValue.valid).toBe(false);
+        });
+
+        it("lax validates when a declaration exists and skips undeclared elements", () => {
+            const schema = compile(GLOBAL.replace("%PC%", "lax"));
+            expect(check(`<t:root xmlns:t="urn:t"><t:known>42</t:known></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><t:ghost/></t:root>`, schema).valid).toBe(true);
+            const badValue = check(`<t:root xmlns:t="urn:t"><t:known>not-an-int</t:known></t:root>`, schema);
+            expect(badValue.valid).toBe(false);
+        });
+
+        it("skip validates nothing — not even declared elements with bad values", () => {
+            const schema = compile(GLOBAL.replace("%PC%", "skip"));
+            expect(check(`<t:root xmlns:t="urn:t"><t:known>not-an-int</t:known></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><t:ghost/></t:root>`, schema).valid).toBe(true);
+        });
+
+        it("wildcard occurrence minOccurs/maxOccurs are enforced", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:any processContents="skip" namespace="##any" minOccurs="2" maxOccurs="3"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<t:root xmlns:t="urn:t"><a/><b/></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a/><b/><c/><d/></t:root>`, schema).valid).toBe(false);
+            const missing = check(`<t:root xmlns:t="urn:t"><a/></t:root>`, schema);
+            expect(missing.valid).toBe(false);
+            expect(missing.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT")).toBe(true);
+        });
+
+        it("a wildcard inside a choice matches any allowed alternative", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:choice>
+                                <xsd:element name="fixed" type="xsd:string"/>
+                                <xsd:any processContents="skip" namespace="##other"/>
+                            </xsd:choice>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<t:root xmlns:t="urn:t"><t:fixed>x</t:fixed></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><a xmlns="urn:other"/></t:root>`, schema).valid).toBe(true);
+            // Target-namespace element other than fixed matches neither alternative.
+            expect(check(`<t:root xmlns:t="urn:t"><t:other/></t:root>`, schema).valid).toBe(false);
+        });
+
+        it("a wildcard inside a sequence with mixed element/wildcard particles works", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string" minOccurs="0"/>
+                                <xsd:any processContents="skip" namespace="##other" maxOccurs="unbounded"/>
+                                <xsd:element name="b" type="xsd:string" minOccurs="0"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // Wildcard matches the middle elements
+            expect(check(`<t:root xmlns:t="urn:t"><t:a>x</t:a><x xmlns="urn:o"/><t:b>y</t:b></t:root>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t"><t:a>x</t:a><x xmlns="urn:o"/><y xmlns="urn:o"/><t:b>y</t:b></t:root>`, schema).valid).toBe(true);
+            // Target-namespace elements are not matched by ##other
+            const bad = check(`<t:root xmlns:t="urn:t"><t:a>x</t:a><t:other/></t:root>`, schema);
+            expect(bad.valid).toBe(false);
+        });
+
+    });
+
+    describe("xs:anyAttribute", () => {
+
+        it("accepts attributes matching the namespace constraint", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:anyAttribute namespace="urn:extra ##local" processContents="lax"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<t:root xmlns:t="urn:t" x="1" e:a="2" xmlns:e="urn:extra"/>`, schema).valid).toBe(true);
+            const bad = check(`<t:root xmlns:t="urn:t" x="1" e:a="2" f:a="3" xmlns:e="urn:extra" xmlns:f="urn:forbidden"/>`, schema);
+            expect(bad.valid).toBe(false);
+            expect(bad.errors.some((e) => e.code === "UNDECLARED_ATTRIBUTE")).toBe(true);
+        });
+
+        it("strict requires a declaration for wildcard-matched attributes", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:attribute name="good" type="xsd:int"/>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:anyAttribute namespace="##any" processContents="strict"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // The global declaration is {urn:t}good; the instance attribute must
+            // be qualified to match it.
+            expect(check(`<t:root xmlns:t="urn:t" t:good="42"/>`, schema).valid).toBe(true);
+            const undeclared = check(`<t:root xmlns:t="urn:t" t:other="1"/>`, schema);
+            expect(undeclared.valid).toBe(false);
+            expect(undeclared.errors.some((e) => e.code === "UNDECLARED_ATTRIBUTE")).toBe(true);
+            // Declared attribute with a bad value is validated.
+            const badValue = check(`<t:root xmlns:t="urn:t" t:good="nope"/>`, schema);
+            expect(badValue.valid).toBe(false);
+        });
+
+        it("skip accepts anything and validates nothing", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:attribute name="good" type="xsd:int"/>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:anyAttribute namespace="##any" processContents="skip"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<t:root xmlns:t="urn:t" good="not-an-int" other="whatever"/>`, schema).valid).toBe(true);
+        });
+
+        it("is inherited through complexContent extension (union of wildcards)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="t:Base">
+                                <xsd:anyAttribute namespace="urn:b" processContents="lax"/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="t:Derived"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // Both the base's and the derived's namespaces are allowed (union).
+            expect(check(`<t:root xmlns:t="urn:t" x:a="1" xmlns:x="urn:a"/>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t" y:b="1" xmlns:y="urn:b"/>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t" z:c="1" xmlns:z="urn:c"/>`, schema).valid).toBe(false);
+        });
+
+        it("a restriction may tighten the attribute wildcard namespace constraint", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="##any" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="t:Derived"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<t:root xmlns:t="urn:t" x:a="1" xmlns:x="urn:a"/>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t" y:b="1" xmlns:y="urn:b"/>`, schema).valid).toBe(false);
+        });
+
+        it("an attribute group's anyAttribute is inherited by complex types referencing it", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:attributeGroup name="Extras">
+                        <xsd:attribute name="note" type="xsd:string"/>
+                        <xsd:anyAttribute namespace="urn:extra" processContents="lax"/>
+                    </xsd:attributeGroup>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attributeGroup ref="t:Extras"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<t:root xmlns:t="urn:t" note="hi" x:e="1" xmlns:x="urn:extra"/>`, schema).valid).toBe(true);
+            expect(check(`<t:root xmlns:t="urn:t" note="hi" y:o="1" xmlns:y="urn:other"/>`, schema).valid).toBe(false);
+        });
+
+    });
+
+});

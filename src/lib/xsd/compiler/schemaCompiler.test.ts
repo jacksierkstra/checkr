@@ -1,6 +1,6 @@
 import { XMLParserImpl } from "@lib/xml/parser";
 import { SchemaCompilerImpl } from "@lib/xsd/compiler/schemaCompiler";
-import { ComplexTypeDefinition, CompiledSchema, ElementDeclaration, ModelGroup, SimpleTypeDefinition } from "@lib/types/component-graph";
+import { ComplexTypeDefinition, CompiledSchema, ElementDeclaration, ModelGroup, SimpleTypeDefinition, Wildcard } from "@lib/types/component-graph";
 import { NAMESPACE_XSD } from "@lib/types/namespaces";
 import { SchemaCompilationError, SchemaError } from "@lib/types/schema-error";
 
@@ -335,23 +335,28 @@ describe("SchemaCompiler — two-phase core (CHK-008)", () => {
             expect(seen[0]!.code).toBe("INVALID_SCHEMA_DOCUMENT");
         });
 
-        it("reports unsupported constructs as warnings and still compiles", () => {
+        it("compiles xs:any and xs:anyAttribute without unsupported-feature warnings (CHK-021)", () => {
             const xsd = `
-                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t">
                     <xsd:element name="root">
                         <xsd:complexType>
                             <xsd:sequence>
-                                <xsd:any processContents="lax"/>
+                                <xsd:any processContents="lax" namespace="##other"/>
                             </xsd:sequence>
+                            <xsd:anyAttribute namespace="urn:extra" processContents="skip"/>
                         </xsd:complexType>
                     </xsd:element>
                 </xsd:schema>
             `;
             const seen: SchemaError[] = [];
             const schema: CompiledSchema = compiler.compile(xsd, { listener: (e) => seen.push(e) });
-            expect(seen.length).toBeGreaterThan(0);
-            expect(seen.every((e) => e.severity === "warning" && e.code === "UNSUPPORTED_FEATURE")).toBe(true);
-            expect(schema.grammars.get("")!.elements.get("root")).toBeDefined();
+            expect(seen).toHaveLength(0);
+            const decl = schema.grammars.get("urn:t")!.elements.get("root")!;
+            const type = decl.type as ComplexTypeDefinition;
+            const seq = type.particle!.term as ModelGroup;
+            expect(seq.particles[0]!.term.kind).toBe("wildcard");
+            expect(type.attributeWildcard).not.toBeNull();
+            expect((type.attributeWildcard!.namespaceConstraint as { kind: "uris"; uris: ReadonlySet<string> }).uris.has("urn:extra")).toBe(true);
         });
 
         it("reports an attribute whose type must be simple", () => {
@@ -1871,6 +1876,344 @@ describe("complex content derivation (CHK-020)", () => {
             const ct = schema.grammars.get("")!.types.get("M") as ComplexTypeDefinition;
             expect(ct.contentType).toBe("mixed");
             expect(ct.particle).toBeNull();
+        });
+
+    });
+
+});
+describe("wildcards — namespace constraint parsing and derivation rules (CHK-021)", () => {
+
+    it("parses a default namespace constraint as ##any", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:element name="root">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                            <xsd:any/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+        const schema = compiler.compile(xsd);
+        const type = schema.grammars.get("")!.elements.get("root")!.type as ComplexTypeDefinition;
+        const wc = (type.particle!.term as ModelGroup).particles[0]!.term as Wildcard;
+        expect(wc.namespaceConstraint.kind).toBe("any");
+    });
+
+    it("parses ##other with the target namespace", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t">
+                <xsd:element name="root">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                            <xsd:any namespace="##other"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+        const schema = compiler.compile(xsd);
+        const type = schema.grammars.get("urn:t")!.elements.get("root")!.type as ComplexTypeDefinition;
+        const wc = (type.particle!.term as ModelGroup).particles[0]!.term as Wildcard;
+        expect(wc.namespaceConstraint).toMatchObject({ kind: "other", target: "urn:t" });
+    });
+
+    it("parses an explicit list with ##targetNamespace and ##local", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t">
+                <xsd:element name="root">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                            <xsd:any namespace="##targetNamespace ##local http://example.com"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+        const schema = compiler.compile(xsd);
+        const type = schema.grammars.get("urn:t")!.elements.get("root")!.type as ComplexTypeDefinition;
+        const wc = (type.particle!.term as ModelGroup).particles[0]!.term as Wildcard;
+        const c = wc.namespaceConstraint as { kind: "uris"; uris: ReadonlySet<string> };
+        expect(c.uris.has("urn:t")).toBe(true);
+        expect(c.uris.has("")).toBe(true); // ##local → ""
+        expect(c.uris.has("http://example.com")).toBe(true);
+    });
+
+    it("rejects a namespace attribute mixing ##any with other tokens", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:element name="root">
+                    <xsd:complexType>
+                        <xsd:sequence>
+                            <xsd:any namespace="##any http://example.com"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+        const seen: SchemaError[] = [];
+        expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+            .toThrow(SchemaCompilationError);
+        expect(seen.some((e) => e.code === "INVALID_SCHEMA_DOCUMENT")).toBe(true);
+    });
+
+    describe("attribute wildcard in derivation", () => {
+
+        it("extension unions the base and derived attribute wildcard constraints", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="t:Base">
+                                <xsd:anyAttribute namespace="urn:b" processContents="strict"/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("urn:t")!.types.get("Derived") as ComplexTypeDefinition;
+            const c = derived.attributeWildcard!.namespaceConstraint as { kind: "uris"; uris: ReadonlySet<string> };
+            // Union of {urn:a} and {urn:b}
+            expect(c.uris.has("urn:a")).toBe(true);
+            expect(c.uris.has("urn:b")).toBe(true);
+            // processContents from the complete wildcard (the derived's own)
+            expect(derived.attributeWildcard!.processContents).toBe("strict");
+        });
+
+        it("extension with an absent base wildcard keeps the derived's complete wildcard", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base"/>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="t:Base">
+                                <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("urn:t")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(derived.attributeWildcard).not.toBeNull();
+            const c = derived.attributeWildcard!.namespaceConstraint as { kind: "uris"; uris: ReadonlySet<string> };
+            expect(c.uris.has("urn:a")).toBe(true);
+        });
+
+        it("extension with an absent complete wildcard inherits the base's wildcard", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="t:Base"/>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("urn:t")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(derived.attributeWildcard).not.toBeNull();
+            const c = derived.attributeWildcard!.namespaceConstraint as { kind: "uris"; uris: ReadonlySet<string> };
+            expect(c.uris.has("urn:a")).toBe(true);
+        });
+
+        it("restriction validates the derived wildcard is a subset of the base's", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="##any" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("urn:t")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(derived.attributeWildcard).not.toBeNull();
+        });
+
+        it("restriction rejects a non-subset wildcard", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="urn:a" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:anyAttribute namespace="urn:b" processContents="lax"/>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_RESTRICTION")).toBe(true);
+        });
+
+        it("restriction rejects a weaker processContents", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="##any" processContents="strict"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:anyAttribute namespace="##any" processContents="skip"/>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_RESTRICTION")).toBe(true);
+        });
+
+        it("restriction may remove the base's attribute wildcard", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:anyAttribute namespace="##any" processContents="lax"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base"/>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("urn:t")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(derived.attributeWildcard).toBeNull();
+        });
+
+    });
+
+    describe("particle wildcard restriction", () => {
+
+        it("a wildcard may restrict another wildcard with a subset constraint", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:any namespace="##any" processContents="lax"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:sequence>
+                                    <xsd:any namespace="urn:a" processContents="lax"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            expect(schema.grammars.get("urn:t")!.types.get("Derived")).toBeDefined();
+        });
+
+        it("element declaration may restrict a wildcard", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:any namespace="##any" processContents="lax"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:sequence>
+                                    <xsd:element name="a" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            expect(schema.grammars.get("urn:t")!.types.get("Derived")).toBeDefined();
+        });
+
+        it("a wildcard cannot restrict an element declaration", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="t:Base">
+                                <xsd:sequence>
+                                    <xsd:any namespace="##any" processContents="lax"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_RESTRICTION")).toBe(true);
+        });
+
+    });
+
+    describe("UPA with wildcards", () => {
+
+        it("two overlapping wildcards report AMBIGUOUS_CONTENT_MODEL", () => {
+            const xsd2 = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Ambiguous">
+                        <xsd:choice>
+                            <xsd:any namespace="##any" processContents="lax"/>
+                            <xsd:any namespace="urn:a" processContents="lax"/>
+                        </xsd:choice>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd2, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "AMBIGUOUS_CONTENT_MODEL")).toBe(true);
+        });
+
+        it("two disjoint wildcards do not report UPA violations", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:t" xmlns:t="urn:t" elementFormDefault="qualified">
+                    <xsd:complexType name="Disjoint">
+                        <xsd:sequence>
+                            <xsd:any namespace="urn:a" processContents="lax"/>
+                            <xsd:any namespace="urn:b" processContents="lax"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            expect(schema.grammars.get("urn:t")!.types.get("Disjoint")).toBeDefined();
         });
 
     });

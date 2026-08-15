@@ -12,6 +12,7 @@ import {
     Facet,
     ModelGroup,
     ModelGroupDefinition,
+    NamespaceConstraint,
     Particle,
     ParticleTerm,
     QName,
@@ -25,6 +26,16 @@ import {
 } from "@lib/types/component-graph";
 import { deepFreeze } from "@lib/types/immutable";
 import { namespaceKey, NAMESPACE_XSD } from "@lib/types/namespaces";
+import {
+    describeConstraint,
+    namespaceConstraintTokenViolation,
+    parseNamespaceConstraint,
+    processContentsAtLeastAsStrict,
+    wildcardAllowsNamespace,
+    wildcardIntersection,
+    wildcardSubset,
+    wildcardUnion,
+} from "@lib/xsd/wildcards";
 import {
     SchemaCompilationError,
     SchemaError,
@@ -72,6 +83,11 @@ interface BuildContext {
     allAttributeGroupDefs: Array<{ def: AttributeGroupDefinition; node: Element }>;
     /** Source element for each attribute-group-ref placeholder use, for error reporting. */
     attributeGroupRefNodes: Map<AttributeUse, Element>;
+    /**
+     * Directly referenced attribute-group QNames per owning complex type or
+     * attribute group definition, for "complete wildcard" computation (CHK-021).
+     */
+    attributeGroupWildcardRefs: Map<object, QName[]>;
     /** Derivations recorded for pass 2e/2f/3b (CHK-020). */
     derivations: Array<{
         type: ComplexTypeDefinition;
@@ -159,6 +175,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             locations: new Map(),
             particleNodes: new Map(),
             attributeGroupRefNodes: new Map(),
+            attributeGroupWildcardRefs: new Map(),
             report,
         };
 
@@ -199,6 +216,11 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
         // Pass 2d — expand attribute group references into attribute uses (CHK-019).
         this.expandAttributeGroups(ctx, grammars);
+
+        // Pass 2d.5 — compute every attribute group's and complex type's
+        // "complete wildcard" from local <xs:anyAttribute> + referenced attribute
+        // groups (CHK-021). Must run after expansion so group refs are spliced.
+        this.resolveAttributeWildcards(ctx, grammars);
 
         // Pass 2e — resolve the base type definitions of complex/simple content
         // derivations (complexContent/simpleContent extension & restriction, CHK-020).
@@ -391,7 +413,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             contentType = "mixed";
         }
 
-        const attributeUses = this.readComplexTypeUses(attributeParent, ctx);
+        const usesResult = this.readComplexTypeUses(attributeParent, ctx);
+        const attributeUses = usesResult.uses;
 
         const result: ComplexTypeDefinition = {
             kind: "complex-type",
@@ -402,7 +425,14 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             simpleType,
             baseType: null,
             derivationMethod,
+            // The local wildcard from <xs:anyAttribute>; pass 2d.5 computes the
+            // complete wildcard (intersection with referenced attribute groups)
+            // and pass 2f unions it with the base for extensions (CHK-021).
+            attributeWildcard: usesResult.wildcard,
         };
+        if (usesResult.groupRefs.length > 0) {
+            ctx.attributeGroupWildcardRefs.set(result, usesResult.groupRefs);
+        }
         ctx.allComplexTypes.push({ type: result, node: el });
         if (baseRef && derivationMethod && derivationNode) {
             ctx.derivations.push({
@@ -557,10 +587,18 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     /**
      * Parse attribute use children from an element (the xs:complexType element
      * itself for plain content, or the extension/restriction element for
-     * simpleContent/complexContent derivations, CHK-020).
+     * simpleContent/complexContent derivations, CHK-020). Also collects the
+     * local `<xs:anyAttribute>` wildcard and the directly referenced attribute
+     * groups for "complete wildcard" computation (CHK-021).
      */
-    private readComplexTypeUses(el: Element, ctx: BuildContext): AttributeUse[] {
+    private readComplexTypeUses(el: Element, ctx: BuildContext): {
+        uses: AttributeUse[];
+        wildcard: Wildcard | null;
+        groupRefs: QName[];
+    } {
         const uses: AttributeUse[] = [];
+        let wildcard: Wildcard | null = null;
+        const groupRefs: QName[] = [];
         for (const child of childElements(el)) {
             if (child.namespaceURI !== NAMESPACE_XSD) continue;
             if (child.localName === "attribute") {
@@ -569,6 +607,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             } else if (child.localName === "attributeGroup") {
                 const ref = this.readQName(child, "ref");
                 if (ref) {
+                    groupRefs.push(ref);
                     const placeholder = this.placeholderAttributeGroupUse(child, ref);
                     ctx.attributeGroupRefNodes.set(placeholder, child);
                     uses.push(placeholder);
@@ -582,16 +621,10 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     });
                 }
             } else if (child.localName === "anyAttribute") {
-                ctx.report({
-                    severity: "warning",
-                    code: "UNSUPPORTED_FEATURE",
-                    message: "xs:anyAttribute is not supported yet.",
-                    location: locationOf(child),
-                    phase: "schema-compilation",
-                });
+                wildcard = this.buildWildcard(child, ctx);
             }
         }
-        return uses;
+        return { uses, wildcard, groupRefs };
     }
 
     private buildModelGroup(el: Element, ctx: BuildContext): ModelGroup {
@@ -685,12 +718,16 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             });
             return null;
         }
-        const attributeUses = this.readComplexTypeUses(el, ctx);
+        const usesResult = this.readComplexTypeUses(el, ctx);
         const def: AttributeGroupDefinition = {
             kind: "attribute-group-definition",
             name: { namespaceURI: ctx.targetNamespace, localName },
-            attributeUses,
+            attributeUses: usesResult.uses,
+            attributeWildcard: usesResult.wildcard,
         };
+        if (usesResult.groupRefs.length > 0) {
+            ctx.attributeGroupWildcardRefs.set(def, usesResult.groupRefs);
+        }
         ctx.allAttributeGroupDefs.push({ def, node: el });
         return def;
     }
@@ -761,19 +798,24 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     private buildAnyParticle(el: Element, ctx: BuildContext): Particle {
-        ctx.report({
-            severity: "warning",
-            code: "UNSUPPORTED_FEATURE",
-            message: "Wildcard content (xs:any) is compiled but not validated yet.",
-            location: locationOf(el),
-            phase: "schema-compilation",
-        });
-        return this.wrapParticle(ctx, el, this.buildWildcard(el));
+        return this.wrapParticle(ctx, el, this.buildWildcard(el, ctx));
     }
 
-    private buildWildcard(el: Element): Wildcard {
+    private buildWildcard(el: Element, ctx: BuildContext): Wildcard {
         const processContents = (el.getAttribute("processContents") ?? "strict") as "strict" | "lax" | "skip";
-        return { kind: "wildcard", processContents };
+        const namespaceAttr = el.getAttribute("namespace");
+        const violation = namespaceConstraintTokenViolation(namespaceAttr);
+        if (violation) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: violation,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        const namespaceConstraint = parseNamespaceConstraint(namespaceAttr, ctx.targetNamespace);
+        return { kind: "wildcard", processContents, namespaceConstraint };
     }
 
     private wrapParticle(ctx: BuildContext, el: Element, term: ParticleTerm): Particle {
@@ -1095,6 +1137,75 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     // -----------------------------------------------------------------------
+    // Pass 2d.5 — compute attribute wildcards (CHK-021)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Compute every attribute group's and complex type's "complete wildcard"
+     * (XSD 1.0 §3.4.3): the local `<xs:anyAttribute>` wildcard intersected
+     * with the {attribute wildcard}s of directly referenced attribute groups.
+     * When there is no local wildcard, the process contents comes from the
+     * first non-absent group wildcard (§3.4.3 rule 2.2.2).
+     *
+     * Runs after attribute-group expansion so all references are spliced.
+     * Complex-type wildcards are the input to pass 2f, which unions the base
+     * type's wildcard in for extension derivations.
+     */
+    private resolveAttributeWildcards(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
+        const computed = new Map<object, Wildcard | null>();
+        const inProgress = new Set<object>();
+
+        const compute = (owner: AttributeGroupDefinition | ComplexTypeDefinition): Wildcard | null => {
+            if (computed.has(owner)) return computed.get(owner) ?? null;
+            if (inProgress.has(owner)) return null; // circular → error already reported
+            inProgress.add(owner);
+            const local = owner.attributeWildcard;
+            const refs = ctx.attributeGroupWildcardRefs.get(owner) ?? [];
+            const groupWildcards: Wildcard[] = [];
+            for (const ref of refs) {
+                const def = this.lookupAttributeGroup(grammars, ref);
+                if (!def) continue; // UNRESOLVED_REFERENCE already reported in pass 2d
+                const gw = compute(def);
+                if (gw) groupWildcards.push(gw);
+            }
+            let complete: Wildcard | null;
+            if (groupWildcards.length === 0) {
+                complete = local;
+            } else if (local) {
+                // 2.2.1: intersection of local + group wildcards; processContents
+                // is the local wildcard's.
+                const constraint = this.intersectConstraints([local.namespaceConstraint, ...groupWildcards.map((g) => g.namespaceConstraint)]);
+                complete = { kind: "wildcard", processContents: local.processContents, namespaceConstraint: constraint };
+            } else {
+                // 2.2.2: intersection of the group wildcards; processContents
+                // is the first non-absent group wildcard's.
+                const constraint = this.intersectConstraints(groupWildcards.map((g) => g.namespaceConstraint));
+                complete = { kind: "wildcard", processContents: groupWildcards[0]!.processContents, namespaceConstraint: constraint };
+            }
+            inProgress.delete(owner);
+            computed.set(owner, complete);
+            (owner as { attributeWildcard: Wildcard | null }).attributeWildcard = complete;
+            return complete;
+        };
+
+        for (const { def } of ctx.allAttributeGroupDefs) compute(def);
+        for (const { type } of ctx.allComplexTypes) compute(type);
+    }
+
+    /** Fold wildcard constraints with the intensional intersection (§3.10.6). */
+    private intersectConstraints(constraints: ReadonlyArray<NamespaceConstraint>): NamespaceConstraint {
+        let acc = constraints[0]!;
+        for (let i = 1; i < constraints.length; i++) {
+            const next = wildcardIntersection(acc, constraints[i]!);
+            // An inexpressible intersection (e.g. two ##other of different
+            // targets) cannot occur within one schema; fall back to matching
+            // nothing rather than guessing.
+            acc = next ?? { kind: "uris", uris: new Set() };
+        }
+        return acc;
+    }
+
+    // -----------------------------------------------------------------------
     // Pass 2e — resolve derivation bases (CHK-020)
     // -----------------------------------------------------------------------
 
@@ -1168,7 +1279,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             const d = ctx.derivations.find((r) => r.type === type);
             if (d && d.baseResolved) {
                 if (d.baseKind === "complex" && base) {
-                    this.spliceDerivation(d, base);
+                    this.spliceDerivation(ctx, d, base);
                 } else if (d.baseKind === "simple") {
                     this.spliceSimpleBaseDerivation(d);
                 }
@@ -1199,6 +1310,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
      * `base` is the resolved base complex type (already fully processed).
      */
     private spliceDerivation(
+        ctx: BuildContext,
         d: BuildContext["derivations"][number],
         base: ComplexTypeDefinition,
     ): void {
@@ -1249,6 +1361,35 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 ...base.attributeUses,
                 ...d.newAttributeUses,
             ];
+
+            // Attribute wildcard: the extension's complete wildcard, unioned
+            // with the base's (§3.4.2 rule 3.2.2, Attribute Wildcard Union).
+            // When the union is not expressible, report and fall back to a
+            // wildcard matching nothing.
+            const complete = type.attributeWildcard;
+            const baseWildcard = base.attributeWildcard;
+            if (baseWildcard !== null) {
+                if (complete === null) {
+                    (type as { attributeWildcard: Wildcard | null }).attributeWildcard = baseWildcard;
+                } else {
+                    const union = wildcardUnion(baseWildcard.namespaceConstraint, complete.namespaceConstraint);
+                    if (union === null) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_EXTENSION",
+                            message: `The attribute wildcard union of the base (${describeConstraint(baseWildcard.namespaceConstraint)}) and the extension (${describeConstraint(complete.namespaceConstraint)}) is not expressible.`,
+                            location: locationOf(d.node),
+                            phase: "schema-compilation",
+                        });
+                    }
+                    (type as { attributeWildcard: Wildcard | null }).attributeWildcard = {
+                        kind: "wildcard",
+                        processContents: complete.processContents,
+                        namespaceConstraint: union ?? { kind: "uris", uris: new Set() },
+                    };
+                }
+            }
+            // baseWildcard === null: the type keeps its complete wildcard.
         } else {
             // Restriction
             if (d.form === "complex" && base.contentType === "simple") {
@@ -1293,6 +1434,15 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                             severity: "error",
                             code: "INVALID_RESTRICTION",
                             message: "A simpleContent restriction against a simple type cannot declare attributes; use a simpleContent extension to add attributes.",
+                            location: locationOf(d.node),
+                            phase: "schema-compilation",
+                        });
+                    }
+                    if (d.type.attributeWildcard !== null) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_RESTRICTION",
+                            message: "A simpleContent restriction against a simple type cannot declare an attribute wildcard (xs:anyAttribute); use a simpleContent extension to add one.",
                             location: locationOf(d.node),
                             phase: "schema-compilation",
                         });
@@ -1512,6 +1662,40 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         // 4. Attribute use restriction (subset by name, type restriction,
         // requiredness compatibility).
         this.validateAttributeRestriction(ctx, d, base);
+
+        // 5. Attribute wildcard restriction (derivation-ok-restriction.4, CHK-021):
+        // if the derived type has an attribute wildcard, the base must have one
+        // too, the derived constraint must be a subset of the base's, and the
+        // derived processContents must be at least as strict.
+        const derivedWildcard = type.attributeWildcard;
+        if (derivedWildcard !== null) {
+            const baseWildcard = base.attributeWildcard;
+            if (baseWildcard === null) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "The restricted type declares an attribute wildcard but the base type has none.",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            } else if (!wildcardSubset(derivedWildcard.namespaceConstraint, baseWildcard.namespaceConstraint)) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: `The restricted type's attribute wildcard namespace constraint ${describeConstraint(derivedWildcard.namespaceConstraint)} must be a subset of the base type's ${describeConstraint(baseWildcard.namespaceConstraint)}.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            } else if (!processContentsAtLeastAsStrict(derivedWildcard, baseWildcard)) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: `The restricted type's attribute wildcard processContents (${derivedWildcard.processContents}) must be identical to or stricter than the base's (${baseWildcard.processContents}).`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        }
     }
 
     /**
@@ -1587,8 +1771,31 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         // Both all: CTR-all-compile already reported above; skip deep check.
         if (dt.kind === "all" && bt.kind === "all") return null;
 
-        // Wildcards: CHK-021 scope — lenient.
-        if (dt.kind === "wildcard" || bt.kind === "wildcard") return null;
+        // Both wildcards: the derived constraint must be a subset of the base's
+        // and its processContents at least as strict (§3.9.6 Wildcard:Wildcard).
+        if (dt.kind === "wildcard" && bt.kind === "wildcard") {
+            if (!wildcardSubset(dt.namespaceConstraint, bt.namespaceConstraint)) {
+                return `The derived wildcard's namespace constraint ${describeConstraint(dt.namespaceConstraint)} is not a subset of the base wildcard's ${describeConstraint(bt.namespaceConstraint)}.`;
+            }
+            if (!processContentsAtLeastAsStrict(dt, bt)) {
+                return `The derived wildcard's processContents (${dt.processContents}) must be identical to or stricter than the base wildcard's (${bt.processContents}).`;
+            }
+            return null;
+        }
+
+        // Element declaration restricting a wildcard (§3.9.6 Elt:Wildcard): the
+        // element's target namespace must be allowed by the base wildcard.
+        if (dt.kind === "element" && bt.kind === "wildcard") {
+            if (!wildcardAllowsNamespace(bt.namespaceConstraint, dt.name.namespaceURI)) {
+                return `Element ${displayQName(dt.name)} does not match the base wildcard's namespace constraint ${describeConstraint(bt.namespaceConstraint)}.`;
+            }
+            return null;
+        }
+
+        // A wildcard cannot restrict an element declaration.
+        if (dt.kind === "wildcard" && bt.kind === "element") {
+            return `A wildcard cannot be a valid restriction of the element declaration ${displayQName(bt.name)}.`;
+        }
 
         // Otherwise, the term kinds are incompatible.
         return `Term kind "${dt.kind}" is incompatible with base term kind "${bt.kind}".`;

@@ -109,6 +109,14 @@ export interface ComplexTypeDefinition {
      * or `"restriction"`), or null when the type is not derived (CHK-020).
      */
     readonly derivationMethod: DerivationMethod | null;
+    /**
+     * The attribute wildcard from `<xs:anyAttribute>` (CHK-021). The compiler
+     * computes the "complete wildcard" (XSD 1.0 §3.4.3): the local wildcard
+     * intersected with the referenced attribute groups' wildcards, then unions
+     * it with the base type's wildcard for extension derivations (§3.4.2).
+     * Null when the type declares (and inherits) no attribute wildcard.
+     */
+    readonly attributeWildcard: Wildcard | null;
 }
 
 export type TypeDefinition = SimpleTypeDefinition | ComplexTypeDefinition;
@@ -186,9 +194,27 @@ export interface ModelGroup {
     readonly ref: QName | null;
 }
 
+/**
+ * The {namespace constraint} of a wildcard (XSD 1.0 §3.10.1), normalized at
+ * compile time so it carries no reference to the schema's target namespace:
+ * - `"any"` — `##any` (the default): every namespace is allowed.
+ * - `"other"` — `##other`: every namespace except the schema's target
+ *   namespace. Per §3.10.4 rule 2.3, the absent (no) namespace never matches
+ *   a `##other` constraint.
+ * - `"uris"` — an explicit whitespace-separated list; `##targetNamespace`
+ *   was resolved to the target URI and `##local` to the `""` sentinel (the
+ *   absent namespace, matching `namespaceKey`). An empty set matches nothing.
+ */
+export type NamespaceConstraint =
+    | { readonly kind: "any" }
+    | { readonly kind: "other"; readonly target: string | null }
+    | { readonly kind: "uris"; readonly uris: ReadonlySet<string> };
+
 export interface Wildcard {
     readonly kind: "wildcard";
     readonly processContents: "strict" | "lax" | "skip";
+    /** The parsed `namespace` attribute (defaults to `##any`, CHK-021). */
+    readonly namespaceConstraint: NamespaceConstraint;
 }
 
 export type ParticleTerm = ElementDeclaration | ModelGroup | Wildcard;
@@ -213,6 +239,8 @@ export interface AttributeGroupDefinition {
     readonly kind: "attribute-group-definition";
     readonly name: QName;
     readonly attributeUses: ReadonlyArray<AttributeUse>;
+    /** The attribute wildcard from `<xs:anyAttribute>` (CHK-021). */
+    readonly attributeWildcard: Wildcard | null;
 }
 
 export interface CompiledGrammar {

@@ -186,8 +186,8 @@
     {
       "id": "CHK-021",
       "title": "Wildcards",
-      "file": "docs/backlog/active/CHK-021-wildcards.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-021-wildcards.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

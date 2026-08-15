@@ -1,4 +1,4 @@
-import { Document, Element } from "@xmldom/xmldom";
+import { Attr, Document, Element } from "@xmldom/xmldom";
 import {
     ComplexTypeDefinition,
     CompiledSchema,
@@ -7,6 +7,7 @@ import {
     ParticleTerm,
     QName,
     SimpleTypeDefinition,
+    Wildcard,
     qnameEqual,
     qnameKey,
     displayQName,
@@ -19,6 +20,7 @@ import { checkStringFamilyLexicalSpace } from "@lib/xsd/string-types";
 import { checkNumericFamilyLexicalSpace } from "@lib/xsd/numeric-types";
 import { checkDateTimeFamilyLexicalSpace } from "@lib/xsd/datetime-types";
 import { checkRemainingFamilyLexicalSpace } from "@lib/xsd/remaining-types";
+import { wildcardAllowsNamespace } from "@lib/xsd/wildcards";
 import {
     SchemaError,
     SchemaErrorCode,
@@ -47,8 +49,9 @@ export interface InstanceValidator {
  * and reports every problem through the error listener / result list.
  *
  * Scope note (CHK-008): content-model matching is implemented for `sequence`
- * model groups with element particles; `choice`/`all` groups, wildcards and
- * nested groups report `UNSUPPORTED_FEATURE` rather than guessing.
+ * model groups with element particles; `choice`/`all` groups and nested
+ * groups report `UNSUPPORTED_FEATURE` rather than guessing. Wildcards are
+ * fully validated since CHK-021.
  */
 export class InstanceValidatorImpl implements InstanceValidator {
     constructor(private xmlParser: XMLParser) {}
@@ -195,7 +198,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 break;
         }
 
-        this.validateAttributes(node, type, report);
+        this.validateAttributes(node, type, schema, report);
     }
 
     // -----------------------------------------------------------------------
@@ -228,8 +231,13 @@ export class InstanceValidatorImpl implements InstanceValidator {
         }
 
         if (term.kind === "wildcard") {
-            report(this.error(node, "UNSUPPORTED_FEATURE",
-                "Wildcard content (xs:any) is compiled but not validated yet."));
+            // Single wildcard particle: consume all children matching the
+            // namespace constraint, then report leftovers (CHK-021).
+            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report);
+            for (let i = consumed; i < children.length; i++) {
+                report(this.error(children[i]!, "UNEXPECTED_ELEMENT",
+                    `Element <${children[i]!.localName}> is not allowed inside <${node.localName}> at this position.`));
+            }
             return;
         }
     }
@@ -395,8 +403,55 @@ export class InstanceValidatorImpl implements InstanceValidator {
             return consumed;
         }
 
-        // Wildcard — skip
+        // Wildcard term: consume consecutive children whose namespace matches
+        // the constraint, validating each per its processContents (CHK-021).
+        if (term.kind === "wildcard") {
+            const wildcard = term;
+            let count = 0;
+            let idx = startIdx;
+            while (idx < children.length) {
+                const c = children[idx]!;
+                if (!wildcardAllowsNamespace(wildcard.namespaceConstraint, c.namespaceURI)) break;
+                this.validateWildcardElement(c, wildcard, schema, report);
+                count++;
+                idx++;
+                if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
+            }
+            if (count < particle.minOccurs) {
+                report(this.error(node, "MISSING_REQUIRED_ELEMENT",
+                    `A wildcard element must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs ${count}.`));
+            }
+            return idx - startIdx;
+        }
+
         return 0;
+    }
+
+    /**
+     * Validate an element matched by a wildcard per its `processContents`
+     * (XSD 1.0 §3.10.4): strict requires a declaration (and validates against
+     * it), lax validates when a declaration exists and skips otherwise, and
+     * skip validates nothing (neither the element nor its children/attributes).
+     */
+    private validateWildcardElement(
+        node: Element,
+        wildcard: Wildcard,
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): void {
+        if (wildcard.processContents === "skip") return;
+        const decl = this.lookupElementDeclaration(node, schema);
+        if (wildcard.processContents === "strict" && !decl) {
+            report(this.error(node, "UNDECLARED_ELEMENT",
+                `Element <${node.localName}> matches a strict wildcard but has no declaration in the schema.`));
+            return;
+        }
+        if (decl) this.validateElement(node, decl, schema, report);
+    }
+
+    /** Resolve an instance element's global declaration by QName. */
+    private lookupElementDeclaration(node: Element, schema: CompiledSchema): ElementDeclaration | null {
+        return schema.grammars.get(namespaceKey(node.namespaceURI))?.elements.get(node.localName ?? "") ?? null;
     }
 
     /**
@@ -462,6 +517,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
                     matched.add(idx);
                     if (particle.term.kind === "element") {
                         this.validateElement(children[idx]!, particle.term, schema, report);
+                    } else if (particle.term.kind === "wildcard") {
+                        this.validateWildcardElement(children[idx]!, particle.term, schema, report);
                     }
                 }
             }
@@ -489,11 +546,15 @@ export class InstanceValidatorImpl implements InstanceValidator {
             }
             return false;
         }
-        return false; // wildcard (not handled yet)
+        if (term.kind === "wildcard") {
+            return wildcardAllowsNamespace(term.namespaceConstraint, child.namespaceURI);
+        }
+        return false;
     }
 
     private termName(term: ParticleTerm): string {
         if (term.kind === "element") return displayQName(term.name);
+        if (term.kind === "wildcard") return "a wildcard";
         return `the ${term.kind} group`;
     }
 
@@ -504,6 +565,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
     private validateAttributes(
         node: Element,
         type: ComplexTypeDefinition,
+        schema: CompiledSchema,
         report: (error: SchemaError) => void
     ): void {
         const instanceAttrs = Array.from(node.attributes).filter(
@@ -526,14 +588,44 @@ export class InstanceValidatorImpl implements InstanceValidator {
             }
         }
 
+        const wildcard = type.attributeWildcard;
         for (const attr of instanceAttrs) {
             const ns = attr.namespaceURI;
             if (ns === NAMESPACE_XML || ns === NAMESPACE_XSI) continue; // xml:*, xsi:* are standard
             const key = qnameKey({ namespaceURI: ns, localName: attr.localName ?? "" });
-            if (!declared.has(key)) {
-                report(this.error(node, "UNDECLARED_ATTRIBUTE",
-                    `Attribute ${displayQName({ namespaceURI: ns, localName: attr.localName ?? "" })} is not declared by the type of <${node.localName}>.`));
+            if (declared.has(key)) continue;
+            if (wildcard && wildcardAllowsNamespace(wildcard.namespaceConstraint, ns)) {
+                // Attribute wildcard match: validate per processContents (CHK-021).
+                this.validateWildcardAttribute(node, attr, wildcard, schema, report);
+                continue;
             }
+            report(this.error(node, "UNDECLARED_ATTRIBUTE",
+                `Attribute ${displayQName({ namespaceURI: ns, localName: attr.localName ?? "" })} is not declared by the type of <${node.localName}>.`));
+        }
+    }
+
+    /**
+     * Validate an attribute matched by an attribute wildcard per its
+     * `processContents`: strict requires a declaration and validates the value
+     * against it, lax validates when a declaration exists and skips otherwise,
+     * and skip validates nothing.
+     */
+    private validateWildcardAttribute(
+        node: Element,
+        attr: Attr,
+        wildcard: Wildcard,
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): void {
+        if (wildcard.processContents === "skip") return;
+        const decl = schema.grammars.get(namespaceKey(attr.namespaceURI))?.attributes.get(attr.localName ?? "") ?? null;
+        if (wildcard.processContents === "strict" && !decl) {
+            report(this.error(node, "UNDECLARED_ATTRIBUTE",
+                `Attribute ${displayQName({ namespaceURI: attr.namespaceURI, localName: attr.localName ?? "" })} matches a strict attribute wildcard but has no declaration in the schema.`));
+            return;
+        }
+        if (decl?.type) {
+            this.validateTextValue(node, attr.value ?? "", decl.type, report);
         }
     }
 

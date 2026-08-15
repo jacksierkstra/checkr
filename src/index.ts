@@ -27,6 +27,7 @@ export type {
     Facet,
     ModelGroup,
     ModelGroupKind,
+    NamespaceConstraint,
     Particle,
     ParticleTerm,
     QName,
