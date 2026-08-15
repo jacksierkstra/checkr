@@ -24,8 +24,10 @@ export type SchemaErrorCode =
     | "INVALID_SCHEMA_DOCUMENT"
     /** The instance document is not well-formed XML. */
     | "INVALID_INSTANCE_DOCUMENT"
-    /** A QName reference (type, base, itemType, memberTypes, element ref) resolves to nothing. */
+    /** A QName reference (type, base, itemType, memberTypes) resolves to nothing. */
     | "UNRESOLVED_TYPE"
+    /** An element/attribute reference (ref=) resolves to no global declaration. */
+    | "UNRESOLVED_REFERENCE"
     /** The instance root element is not declared as a global element in the schema. */
     | "UNDECLARED_ELEMENT"
     /** A child element does not fit the declared content model. */

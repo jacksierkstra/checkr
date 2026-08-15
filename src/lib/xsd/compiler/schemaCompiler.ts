@@ -49,7 +49,7 @@ interface BuildContext {
     allElements: ElementDeclaration[];
     /** Every attribute declaration built during pass 1, for pass 2 resolution. */
     allAttributes: AttributeDeclaration[];
-    /** Every remaining QName reference (simple-type bases, union members, element refs). */
+    /** Every remaining QName reference (simple-type bases, union members). */
     refs: Array<{ ref: QName; node: Element }>;
     /** Every simple type definition built during pass 1, for pass 2 facet resolution. */
     allSimpleTypes: SimpleTypeDefinition[];
@@ -64,6 +64,7 @@ const UNBOUNDED = "unbounded";
 interface MutableGrammar {
     namespaceURI: string | null;
     elements: Map<string, ElementDeclaration>;
+    attributes: Map<string, AttributeDeclaration>;
     types: Map<string, TypeDefinition>;
 }
 
@@ -107,6 +108,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             grammar: {
                 namespaceURI: root.getAttribute("targetNamespace") || null,
                 elements: new Map(),
+                attributes: new Map(),
                 types: new Map(),
             },
             allElements: [],
@@ -123,6 +125,9 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             if (child.localName === "element") {
                 const decl = this.buildGlobalElement(child, ctx);
                 ctx.grammar.elements.set(decl.name.localName, decl);
+            } else if (child.localName === "attribute") {
+                const decl = this.buildGlobalAttribute(child, ctx);
+                if (decl) ctx.grammar.attributes.set(decl.name.localName, decl);
             } else if (child.localName === "complexType") {
                 const type = this.buildComplexType(child, ctx, ctx.targetNamespace);
                 if (type.name) ctx.grammar.types.set(type.name.localName, type);
@@ -174,9 +179,33 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             typeRef,
             type: inlineType,
             nillable: el.getAttribute("nillable") === "true",
+            ref: null,
         };
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
+        return decl;
+    }
+
+    private buildGlobalAttribute(el: Element, ctx: BuildContext): AttributeDeclaration | null {
+        const localName = el.getAttribute("name") ?? "";
+        if (!localName) {
+            ctx.report({
+                severity: "fatal",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: "A global xs:attribute must carry a name.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            return null;
+        }
+        const decl: AttributeDeclaration = {
+            kind: "attribute",
+            name: { namespaceURI: ctx.targetNamespace, localName },
+            typeRef: this.readQName(el, "type"),
+            type: null,
+            ref: null,
+        };
+        ctx.allAttributes.push(decl);
         return decl;
     }
 
@@ -422,53 +451,41 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
     private buildLocalElementParticle(el: Element, ctx: BuildContext): Particle {
         const refAttr = this.readQName(el, "ref");
-        const inlineType = this.readQName(el, "type") ? null : this.buildInlineType(el, ctx);
+        const typeRef = refAttr ? null : this.readQName(el, "type");
+        const inlineType = refAttr || typeRef ? null : this.buildInlineType(el, ctx);
         const decl: ElementDeclaration = {
             kind: "element",
             scope: "local",
-            name: this.localElementName(el, ctx),
-            typeRef: this.readQName(el, "type"),
+            // A ref particle's identity is the referenced QName; its type is
+            // resolved in pass 2 to the referenced global declaration (CHK-017).
+            name: refAttr
+                ? { namespaceURI: refAttr.namespaceURI, localName: refAttr.localName }
+                : this.localElementName(el, ctx),
+            typeRef,
             type: inlineType,
             nillable: el.getAttribute("nillable") === "true",
+            ref: refAttr,
         };
-        if (refAttr) {
-            ctx.report({
-                severity: "warning",
-                code: "UNSUPPORTED_FEATURE",
-                message: `Element references (ref="${displayQName(refAttr)}") are not supported yet; compiled as a local declaration.`,
-                location: locationOf(el),
-                phase: "schema-compilation",
-            });
-            this.trackRef(ctx, el, refAttr);
-            // Best-effort: give the local stand-in the referenced element's identity so
-            // content matching still works for the resolved case.
-            (decl as { name: QName }).name = { namespaceURI: refAttr.namespaceURI, localName: refAttr.localName };
-            (decl as { type: TypeDefinition | null }).type = null;
-            (decl as { typeRef: QName | null }).typeRef = null;
-        }
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
         return this.wrapParticle(el, decl);
     }
 
     private buildAttributeUse(el: Element, ctx: BuildContext): AttributeUse | null {
-        const name = this.localAttributeName(el, ctx);
-        const typeRef = this.readQName(el, "type");
+        const refAttr = this.readQName(el, "ref");
+        const typeRef = refAttr ? null : this.readQName(el, "type");
+        // A ref attribute use's identity is the referenced QName; its type is
+        // resolved in pass 2 to the referenced global declaration (CHK-017).
+        const name = refAttr
+            ? { namespaceURI: refAttr.namespaceURI, localName: refAttr.localName }
+            : this.localAttributeName(el, ctx);
         const decl: AttributeDeclaration = {
             kind: "attribute",
             name,
             typeRef,
             type: null,
+            ref: refAttr,
         };
-        if (el.getAttribute("ref")) {
-            ctx.report({
-                severity: "warning",
-                code: "UNSUPPORTED_FEATURE",
-                message: "Attribute references (ref=) are not supported yet.",
-                location: locationOf(el),
-                phase: "schema-compilation",
-            });
-        }
         ctx.allAttributes.push(decl);
         const use = el.getAttribute("use") ?? "optional";
         return {
@@ -572,6 +589,44 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 });
             }
         }
+
+        // Pass 2b — resolve element references (ref=) to their global
+        // declarations, carrying the referenced declaration's type onto the
+        // particle (CHK-017). Unresolved references are compile errors.
+        for (const decl of ctx.allElements) {
+            if (!decl.ref) continue;
+            const resolved = this.lookupElement(grammars, decl.ref);
+            if (resolved) {
+                (decl as { type: TypeDefinition | null }).type = resolved.type;
+                (decl as { nillable: boolean }).nillable = resolved.nillable;
+            } else {
+                ctx.report({
+                    severity: "error",
+                    code: "UNRESOLVED_REFERENCE",
+                    message: `Element reference ${displayQName(decl.ref)} does not resolve to a global element declaration.`,
+                    location: ctx.locations.get(decl) ?? { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // Pass 2c — resolve attribute references (ref=) to their global
+        // declarations (CHK-017).
+        for (const attr of ctx.allAttributes) {
+            if (!attr.ref) continue;
+            const resolved = this.lookupAttribute(grammars, attr.ref);
+            if (resolved) {
+                (attr as { type: SimpleTypeDefinition | null }).type = resolved.type;
+            } else {
+                ctx.report({
+                    severity: "error",
+                    code: "UNRESOLVED_REFERENCE",
+                    message: `Attribute reference ${displayQName(attr.ref)} does not resolve to a global attribute declaration.`,
+                    location: { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
+        }
     }
 
     private lookupType(grammars: Map<string, CompiledGrammar>, q: QName): TypeDefinition | null {
@@ -580,6 +635,10 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
     private lookupElement(grammars: Map<string, CompiledGrammar>, q: QName): ElementDeclaration | null {
         return grammars.get(namespaceKey(q.namespaceURI))?.elements.get(q.localName) ?? null;
+    }
+
+    private lookupAttribute(grammars: Map<string, CompiledGrammar>, q: QName): AttributeDeclaration | null {
+        return grammars.get(namespaceKey(q.namespaceURI))?.attributes.get(q.localName) ?? null;
     }
 
     // -----------------------------------------------------------------------

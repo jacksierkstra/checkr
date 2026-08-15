@@ -170,6 +170,7 @@ types.set("anyType", builtinAnyType());
 export const BUILTIN_GRAMMAR: CompiledGrammar = deepFreeze({
     namespaceURI: NAMESPACE_XSD,
     elements: new Map(),
+    attributes: new Map(),
     types,
 });
 

@@ -344,3 +344,74 @@ describe("list and union types end-to-end (CHK-016)", () => {
     });
 
 });
+
+// ---------------------------------------------------------------------------
+// QName resolution — namespaced schema with qualified children (CHK-017)
+// ---------------------------------------------------------------------------
+
+describe("namespaced schema with qualified children end-to-end (CHK-017)", () => {
+
+    // The benchmark books fixture, but with elementFormDefault=qualified so
+    // every local element is namespace-qualified and must match by namespace.
+    const BOOKS_XSD_QUALIFIED = `
+        <xsd:schema xmlns:xsd="${NAMESPACE_XSD}"
+        targetNamespace="urn:books"
+        xmlns:bks="urn:books"
+        elementFormDefault="qualified">
+            <xsd:element name="books" type="bks:BooksForm"/>
+            <xsd:complexType name="BooksForm">
+                <xsd:sequence>
+                    <xsd:element name="book" type="bks:BookForm" minOccurs="0" maxOccurs="unbounded"/>
+                </xsd:sequence>
+            </xsd:complexType>
+            <xsd:complexType name="BookForm">
+                <xsd:sequence>
+                    <xsd:element name="author" type="xsd:string"/>
+                    <xsd:element name="title" type="xsd:string"/>
+                    <xsd:element name="price" type="xsd:float"/>
+                </xsd:sequence>
+                <xsd:attribute name="id" type="xsd:string"/>
+            </xsd:complexType>
+        </xsd:schema>
+    `;
+
+    const VALID = `
+        <x:books xmlns:x="urn:books" xmlns="urn:books">
+            <book id="b1"><author>A</author><title>T</title><price>44.95</price></book>
+            <book id="b2"><author>B</author><title>T2</title><price>1.5</price></book>
+        </x:books>
+    `;
+
+    const MISSING_TITLE = `
+        <x:books xmlns:x="urn:books" xmlns="urn:books">
+            <book id="b1"><author>A</author><price>44.95</price></book>
+        </x:books>
+    `;
+
+    it("validates a namespaced instance with qualified children end-to-end", () => {
+        const schema = compileSchema(BOOKS_XSD_QUALIFIED);
+        const { valid, errors } = validate(VALID, schema);
+        expect(valid).toBe(true);
+        expect(errors).toHaveLength(0);
+    });
+
+    it("rejects a namespaced instance missing a required qualified child", () => {
+        const schema = compileSchema(BOOKS_XSD_QUALIFIED);
+        const { valid, errors } = validate(MISSING_TITLE, schema);
+        expect(valid).toBe(false);
+        expect(errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT" && e.message.includes("title"))).toBe(true);
+    });
+
+    it("rejects a qualified child that is pushed out of the namespace", () => {
+        const schema = compileSchema(BOOKS_XSD_QUALIFIED);
+        const xml = `
+            <x:books xmlns:x="urn:books">
+                <book xmlns="" id="b1"><author xmlns="urn:books">A</author><title xmlns="urn:books">T</title><price xmlns="urn:books">44.95</price></book>
+            </x:books>
+        `;
+        const { valid, errors } = validate(xml, schema);
+        expect(valid).toBe(false);
+        expect(errors.some((e) => e.code === "UNEXPECTED_ELEMENT" && e.message.includes("book"))).toBe(true);
+    });
+
+});

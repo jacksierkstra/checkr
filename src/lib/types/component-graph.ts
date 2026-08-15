@@ -110,6 +110,13 @@ export interface ElementDeclaration {
     /** The resolved type definition (set at compile time). */
     readonly type: TypeDefinition | null;
     readonly nillable: boolean;
+    /**
+     * For a local element declaration produced by `<xs:element ref="…">`,
+     * the QName of the referenced global element declaration. Resolved at
+     * compile time (pass 2) to point the particle's term to the global
+     * declaration. Null for non-ref declarations (CHK-017).
+     */
+    readonly ref: QName | null;
 }
 
 export interface AttributeDeclaration {
@@ -117,6 +124,12 @@ export interface AttributeDeclaration {
     readonly name: QName;
     readonly typeRef: QName | null;
     readonly type: SimpleTypeDefinition | null;
+    /**
+     * For an attribute declaration produced by `<xs:attribute ref="…">`,
+     * the QName of the referenced global attribute declaration. Resolved at
+     * compile time (pass 2). Null for non-ref declarations (CHK-017).
+     */
+    readonly ref: QName | null;
 }
 
 export interface AttributeUse {
@@ -157,6 +170,7 @@ export type ParticleTerm = ElementDeclaration | ModelGroup | Wildcard;
 export interface CompiledGrammar {
     readonly namespaceURI: string | null;
     readonly elements: ReadonlyMap<string, ElementDeclaration>;
+    readonly attributes: ReadonlyMap<string, AttributeDeclaration>;
     readonly types: ReadonlyMap<string, TypeDefinition>;
 }
 

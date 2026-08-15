@@ -1039,4 +1039,178 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("element and attribute references (CHK-017)", () => {
+
+        it("validates instance elements via a ref= to a global declaration", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="child"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="child" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><child>x</child></root>`, schema).valid).toBe(true);
+            // A ref'd element is not anyType — its declared type is enforced.
+            const { valid, errors } = check(`<root><child><nested/></child></root>`, schema);
+            expect(valid).toBe(false);
+            expect(errors.some((e) => e.code === "INVALID_ELEMENT_CONTENT")).toBe(true);
+            // A missing required ref'd particle is reported.
+            const missing = check(`<root></root>`, schema);
+            expect(missing.valid).toBe(false);
+            expect(missing.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT")).toBe(true);
+        });
+
+        it("enforces the referenced element's type on instance values", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="count"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="count" type="xsd:integer"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><count>42</count></root>`, schema).valid).toBe(true);
+            expect(check(`<root><count>not-an-int</count></root>`, schema).valid).toBe(false);
+        });
+
+        it("honors occurrence bounds on the ref particle itself", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="item" minOccurs="0" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="item" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><item>a</item><item>b</item><item>c</item></root>`, schema).valid).toBe(true);
+            expect(check(`<root></root>`, schema).valid).toBe(true);
+        });
+
+        it("validates attributes via a ref= to a global declaration", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attribute name="size" type="xsd:string"/>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute ref="size" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root size="m"/>`, schema).valid).toBe(true);
+            const r1 = check(`<root/>`, schema);
+            expect(r1.valid).toBe(false);
+            expect(r1.errors.some((e) => e.code === "MISSING_REQUIRED_ATTRIBUTE")).toBe(true);
+            // Undeclared attributes are still rejected alongside the ref'd one.
+            expect(check(`<root size="m" other="x"/>`, schema).valid).toBe(false);
+        });
+
+        it("enforces the referenced attribute's type on instance values", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attribute name="count" type="xsd:integer"/>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute ref="count"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root count="7"/>`, schema).valid).toBe(true);
+            expect(check(`<root count="abc"/>`, schema).valid).toBe(false);
+        });
+
+    });
+
+    describe("namespace-aware matching (CHK-017)", () => {
+
+        it("matches qualified local elements by namespace under elementFormDefault=qualified", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:books" xmlns:b="urn:books" elementFormDefault="qualified">
+                    <xsd:element name="books" type="b:BooksType"/>
+                    <xsd:complexType name="BooksType">
+                        <xsd:sequence>
+                            <xsd:element name="book" type="b:BookType" minOccurs="0" maxOccurs="unbounded"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="BookType">
+                        <xsd:sequence>
+                            <xsd:element name="title" type="xsd:string"/>
+                        </xsd:sequence>
+                        <xsd:attribute name="id" type="xsd:string"/>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // Qualified children (default namespace = urn:books) validate.
+            const valid = `<b:books xmlns:b="urn:books" xmlns="urn:books"><book id="b1"><title>T</title></book></b:books>`;
+            expect(check(valid, schema).valid).toBe(true);
+            // An element explicitly pushed out of the namespace is rejected.
+            const invalid = `<b:books xmlns:b="urn:books"><book xmlns="" id="b1"><title>T</title></book></b:books>`;
+            const { valid: v, errors } = check(invalid, schema);
+            expect(v).toBe(false);
+            expect(errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+        });
+
+        it("matches ref'd global elements across prefixes in the same namespace", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:co" xmlns:c="urn:co">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="c:child"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="child" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<c:root xmlns:c="urn:co"><c:child>hi</c:child></c:root>`, schema).valid).toBe(true);
+            // The same local name in a different namespace does not match.
+            const { valid, errors } = check(`<c:root xmlns:c="urn:co"><x:child xmlns:x="urn:other">hi</x:child></c:root>`, schema);
+            expect(valid).toBe(false);
+            expect(errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+        });
+
+        it("matches a qualified global attribute ref by namespace (attributes never take a default namespace)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:co" xmlns:c="urn:co">
+                    <xsd:attribute name="id" type="xsd:string"/>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute ref="c:id"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // The global attribute is in urn:co, so the instance must prefix it.
+            expect(check(`<c:root xmlns:c="urn:co" c:id="a"/>`, schema).valid).toBe(true);
+            // An unprefixed instance attribute is in no namespace and does not match.
+            const { valid, errors } = check(`<c:root xmlns:c="urn:co" id="a"/>`, schema);
+            expect(valid).toBe(false);
+            expect(errors.some((e) => e.code === "UNDECLARED_ATTRIBUTE")).toBe(true);
+        });
+
+    });
+
 });

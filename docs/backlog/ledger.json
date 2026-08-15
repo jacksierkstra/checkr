@@ -150,8 +150,8 @@
     {
       "id": "CHK-017",
       "title": "QName resolution and namespace-correct declarations",
-      "file": "docs/backlog/active/CHK-017-qname-resolution-namespace-declarations.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-017-qname-resolution-namespace-declarations.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

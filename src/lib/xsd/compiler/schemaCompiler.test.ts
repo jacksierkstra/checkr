@@ -506,6 +506,185 @@ describe("SchemaCompiler — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("QName resolution and refs (CHK-017)", () => {
+
+        it("registers global attribute declarations in the grammar keyed by QName", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" targetNamespace="urn:attrs">
+                    <xsd:attribute name="id" type="xsd:string"/>
+                    <xsd:attribute name="count" type="xsd:integer"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const grammar = schema.grammars.get("urn:attrs")!;
+            expect(grammar.attributes.get("id")).toBeDefined();
+            expect(grammar.attributes.get("count")).toBeDefined();
+            expect(grammar.attributes.get("id")!.name).toEqual({ namespaceURI: "urn:attrs", localName: "id" });
+        });
+
+        it("resolves a local element ref= to the referenced global declaration at compile time", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="child"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="child" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type as ComplexTypeDefinition;
+            const group = complex.particle!.term;
+            if (group.kind !== "sequence") throw new Error("expected a sequence");
+            const term = group.particles[0]!.term as ElementDeclaration;
+            // The ref particle carries the referenced QName and resolves to the
+            // global declaration's type (xsd:string), not anyType.
+            expect(term.ref).toEqual({ namespaceURI: null, localName: "child" });
+            expect(term.name).toEqual({ namespaceURI: null, localName: "child" });
+            expect(term.type?.kind).toBe("simple-type");
+            expect((term.type as { name: { localName: string } | null }).name?.localName).toBe("string");
+        });
+
+        it("resolves forward ref= references to global elements declared later", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="later"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="later" type="xsd:integer"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type as ComplexTypeDefinition;
+            const group = complex.particle!.term;
+            if (group.kind !== "sequence") throw new Error("expected a sequence");
+            const term = group.particles[0]!.term as ElementDeclaration;
+            expect((term.type as { name: { localName: string } | null }).name?.localName).toBe("integer");
+        });
+
+        it("resolves a ref= written with an explicit prefix bound to the target namespace", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" xmlns:c="urn:co" targetNamespace="urn:co">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="c:child"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:element name="child" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("urn:co")!.elements.get("root")!;
+            const complex = root.type as ComplexTypeDefinition;
+            const group = complex.particle!.term;
+            if (group.kind !== "sequence") throw new Error("expected a sequence");
+            const term = group.particles[0]!.term as ElementDeclaration;
+            expect(term.ref).toEqual({ namespaceURI: "urn:co", localName: "child" });
+            expect(term.type?.kind).toBe("simple-type");
+        });
+
+        it("resolves an attribute ref= to the referenced global declaration", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attribute name="lang" type="xsd:string"/>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute ref="lang" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type as ComplexTypeDefinition;
+            const use = complex.attributeUses[0]!;
+            expect(use.required).toBe(true);
+            expect(use.declaration.ref).toEqual({ namespaceURI: null, localName: "lang" });
+            expect(use.declaration.type?.kind).toBe("simple-type");
+            expect((use.declaration.type as { name: { localName: string } | null }).name?.localName).toBe("string");
+        });
+
+        it("reports an unresolved element ref= as a compile error", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="MissingElement"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "UNRESOLVED_REFERENCE" && e.message.includes("MissingElement"))).toBe(true);
+        });
+
+        it("reports an unresolved attribute ref= as a compile error", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute ref="MissingAttr"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "UNRESOLVED_REFERENCE" && e.message.includes("MissingAttr"))).toBe(true);
+        });
+
+        it("type= reference resolution carries the full type content (children, attributes, facets)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Size">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:enumeration value="small"/>
+                            <xsd:enumeration value="large"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:complexType name="Item">
+                        <xsd:sequence>
+                            <xsd:element name="name" type="xsd:string"/>
+                        </xsd:sequence>
+                        <xsd:attribute name="size" type="Size"/>
+                    </xsd:complexType>
+                    <xsd:element name="item" type="Item"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const item = schema.grammars.get("")!.elements.get("item")!;
+            const complex = item.type as ComplexTypeDefinition;
+            expect(complex.contentType).toBe("element-only");
+            // Children carried through the type reference.
+            const group = complex.particle!.term;
+            if (group.kind !== "sequence") throw new Error("expected a sequence");
+            expect(group.particles).toHaveLength(1);
+            // Attributes carried through the type reference, with facets on
+            // the attribute's own simple type (not dropped, per the gap analysis).
+            const use = complex.attributeUses[0]!;
+            expect(use.declaration.name.localName).toBe("size");
+            const enums = use.declaration.type!.effectiveFacets.filter((f) => f.kind === "enumeration");
+            expect(enums).toHaveLength(2);
+        });
+
+    });
+
     describe("list and union types (CHK-016)", () => {
 
         it("compiles a list type and resolves its item type definition", () => {
