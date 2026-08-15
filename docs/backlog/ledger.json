@@ -204,8 +204,8 @@
     {
       "id": "CHK-023",
       "title": "Substitution groups and declaration attributes",
-      "file": "docs/backlog/active/CHK-023-substitution-groups-declaration-attributes.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-023-substitution-groups-declaration-attributes.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

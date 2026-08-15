@@ -81,6 +81,13 @@ export interface SimpleTypeDefinition {
      * enumeration is the own one when present, else the inherited one.
      */
     readonly effectiveFacets: ReadonlyArray<Facet>;
+    /**
+     * The simple type's final attribute (XSD 1.0 Part 2 §3.3.2, CHK-023).
+     * A whitespace-separated list of 'list' | 'union' | 'restriction' | '#all',
+     * or empty string when no final is declared (schema finalDefault applies).
+     * Controls which derivation kinds are disallowed with this type as base.
+     */
+    readonly final: string;
 }
 
 export type ContentType = "element-only" | "simple" | "mixed" | "empty";
@@ -117,6 +124,19 @@ export interface ComplexTypeDefinition {
      * Null when the type declares (and inherits) no attribute wildcard.
      */
     readonly attributeWildcard: Wildcard | null;
+    /**
+     * Whether this complex type is abstract (XSD 1.0 §3.4.2, CHK-023): an
+     * abstract type cannot be the {type definition} of an instance element
+     * directly — only non-abstract types derived from it may be used.
+     */
+    readonly isAbstract: boolean;
+    /**
+     * The complex type's final attribute (XSD 1.0 §3.4.2, CHK-023).
+     * A whitespace-separated list of 'extension' | 'restriction' | '#all',
+     * or empty string when no final is declared (schema finalDefault applies).
+     * Controls which derivation methods are disallowed with this type as base.
+     */
+    readonly final: string;
 }
 
 export type TypeDefinition = SimpleTypeDefinition | ComplexTypeDefinition;
@@ -210,6 +230,36 @@ export interface ElementDeclaration {
      * element, in document order (CHK-022).
      */
     readonly identityConstraints: ReadonlyArray<IdentityConstraintDefinition>;
+    /**
+     * The QName of the substitution group head this element declares
+     * membership in (the `substitutionGroup` attribute, CHK-023).
+     * Null when the element is not a member of any substitution group.
+     * Resolved at compile time (pass 3) to build the substitution group
+     * hierarchy. Only meaningful for global element declarations.
+     */
+    readonly substitutionGroup: QName | null;
+    /**
+     * Whether this element declaration is abstract (cannot appear directly
+     * in an instance; must be substituted by a non-abstract member, CHK-023).
+     */
+    readonly abstract: boolean;
+    /**
+     * The element's default value constraint (XSD 1.0 §3.3.2, CHK-023).
+     * Null when no default is declared. Mutually exclusive with `fixed`.
+     */
+    readonly default: string | null;
+    /**
+     * The element's fixed value constraint (XSD 1.0 §3.3.2, CHK-023).
+     * Null when no fixed is declared. Mutually exclusive with `default`.
+     */
+    readonly fixed: string | null;
+    /**
+     * The element's block attribute (XSD 1.0 §3.3.2, CHK-023).
+     * A whitespace-separated list of 'extension', 'restriction', 'substitution',
+     * or '#all'. Empty string when no block is declared, in which case the
+     * schema's blockDefault applies (set at compile time).
+     */
+    readonly block: string;
 }
 
 export interface AttributeDeclaration {
@@ -324,6 +374,14 @@ export interface CompiledGrammar {
      * local name, for keyref @refer resolution (CHK-022).
      */
     readonly identityConstraints: ReadonlyMap<string, IdentityConstraintDefinition>;
+    /**
+     * Substitution groups keyed by head local name (XSD 1.0 §3.3.6, CHK-023).
+     * Each entry lists every member of the head's substitution group,
+     * transitively: the head itself, all elements that declare the head via
+     * `substitutionGroup`, and any further members of member-heads. Built at
+     * compile time (pass 3) from the global element declarations.
+     */
+    readonly substitutionGroups: ReadonlyMap<string, ReadonlyArray<ElementDeclaration>>;
 }
 
 export interface CompiledSchema {

@@ -7,6 +7,7 @@ import {
     ParticleTerm,
     QName,
     SimpleTypeDefinition,
+    TypeDefinition,
     Wildcard,
     qnameEqual,
     qnameKey,
@@ -123,10 +124,56 @@ export class InstanceValidatorImpl implements InstanceValidator {
         const type = decl.type;
         if (type) evaluator.nodeTypes.set(node, type);
 
-        if (type?.kind === "simple-type") {
-            this.validateSimpleContent(node, type, report);
-        } else if (type?.kind === "complex-type") {
-            this.validateComplex(node, type, schema, report, evaluator);
+        // Abstract element (XSD 1.0 §3.3.6): a declaration that is abstract
+        // cannot be satisfied by an element with the same name; it must be
+        // substituted by a non-abstract member of its substitution group.
+        if (decl.abstract) {
+            report(this.error(node, "ABSTRACT_ELEMENT",
+                `Element <${node.localName}> is abstract and cannot be instantiated directly.`));
+            // Continue validation so all errors are reported. The element is
+            // invalid regardless.
+        }
+
+        // Abstract type (XSD 1.0 §3.4.2): an abstract complex type cannot be
+        // the {type definition} of an instance element (without xsi:type).
+        if (type?.kind === "complex-type" && type.isAbstract) {
+            report(this.error(node, "ABSTRACT_TYPE",
+                `Element <${node.localName}> uses abstract type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}.`));
+        }
+
+        // xsi:nil handling (XSD 1.0 §3.3.6, CHK-023).
+        const nil = this.xsiNilRequested(node);
+        if (nil) {
+            if (!decl.nillable) {
+                report(this.error(node, "INVALID_NIL",
+                    `Element <${node.localName}> has xsi:nil="true" but is not declared nillable.`));
+            }
+            if (decl.fixed !== null) {
+                report(this.error(node, "FIXED_VALUE_VIOLATION",
+                    `Element <${node.localName}> is nilled but has a fixed value constraint of '${decl.fixed}'.`));
+            }
+            const elementChildren = childElements(node);
+            if (elementChildren.length > 0) {
+                report(this.error(node, "INVALID_NIL",
+                    `Element <${node.localName}> is nilled but has child elements.`));
+            }
+            if (this.nonWhitespaceText(node)) {
+                report(this.error(node, "INVALID_NIL",
+                    `Element <${node.localName}> is nilled but has non-whitespace text content.`));
+            }
+            // Attributes are still validated for nilled elements.
+            if (type?.kind === "complex-type") {
+                this.validateAttributes(node, type, schema, report, evaluator);
+            }
+        } else {
+            if (type?.kind === "simple-type") {
+                this.validateSimpleContent(node, type, report);
+            } else if (type?.kind === "complex-type") {
+                this.validateComplex(node, type, schema, report, evaluator);
+            }
+
+            // Fixed value enforcement (XSD 1.0 §3.3.6, CHK-023).
+            this.enforceFixedValue(node, decl, type, report);
         }
 
         // Identity constraints are evaluated after the element's content and
@@ -362,37 +409,46 @@ export class InstanceValidatorImpl implements InstanceValidator {
     ): number {
         const term = particle.term;
 
-        // Element term: check if next child matches by name
+        // Element term: check if the next child matches by name or via the
+        // substitution group of the head (CHK-023).
         if (term.kind === "element") {
+            const head = this.effectiveDeclaration(term, schema);
             if (startIdx >= children.length) {
                 if (particle.minOccurs > 0) {
                     report(this.error(node, "MISSING_REQUIRED_ELEMENT",
-                        `Element ${displayQName(term.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs 0.`));
+                        `Element ${displayQName(head.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs 0.`));
                 }
                 return 0;
             }
             const child = children[startIdx]!;
-            if (!qnameEqual(
-                { namespaceURI: child.namespaceURI, localName: child.localName ?? "" },
-                term.name
-            )) {
+            const childQName = { namespaceURI: child.namespaceURI, localName: child.localName ?? "" };
+            const exact = qnameEqual(childQName, head.name);
+            const member = exact ? null : this.substitutionMemberFor(schema, head, childQName);
+            if (!exact && member === null) {
                 if (particle.minOccurs > 0) {
                     report(this.error(node, "MISSING_REQUIRED_ELEMENT",
-                        `Element ${displayQName(term.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs 0.`));
+                        `Element ${displayQName(head.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs 0.`));
                 }
+                return 0;
+            }
+            if (!exact && member !== null && this.blockIncludes(head.block, "substitution")) {
+                // The head blocks substitution: the member does not match.
+                report(this.error(child, "BLOCKED_SUBSTITUTION",
+                    `Element <${child.localName}> is a member of the substitution group of ${displayQName(head.name)}, which blocks substitution.`));
                 return 0;
             }
             let count = 0;
             let idx = startIdx;
             while (idx < children.length) {
                 const c = children[idx]!;
-                if (!qnameEqual(
-                    { namespaceURI: c.namespaceURI, localName: c.localName ?? "" },
-                    term.name
-                )) break;
+                const cQName = { namespaceURI: c.namespaceURI, localName: c.localName ?? "" };
+                const cExact = qnameEqual(cQName, head.name);
+                const cMember = cExact ? null : this.substitutionMemberFor(schema, head, cQName);
+                if (!cExact && cMember === null) break;
+                if (!cExact && this.blockIncludes(head.block, "substitution")) break;
                 count++;
                 idx++;
-                this.validateElement(c, term, schema, report, evaluator);
+                this.validateElement(c, cExact ? head : cMember!, schema, report, evaluator);
                 if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
             }
             return idx - startIdx;
@@ -484,7 +540,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
 
         const firstChild = children[0]!;
         for (const particle of particles) {
-            if (!this.matches(firstChild, particle.term)) continue;
+            if (!this.matches(firstChild, particle.term, schema)) continue;
 
             // Found a matching alternative — consume children matching this particle
             const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report, evaluator);
@@ -515,7 +571,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             const matchingIndices: number[] = [];
             for (let i = 0; i < children.length; i++) {
                 if (matched.has(i)) continue;
-                if (this.matches(children[i]!, particle.term)) {
+                if (this.matches(children[i]!, particle.term, schema)) {
                     matchingIndices.push(i);
                 }
             }
@@ -532,7 +588,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                     const idx = matchingIndices[k]!;
                     matched.add(idx);
                     if (particle.term.kind === "element") {
-                        this.validateElement(children[idx]!, particle.term, schema, report, evaluator);
+                        this.validateElement(children[idx]!, this.effectiveDeclaration(particle.term, schema), schema, report, evaluator);
                     } else if (particle.term.kind === "wildcard") {
                         this.validateWildcardElement(children[idx]!, particle.term, schema, report, evaluator);
                     }
@@ -548,17 +604,25 @@ export class InstanceValidatorImpl implements InstanceValidator {
      * For element particles, validates the element instance.
      * For group particles, dispatches to the appropriate handler.
      */
-    private matches(child: Element, term: ParticleTerm): boolean {
+    /**
+     * Whether the child element can satisfy the particle term (CHK-023 adds
+     * substitution-group matching: a member of the term's substitution group
+     * matches in place of the head, unless the head's block attribute forbids
+     * substitution). Abstract heads still match — the abstract violation is
+     * reported when the element is validated against the declaration.
+     */
+    private matches(child: Element, term: ParticleTerm, schema: CompiledSchema): boolean {
         if (term.kind === "element") {
-            return qnameEqual(
-                { namespaceURI: child.namespaceURI, localName: child.localName ?? "" },
-                term.name
-            );
+            const head = this.effectiveDeclaration(term, schema);
+            const childQName = { namespaceURI: child.namespaceURI, localName: child.localName ?? "" };
+            if (qnameEqual(childQName, head.name)) return true;
+            if (this.blockIncludes(head.block, "substitution")) return false;
+            return this.substitutionMemberFor(schema, head, childQName) !== null;
         }
         if (term.kind === "sequence" || term.kind === "choice" || term.kind === "all") {
             // For a group term, check if the child matches any of the group's particles
             for (const p of term.particles) {
-                if (this.matches(child, p.term)) return true;
+                if (this.matches(child, p.term, schema)) return true;
             }
             return false;
         }
@@ -808,5 +872,88 @@ export class InstanceValidatorImpl implements InstanceValidator {
 
     private location(node: { lineNumber?: number; columnNumber?: number }): SchemaLocation {
         return locationOf(node);
+    }
+
+    // -----------------------------------------------------------------------
+    // Declaration-attribute helpers (CHK-023)
+    // -----------------------------------------------------------------------
+
+    /**
+     * For a particle term that is an element reference (`ref` is set), resolve
+     * to the global declaration. For non-ref terms, return the term itself.
+     */
+    private effectiveDeclaration(term: ElementDeclaration, schema: CompiledSchema): ElementDeclaration {
+        if (term.ref) {
+            const found = schema.grammars.get(namespaceKey(term.ref.namespaceURI))?.elements.get(term.ref.localName);
+            return found ?? term;
+        }
+        return term;
+    }
+
+    /**
+     * Look up whether `childQName` is a member of the substitution group of
+     * `head` (the head itself is always a member; this method returns null
+     * for the head itself — the caller handles exact matches separately).
+     * Returns the member declaration or null.
+     */
+    private substitutionMemberFor(
+        schema: CompiledSchema,
+        head: ElementDeclaration,
+        childQName: { namespaceURI: string | null; localName: string },
+    ): ElementDeclaration | null {
+        const group = schema.grammars.get(namespaceKey(head.name.namespaceURI))?.substitutionGroups.get(head.name.localName);
+        if (!group) return null;
+        return group.find((m) => m !== head && qnameEqual(m.name, childQName)) ?? null;
+    }
+
+    /** Whether the token list includes a specific token. */
+    private blockIncludes(block: string, token: string): boolean {
+        return block.split(/\s+/).includes(token);
+    }
+
+    /**
+     * Whether the instance element has xsi:nil set to "true" or "1"
+     * (XSD 1.0 §3.3.6). Returns false for any other value (including
+     * absent, "false", "0", or a non-boolean value).
+     */
+    private xsiNilRequested(node: Element): boolean {
+        const value = node.getAttributeNS(NAMESPACE_XSI, "nil");
+        return value === "true" || value === "1";
+    }
+
+    /**
+     * Enforce a fixed value constraint (XSD 1.0 §3.3.6, CHK-023): the
+     * element's actual value (after whitespace normalization of the type)
+     * must equal the fixed value. Only applicable to simple content.
+     */
+    private enforceFixedValue(
+        node: Element,
+        decl: ElementDeclaration,
+        type: TypeDefinition | null,
+        report: (error: SchemaError) => void,
+    ): void {
+        if (decl.fixed === null) return;
+
+        let raw: string;
+        let simpleType: SimpleTypeDefinition | null = null;
+
+        if (type?.kind === "simple-type") {
+            raw = this.textContent(node);
+            simpleType = type;
+        } else if (type?.kind === "complex-type" && type.contentType === "simple" && type.simpleType) {
+            raw = this.textContent(node);
+            simpleType = type.simpleType;
+        } else {
+            // No simple content — the compiler already reported a schema
+            // error (value constraint on non-simple-content type).
+            return;
+        }
+
+        const normalized = normalizeWhiteSpace(raw, simpleType!.whiteSpace);
+        const fixedNormalized = normalizeWhiteSpace(decl.fixed, simpleType!.whiteSpace);
+        if (normalized !== fixedNormalized) {
+            report(this.error(node, "FIXED_VALUE_VIOLATION",
+                `Element <${node.localName}> has value '${normalized}' but its fixed value constraint is '${decl.fixed}'.`));
+        }
     }
 }

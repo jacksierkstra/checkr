@@ -73,7 +73,19 @@ export type SchemaErrorCode =
     /** A key field's value node is an element assessed against a nillable declaration with xsi:nil (CHK-022). */
     | "KEY_FIELD_NIL"
     /** A keyref targets a key-sequence that has no entry in the referenced key/unique node table (CHK-022). */
-    | "KEYREF_VIOLATION";
+    | "KEYREF_VIOLATION"
+    /** An abstract element declaration is instantiated directly (CHK-023). */
+    | "ABSTRACT_ELEMENT"
+    /** An element is assessed against an abstract type without an xsi:type override (CHK-023). */
+    | "ABSTRACT_TYPE"
+    /** A substitution-group member is blocked by the head's block attribute or the schema's blockDefault (CHK-023). */
+    | "BLOCKED_SUBSTITUTION"
+    /** An element has xsi:nil=true but is not nillable, or a nilled element has content (CHK-023). */
+    | "INVALID_NIL"
+    /** An element's value does not equal its fixed value constraint (CHK-023). */
+    | "FIXED_VALUE_VIOLATION"
+    /** A type marked final (or the schema's finalDefault) forbids the derivation method used with it as base (CHK-023). */
+    | "INVALID_FINAL";
 
 export interface SchemaError {
     severity: SchemaSeverity;

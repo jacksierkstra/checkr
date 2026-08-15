@@ -435,7 +435,7 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
         it("ignores xmlns, xml: and xsi: attributes", () => {
             const schema = compile(ATTR_XSD);
-            const xml = `<root id="a" code="b" xmlns:q="urn:q" xml:lang="en" xmlns:xsi="${NAMESPACE_XSD.replace("Schema", "Schema-instance")}" xsi:nil="true"/>`;
+            const xml = `<root id="a" code="b" xmlns:q="urn:q" xml:lang="en" xmlns:xsi="${NAMESPACE_XSD.replace("Schema", "Schema-instance")}" xsi:nil="false"/>`;
             expect(check(xml, schema).valid).toBe(true);
         });
 

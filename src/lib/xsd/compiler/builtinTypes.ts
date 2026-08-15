@@ -125,6 +125,9 @@ for (const def of BUILTIN_DEFS) {
         baseType: null,
         whiteSpace: def.whiteSpace,
         effectiveFacets: def.facets ?? [],
+        // The built-in datatypes do not block user derivations (restriction,
+        // list, and union of built-ins are all legal; CHK-023).
+        final: "",
     };
     byName.set(def.localName, st);
 }
@@ -159,6 +162,8 @@ function builtinAnyType(): ComplexTypeDefinition {
         baseType: null,
         derivationMethod: null,
         attributeWildcard: null,
+        isAbstract: false,
+        final: "",
     };
 }
 
@@ -177,6 +182,7 @@ export const BUILTIN_GRAMMAR: CompiledGrammar = deepFreeze({
     modelGroups: new Map(),
     attributeGroups: new Map(),
     identityConstraints: new Map(),
+    substitutionGroups: new Map(),
     types,
 });
 

@@ -48,7 +48,7 @@ function builtin(localName: string): SimpleTypeDefinition {
         facets: [],
         baseType: null,
         whiteSpace: "collapse",
-        effectiveFacets: [],
+        effectiveFacets: [], final: "",
     };
 }
 
@@ -64,7 +64,7 @@ function derivedSt(localName: string, baseType: SimpleTypeDefinition | null): Si
         facets: [],
         baseType,
         whiteSpace: baseType?.whiteSpace ?? "collapse",
-        effectiveFacets: [],
+        effectiveFacets: [], final: "",
     };
 }
 

@@ -47,7 +47,7 @@ describe("facet framework (CHK-010)", () => {
     describe("facet inheritance down restriction chains", () => {
 
         function st(name: string, facets: ReadonlyArray<Facet>, base: SimpleTypeDefinition | null = null, ws: WhiteSpaceValue = "preserve", eff: ReadonlyArray<Facet> = facets): SimpleTypeDefinition {
-            return { kind: "simple-type", name: { namespaceURI: null, localName: name }, variety: "atomic", itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets, baseType: base, whiteSpace: ws, effectiveFacets: eff };
+            return { kind: "simple-type", name: { namespaceURI: null, localName: name }, variety: "atomic", itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets, baseType: base, whiteSpace: ws, effectiveFacets: eff, final: "" };
         }
 
         it("derived type overrides base facet of the same kind", () => {
@@ -156,7 +156,7 @@ describe("facet framework (CHK-010)", () => {
                 facets: [],
                 baseType: null,
                 whiteSpace: "collapse",
-                effectiveFacets: [],
+                effectiveFacets: [], final: "",
             };
             // Without type: skipped
             expect(violations("0", [{ kind: "minInclusive", value: "1" }])).toHaveLength(0);
@@ -178,7 +178,7 @@ describe("facet framework (CHK-010)", () => {
                 facets: [],
                 baseType: null,
                 whiteSpace: "collapse",
-                effectiveFacets: [],
+                effectiveFacets: [], final: "",
             };
             expect(violations("123", [{ kind: "totalDigits", value: "3" }], decimalType)).toHaveLength(0);
             expect(violations("1234", [{ kind: "totalDigits", value: "3" }], decimalType)).toHaveLength(1);
@@ -196,7 +196,7 @@ describe("facet framework (CHK-010)", () => {
                 facets: [],
                 baseType: null,
                 whiteSpace: "collapse",
-                effectiveFacets: [],
+                effectiveFacets: [], final: "",
             };
             expect(violations("1.23", [{ kind: "fractionDigits", value: "2" }], decimalType)).toHaveLength(0);
             expect(violations("1.234", [{ kind: "fractionDigits", value: "2" }], decimalType)).toHaveLength(1);
@@ -220,7 +220,7 @@ describe("list-aware facet semantics (CHK-016)", () => {
             facets: [],
             baseType: null,
             whiteSpace,
-            effectiveFacets: [],
+            effectiveFacets: [], final: "",
         };
     }
 

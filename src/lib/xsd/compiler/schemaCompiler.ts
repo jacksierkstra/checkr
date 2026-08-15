@@ -68,6 +68,18 @@ interface BuildContext {
     targetNamespace: string | null;
     elementFormDefault: boolean;
     attributeFormDefault: boolean;
+    /**
+     * The schema's blockDefault (XSD 1.0 §3.3.2), normalized to the token
+     * list {extension, restriction, substitution} (an explicit #all expands).
+     * Applies to element declarations without an explicit block attribute.
+     */
+    blockDefault: string;
+    /**
+     * The schema's finalDefault (XSD 1.0 §3.4.2), normalized with the union
+     * of the complex and simple type token sets. Each type kind filters it to
+     * its own tokens when it has no explicit final attribute.
+     */
+    finalDefault: string;
     /** Mutable during pass 1; frozen as part of the final CompiledSchema. */
     grammar: MutableGrammar;
     /** Every element declaration built during pass 1, for pass 2 resolution. */
@@ -120,6 +132,15 @@ interface BuildContext {
 /** Limit constant for `unbounded`. */
 const UNBOUNDED = "unbounded";
 
+/** Legal tokens of an element declaration's block attribute (XSD 1.0 §3.3.2). */
+const BLOCK_TOKENS = ["extension", "restriction", "substitution"];
+
+/** Legal tokens of a complex type's final attribute (XSD 1.0 §3.4.2). */
+const COMPLEX_FINAL_TOKENS = ["extension", "restriction"];
+
+/** Legal tokens of a simple type's final attribute (XSD 1.0 Part 2 §3.3.2). */
+const SIMPLE_FINAL_TOKENS = ["list", "union", "restriction"];
+
 interface MutableGrammar {
     namespaceURI: string | null;
     elements: Map<string, ElementDeclaration>;
@@ -128,6 +149,7 @@ interface MutableGrammar {
     modelGroups: Map<string, ModelGroupDefinition>;
     attributeGroups: Map<string, AttributeGroupDefinition>;
     identityConstraints: Map<string, IdentityConstraintDefinition>;
+    substitutionGroups: Map<string, ElementDeclaration[]>;
 }
 
 /**
@@ -167,6 +189,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             targetNamespace: root.getAttribute("targetNamespace") || null,
             elementFormDefault: root.getAttribute("elementFormDefault") === "qualified",
             attributeFormDefault: root.getAttribute("attributeFormDefault") === "qualified",
+            blockDefault: this.normalizeTokens(root.getAttribute("blockDefault"), "", BLOCK_TOKENS),
+            finalDefault: this.normalizeTokens(root.getAttribute("finalDefault"), "", [...COMPLEX_FINAL_TOKENS, ...SIMPLE_FINAL_TOKENS]),
             grammar: {
                 namespaceURI: root.getAttribute("targetNamespace") || null,
                 elements: new Map(),
@@ -175,6 +199,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 modelGroups: new Map(),
                 attributeGroups: new Map(),
                 identityConstraints: new Map(),
+                substitutionGroups: new Map(),
             },
             allElements: [],
             allAttributes: [],
@@ -225,6 +250,10 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
         // Pass 2 — eager multi-pass reference resolution (AD §5).
         this.resolveReferencePass(ctx, grammars);
+
+        // Pass 2a.5 — resolve substitution group affiliations and build the
+        // transitive member sets per head (XSD 1.0 §3.3.6, CHK-023).
+        this.buildSubstitutionGroups(ctx, grammars);
 
         // Pass 2c — expand named model group references into particles (CHK-019).
         this.expandModelGroups(ctx, grammars);
@@ -290,7 +319,13 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             nillable: el.getAttribute("nillable") === "true",
             ref: null,
             identityConstraints: this.buildIdentityConstraints(el, ctx),
+            substitutionGroup: this.readQName(el, "substitutionGroup"),
+            abstract: el.getAttribute("abstract") === "true",
+            default: el.getAttribute("default") ?? null,
+            fixed: el.getAttribute("fixed") ?? null,
+            block: this.normalizeTokens(el.getAttribute("block"), ctx.blockDefault, BLOCK_TOKENS),
         };
+        this.checkValueConstraint(decl, el, ctx);
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
         return decl;
@@ -445,6 +480,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             // complete wildcard (intersection with referenced attribute groups)
             // and pass 2f unions it with the base for extensions (CHK-021).
             attributeWildcard: usesResult.wildcard,
+            isAbstract: el.getAttribute("abstract") === "true",
+            final: this.finalForComplexType(el, ctx),
         };
         if (usesResult.groupRefs.length > 0) {
             ctx.attributeGroupWildcardRefs.set(result, usesResult.groupRefs);
@@ -478,6 +515,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 kind: "simple-type", name, variety: "atomic",
                 itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets: [],
                 baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+                final: "",
             };
             ctx.allSimpleTypes.push(st);
             return st;
@@ -500,6 +538,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     baseType: null,
                     whiteSpace: "preserve",
                     effectiveFacets: [],
+                    final: this.finalForSimpleType(el, ctx),
                 };
                 this.checkPatternFacets(this.readFacets(derivation), ctx);
                 break;
@@ -522,6 +561,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     kind: "simple-type", name, variety: "list",
                     itemType, memberTypes: [], itemTypeDef, memberTypeDefs: [], facets: [],
                     baseType: null, whiteSpace: "collapse", effectiveFacets: [],
+                    final: this.finalForSimpleType(el, ctx),
                 };
                 break;
             }
@@ -549,6 +589,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     kind: "simple-type", name, variety: "union",
                     itemType: null, memberTypes, itemTypeDef: null, memberTypeDefs, facets: [],
                     baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+                    final: this.finalForSimpleType(el, ctx),
                 };
                 break;
             }
@@ -557,6 +598,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     kind: "simple-type", name, variety: "atomic",
                     itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets: [],
                     baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+                    final: "",
                 };
                 break;
         }
@@ -594,6 +636,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             baseType: null,
             whiteSpace: "preserve",
             effectiveFacets: [],
+            final: "",
         };
         if (base) ctx.simpleContentRestrictions.add(st);
         ctx.allSimpleTypes.push(st);
@@ -782,7 +825,16 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             nillable: el.getAttribute("nillable") === "true",
             ref: refAttr,
             identityConstraints: refAttr ? [] : this.buildIdentityConstraints(el, ctx),
+            // A local declaration cannot head a substitution group (XSD 1.0
+            // §3.3.6); it may still declare membership attributes (abstract,
+            // default, fixed, block) when it is a real local declaration.
+            substitutionGroup: null,
+            abstract: el.getAttribute("abstract") === "true",
+            default: el.getAttribute("default") ?? null,
+            fixed: el.getAttribute("fixed") ?? null,
+            block: this.normalizeTokens(el.getAttribute("block"), ctx.blockDefault, BLOCK_TOKENS),
         };
+        this.checkValueConstraint(decl, el, ctx);
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
         return this.wrapParticle(ctx, el, decl);
@@ -1019,6 +1071,23 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 });
             }
         }
+
+        // XSD 1.0 §3.3.2: an element declaration with a default/fixed value
+        // constraint must have a simple type or a complex type with simple
+        // content (the fixed/default value is a value of that type).
+        for (const decl of ctx.allElements) {
+            if (decl.default === null && decl.fixed === null) continue;
+            const t = decl.type;
+            if (t?.kind === "complex-type" && t.contentType !== "simple") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Element ${displayQName(decl.name)} declares a ${decl.default !== null ? "default" : "fixed"} value constraint but its type does not have simple content.`,
+                    location: ctx.locations.get(decl) ?? { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
+        }
         for (const attr of ctx.allAttributes) {
             if (!attr.typeRef) continue;
             const resolved = this.lookupType(grammars, attr.typeRef);
@@ -1130,6 +1199,134 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             }
             (ic as { referencedConstraint: IdentityConstraintDefinition | null }).referencedConstraint = referenced;
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 2a.5 — substitution groups (CHK-023)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Resolve every global element's substitutionGroup affiliation and build
+     * the transitive member set per head (XSD 1.0 §3.3.6).
+     *
+     * The substitution group of a head H is the set containing H itself, every
+     * global element declaring H as its substitutionGroup, and — transitively —
+     * every member of any member's own group. Validation uses these sets to
+     * accept a member element anywhere the head is expected.
+     *
+     * Affiliation rules enforced here (cos-element-decl-props-correct):
+     * - the affiliation must resolve to a declared global element;
+     * - the head must live in the same target namespace as the member;
+     * - an element must not be a member of its own group (no cycles).
+     */
+    private buildSubstitutionGroups(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
+        // member -> resolved head (only successful affiliations).
+        const memberOf: Array<{ member: ElementDeclaration; head: ElementDeclaration }> = [];
+        // head local name -> direct members.
+        const directMembers = new Map<string, ElementDeclaration[]>();
+
+        for (const decl of ctx.allElements) {
+            if (decl.scope !== "global") continue;
+            const affiliation = decl.substitutionGroup;
+            if (!affiliation) continue;
+            const loc = ctx.locations.get(decl) ?? { line: 0, column: 0 };
+            const head = this.lookupElement(grammars, affiliation);
+            if (!head) {
+                ctx.report({
+                    severity: "error",
+                    code: "UNRESOLVED_REFERENCE",
+                    message: `Substitution group head ${displayQName(affiliation)} of element ${displayQName(decl.name)} does not resolve to a global element declaration.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            if (head.name.namespaceURI !== decl.name.namespaceURI) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Substitution group head ${displayQName(head.name)} of element ${displayQName(decl.name)} must be in the same target namespace as the member.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            if (qnameEqual(head.name, decl.name)) {
+                ctx.report({
+                    severity: "error",
+                    code: "CIRCULAR_REFERENCE",
+                    message: `Element ${displayQName(decl.name)} cannot be a member of its own substitution group.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            memberOf.push({ member: decl, head });
+            const key = head.name.localName;
+            const list = directMembers.get(key);
+            if (list) list.push(decl);
+            else directMembers.set(key, [decl]);
+        }
+
+        // Cycle detection on the affiliation graph: following substitutionGroup
+        // refs must never return to a declaration already on the path.
+        for (const { member } of memberOf) {
+            const seen = new Set<ElementDeclaration>();
+            let cur: ElementDeclaration | null = member;
+            while (cur) {
+                if (seen.has(cur)) {
+                    ctx.report({
+                        severity: "error",
+                        code: "CIRCULAR_REFERENCE",
+                        message: `Circular substitution group: element ${displayQName(member.name)} is transitively a member of its own substitution group.`,
+                        location: ctx.locations.get(member) ?? { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                    break;
+                }
+                seen.add(cur);
+                cur = memberOf.find((m) => m.member === cur)?.head ?? null;
+            }
+        }
+
+        // Transitive closure per head: {head} ∪ members ∪ members-of-member-heads.
+        const groups = new Map<string, ElementDeclaration[]>();
+        const headNames = new Set(memberOf.map((m) => m.head.name.localName));
+        for (const headName of headNames) {
+            const out: ElementDeclaration[] = [];
+            const queue: ElementDeclaration[] = [];
+            const head = ctx.grammar.elements.get(headName);
+            if (!head) continue;
+            out.push(head);
+            queue.push(head);
+            const seen = new Set<ElementDeclaration>([head]);
+            while (queue.length > 0) {
+                const cur = queue.pop()!;
+                for (const member of directMembers.get(cur.name.localName) ?? []) {
+                    if (seen.has(member)) continue;
+                    seen.add(member);
+                    // XSD 1.0 §3.3.6 (cos-element-decl-consistent): if the
+                    // head has a type, the member's type must be validly
+                    // derived from the head's type (any derivation method
+                    // is accepted, including extension).
+                    if (head.type && member.type && !this.isValidlyDerived(member.type, head.type)) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: `Element ${displayQName(member.name)} is a member of the substitution group of ${displayQName(head.name)} but its type is not validly derived from the head's type.`,
+                            location: ctx.locations.get(member) ?? { line: 0, column: 0 },
+                            phase: "schema-compilation",
+                        });
+                        continue;
+                    }
+                    out.push(member);
+                    // A member that is itself a head brings its own members.
+                    queue.push(member);
+                }
+            }
+            groups.set(headName, out);
+        }
+        ctx.grammar.substitutionGroups = groups;
     }
 
     private lookupType(grammars: Map<string, CompiledGrammar>, q: QName): TypeDefinition | null {
@@ -1651,6 +1848,17 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             }
 
             const base = d.type.baseType!;
+            // XSD 1.0 §3.4.2: the base type's final (or the schema's
+            // finalDefault) forbids the derivation method used against it.
+            if (base.final.split(/\s+/).includes(d.method)) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_FINAL",
+                    message: `Base type ${displayQName(base.name ?? { namespaceURI: null, localName: "(anonymous)" })} is final with respect to ${d.method} and cannot be used as the base of a ${d.form === "simple" ? "simpleContent" : "complexContent"} ${d.method}.`,
+                    location: locationOf(d.node),
+                    phase: "schema-compilation",
+                });
+            }
             if (d.method === "extension") {
                 this.validateExtension(ctx, d, base);
             } else {
@@ -2044,6 +2252,24 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     /**
+     * Whether `sub` is validly derived from `base` (XSD 1.0 §2.4.1): any
+     * chain of extension and restriction derivations is accepted for complex
+     * types; simple types derive by restriction along their baseType chain.
+     * A null base (untyped / anyType) accepts any type.
+     */
+    private isValidlyDerived(sub: TypeDefinition, base: TypeDefinition): boolean {
+        if (sub === base) return true;
+        const seen = new Set<TypeDefinition>();
+        let cur: TypeDefinition | null = sub;
+        while (cur && cur !== base) {
+            if (seen.has(cur)) return false;
+            seen.add(cur);
+            cur = cur.baseType as TypeDefinition | null;
+        }
+        return cur === base;
+    }
+
+    /**
      * Convenience: is the derived element's type a valid restriction of the
      * base element's type? A null base type (untyped element) accepts any
      * derived type; a null derived type does not restrict a typed base.
@@ -2157,6 +2383,15 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 for (const ref of st.memberTypes) {
                     const resolved = this.lookupType(grammars, ref);
                     if (resolved && resolved.kind === "simple-type") {
+                        if (resolved.final.split(/\s+/).includes("union")) {
+                            ctx.report({
+                                severity: "error",
+                                code: "INVALID_FINAL",
+                                message: `Union member type ${displayQName(ref)} is final with respect to union and cannot be a member of a union.`,
+                                location: { line: 0, column: 0 },
+                                phase: "schema-compilation",
+                            });
+                        }
                         resolvedMembers.push(resolved);
                     } else if (resolved) {
                         ctx.report({
@@ -2183,7 +2418,19 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 // A simpleContent restriction may restrict a complex type with
                 // simple content (CHK-020). Its effective simple-type base is
                 // the base complex type's {simple type}.
+                // A simpleContent restriction may restrict a complex type with
+                // simple content (CHK-020). Its effective simple-type base is
+                // the base complex type's {simple type}.
                 if (ctx.simpleContentRestrictions.has(st) && resolved.kind === "complex-type" && resolved.simpleType) {
+                    if (resolved.final.split(/\s+/).includes("restriction")) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_FINAL",
+                            message: `Base type ${displayQName(ref)} is final with respect to restriction and cannot be the base of a simpleContent restriction.`,
+                            location: { line: 0, column: 0 },
+                            phase: "schema-compilation",
+                        });
+                    }
                     (st as { baseType: SimpleTypeDefinition | null }).baseType = resolved.simpleType;
                     continue;
                 }
@@ -2197,8 +2444,26 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 continue;
             }
             if (st.variety === "list") {
+                if (resolved.final.split(/\s+/).includes("list")) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_FINAL",
+                        message: `List item type ${displayQName(ref)} is final with respect to list and cannot be used as a list item type.`,
+                        location: { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                }
                 (st as { itemTypeDef: SimpleTypeDefinition | null }).itemTypeDef = resolved;
             } else {
+                if (resolved.final.split(/\s+/).includes("restriction")) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_FINAL",
+                        message: `Restriction base type ${displayQName(ref)} is final with respect to restriction and cannot be the base of a restriction.`,
+                        location: { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                }
                 (st as { baseType: SimpleTypeDefinition | null }).baseType = resolved;
             }
         }
@@ -2259,6 +2524,57 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         ctx.refs.push({ ref, node });
     }
 
+    // -----------------------------------------------------------------------
+    // Declaration-attribute helpers (CHK-023)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Normalize a whitespace-separated token list (block/final/blockDefault/
+     * finalDefault): an explicit `#all` expands to every allowed token, and
+     * unknown tokens are dropped. When `raw` is null, `defaults` is used.
+     */
+    private normalizeTokens(raw: string | null, defaults: string, allowed: readonly string[]): string {
+        const value = raw ?? defaults;
+        if (!value) return "";
+        const tokens = value.trim().split(/\s+/);
+        if (tokens.includes("#all")) return allowed.join(" ");
+        return tokens.filter((t) => allowed.includes(t)).join(" ");
+    }
+
+    /** The complex type's final token list: own final attribute, else finalDefault. */
+    private finalForComplexType(el: Element, ctx: BuildContext): string {
+        const raw = el.getAttribute("final");
+        return this.normalizeTokens(raw, this.filterTokens(ctx.finalDefault, COMPLEX_FINAL_TOKENS), COMPLEX_FINAL_TOKENS);
+    }
+
+    /** The simple type's final token list: own final attribute, else finalDefault. */
+    private finalForSimpleType(el: Element, ctx: BuildContext): string {
+        const raw = el.getAttribute("final");
+        return this.normalizeTokens(raw, this.filterTokens(ctx.finalDefault, SIMPLE_FINAL_TOKENS), SIMPLE_FINAL_TOKENS);
+    }
+
+    /** Keep only the tokens of `value` that appear in `allowed`. */
+    private filterTokens(value: string, allowed: readonly string[]): string {
+        if (!value) return "";
+        return value.trim().split(/\s+/).filter((t) => allowed.includes(t)).join(" ");
+    }
+
+    /**
+     * XSD 1.0 §3.3.2 (element declaration properties correct): default and
+     * fixed are mutually exclusive. Reported at build time.
+     */
+    private checkValueConstraint(decl: ElementDeclaration, el: Element, ctx: BuildContext): void {
+        if (decl.default !== null && decl.fixed !== null) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `Element ${displayQName(decl.name)} declares both a default and a fixed value constraint; they are mutually exclusive.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+    }
+
     private readQName(el: Element, attrName: string): QName | null {
         const value = el.getAttribute(attrName);
         if (!value) return null;
@@ -2268,7 +2584,11 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     private readQNameString(el: Element, value: string): QName | null {
         const colon = value.indexOf(":");
         if (colon === -1) {
-            return { namespaceURI: el.lookupNamespaceURI(null), localName: value };
+            // The default namespace: per Namespaces in XML an unprefixed QName
+            // resolves against it. xmldom stores it under the '' key, so a
+            // null lookup must fall back to an empty-string lookup.
+            const namespaceURI = el.lookupNamespaceURI(null) ?? el.lookupNamespaceURI("");
+            return { namespaceURI, localName: value };
         }
         const prefix = value.slice(0, colon);
         const localName = value.slice(colon + 1);
