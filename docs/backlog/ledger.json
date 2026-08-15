@@ -114,7 +114,7 @@
     {
       "id": "CHK-013",
       "title": "Date/time family built-in types",
-      "file": "docs/backlog/active/CHK-013-date-time-family-built-ins.md",
+      "file": "docs/backlog/archive/CHK-013-date-time-family-built-ins.md",
       "status": "done",
       "area": "meta",
       "priority": "high",

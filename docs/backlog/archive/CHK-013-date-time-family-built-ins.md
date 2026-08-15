@@ -6,7 +6,7 @@ wayfinder_type: "task"
 parent: "CHK-001"
 area: "meta"
 priority: "high"
-status: "draft"
+status: "done"
 depends_on: ["CHK-010"]
 required_context: ["docs/research/gap-analysis.md"]
 optional_context: ["docs/research/xsts-structure-acquisition.md"]
@@ -52,8 +52,16 @@ Can the date/time family land with real calendar validity, timezone rules, and v
 
 ## Answer
 
-*(to be filled on resolution)*
+Yes. The date/time family lands with genuine calendar validity, timezone rules, and value-space ordering.
+
+- Nine types implemented: dateTime, date, time, gYear, gYearMonth, gMonth, gMonthDay, gDay, duration
+- Each has a lexical validator with calendar validity (leap years, month/day ranges)
+- Timezone: Z (+0), ±hh:mm (parsed to minute offset), absent (null)
+- Value-space comparison via normalised UTC instant for dateTime/date/time
+- Duration partial-order comparison per XSD 1.0 Part 2 §3.2.6.4
+- Bound-facet evaluation wired into validateFacets for all date/time types
+- Type-chain walking follows same pattern as string/numeric families
 
 ## Decision / Outcome
 
-*(filled in after completion)*
+Implementation complete per the acceptance criteria. All 333 tests pass. The date/time family is now validated at both the lexical level (checkDateTimeFamilyLexicalSpace) and the facet level (evaluateDateTimeBoundFromType) for restrictions using bound facets.
