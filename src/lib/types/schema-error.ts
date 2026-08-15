@@ -44,6 +44,8 @@ export type SchemaErrorCode =
     | "FACET_VIOLATION"
     /** An instance value violates a built-in type's lexical space (CHK-011..014). */
     | "LEXICAL_SPACE_VIOLATION"
+    /** A pattern facet value is not a valid XSD regular expression (CHK-015). */
+    | "INVALID_PATTERN"
     /** A compiled construct exists but the processor does not validate it yet. */
     | "UNSUPPORTED_FEATURE";
 

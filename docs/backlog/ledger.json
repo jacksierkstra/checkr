@@ -132,8 +132,8 @@
     {
       "id": "CHK-015",
       "title": "XSD regex engine",
-      "file": "docs/backlog/active/CHK-015-xsd-regex-engine.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-015-xsd-regex-engine.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

@@ -12,6 +12,7 @@ import { Facet, SimpleTypeDefinition, WhiteSpaceValue } from "@lib/types/compone
 import { evaluateNumericFacet } from "@lib/xsd/numeric-types";
 import { evaluateDateTimeBoundFromType } from "@lib/xsd/datetime-types";
 import { binaryOctetLength } from "@lib/xsd/remaining-types";
+import { compileXsdRegex, XsdRegex, XsdRegexError } from "@lib/xsd/regex";
 
 // ---------------------------------------------------------------------------
 // Whitespace normalization (XSD 1.0 Part 2 §4.3.6)
@@ -154,6 +155,27 @@ export interface FacetViolation {
  *
  * Returns an array of violations (empty = valid).
  */
+// ---------------------------------------------------------------------------
+// Pattern facet compilation cache (CHK-015)
+// ---------------------------------------------------------------------------
+
+/**
+ * Module-level cache for compiled XSD regex patterns.
+ * Patterns are immutable strings keyed by the facet value; the cache is
+ * bounded by the number of distinct pattern strings in the schema, which is
+ * small in practice.
+ */
+const patternCache = new Map<string, XsdRegex>();
+
+function compilePatternFacet(value: string): XsdRegex {
+    let re = patternCache.get(value);
+    if (!re) {
+        re = compileXsdRegex(value);
+        patternCache.set(value, re);
+    }
+    return re;
+}
+
 export function validateFacets(
     normalized: string,
     facets: ReadonlyArray<Facet>,
@@ -243,9 +265,16 @@ export function validateFacets(
                 break;
             }
             // Pattern — CHK-015
-            case "pattern":
-                // Not evaluated yet.
+            case "pattern": {
+                const re = compilePatternFacet(f.value);
+                if (!re.matches(normalized)) {
+                    violations.push({
+                        facet: "pattern",
+                        message: `Value does not match the required pattern '${f.value}'.`,
+                    });
+                }
                 break;
+            }
             default:
                 // Unknown facet kind — ignore.
                 break;

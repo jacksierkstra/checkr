@@ -29,6 +29,7 @@ import { childElements, locationOf } from "@lib/xml/dom";
 import { XMLParser } from "@lib/xml/parser";
 import { BUILTIN_GRAMMAR } from "@lib/xsd/compiler/builtinTypes";
 import { computeWhiteSpace, computeEffectiveFacets } from "@lib/xsd/facets";
+import { compileXsdRegex, XsdRegexError } from "@lib/xsd/regex";
 
 export interface CompileOptions {
     listener?: SchemaErrorListener;
@@ -290,6 +291,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     whiteSpace: "preserve",
                     effectiveFacets: [],
                 };
+                this.checkPatternFacets(this.readFacets(derivation), ctx);
                 break;
             }
             case "list": {
@@ -356,11 +358,9 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             variety: "atomic",
             itemType: base,
             memberTypes: [],
-            facets: derivation?.localName === "restriction" ? this.readFacets(derivation) : [],
-            baseType: null,
-            whiteSpace: "preserve",
-            effectiveFacets: [],
+            facets: derivation?.localName === "restriction" ? this.readFacets(derivation) : [], baseType: null, whiteSpace: "preserve", effectiveFacets: [],
         };
+        if (derivation?.localName === "restriction") this.checkPatternFacets(this.readFacets(derivation), ctx);
         ctx.allSimpleTypes.push(st);
         return st;
     }
@@ -637,7 +637,24 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         return Number.isFinite(n) ? n : fallback;
     }
 
-    private readFacets(el: Element): Array<{ kind: string; value: string }> {
+    private checkPatternFacets(facets: ReadonlyArray<{ kind: string; value: string; node: Element }>, ctx: BuildContext): void {
+        for (const f of facets) {
+            if (f.kind !== "pattern") continue;
+            try {
+                compileXsdRegex(f.value);
+            } catch (e) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_PATTERN",
+                    message: `The pattern facet value '${f.value}' is not a valid XSD regular expression: ${e instanceof XsdRegexError ? e.message : String(e)}`,
+                    location: locationOf(f.node),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+    }
+
+    private readFacets(el: Element): Array<{ kind: string; value: string; node: Element }> {
         const FACET_NAMES = [
             "length",
             "minLength",
@@ -652,12 +669,12 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             "totalDigits",
             "fractionDigits",
         ];
-        const facets: Array<{ kind: string; value: string }> = [];
+        const facets: Array<{ kind: string; value: string; node: Element }> = [];
         for (const child of childElements(el)) {
             const localName = child.localName ?? "";
             if (child.namespaceURI !== NAMESPACE_XSD || !FACET_NAMES.includes(localName)) continue;
             const value = child.getAttribute("value");
-            if (value !== null) facets.push({ kind: localName, value });
+            if (value !== null) facets.push({ kind: localName, value, node: child });
         }
         return facets;
     }

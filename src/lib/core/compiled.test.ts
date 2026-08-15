@@ -165,3 +165,102 @@ describe("public two-phase surface — migrated from the legacy single-shot API 
     });
 
 });
+// ---------------------------------------------------------------------------
+// XSD regex engine — pattern facet end-to-end (CHK-015)
+// ---------------------------------------------------------------------------
+
+describe("pattern facet end-to-end (CHK-015)", () => {
+
+    it("validates instance text against a pattern facet", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:simpleType name="VowelString">
+                    <xsd:restriction base="xsd:string">
+                        <xsd:pattern value="[aeiou]+"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+                <xsd:element name="e" type="VowelString"/>
+            </xsd:schema>
+        `;
+        const schema = compileSchema(xsd);
+        expect(validate(`<e>aeiou</e>`, schema).valid).toBe(true);
+        expect(validate(`<e>bcdf</e>`, schema).valid).toBe(false);
+        const { errors } = validate(`<e>bcdf</e>`, schema);
+        expect(errors.some((e) => e.code === "FACET_VIOLATION")).toBe(true);
+    });
+
+    it("validates attribute values against a pattern facet", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:simpleType name="Code">
+                    <xsd:restriction base="xsd:string">
+                        <xsd:pattern value="[A-Z]{3}"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+                <xsd:element name="e">
+                    <xsd:complexType>
+                        <xsd:attribute name="code" type="Code" use="required"/>
+                    </xsd:complexType>
+                </xsd:element>
+            </xsd:schema>
+        `;
+        const schema = compileSchema(xsd);
+        expect(validate(`<e code="ABC"/>`, schema).valid).toBe(true);
+        expect(validate(`<e code="AB"/>`, schema).valid).toBe(false);
+    });
+
+    it("rejects an invalid pattern at compile time", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:simpleType name="BadPattern">
+                    <xsd:restriction base="xsd:string">
+                        <xsd:pattern value="[a-z-[invalid]"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+                <xsd:element name="e" type="BadPattern"/>
+            </xsd:schema>
+        `;
+        const seen: SchemaError[] = [];
+        expect(() => compileSchema(xsd, { listener: (e) => seen.push(e) }))
+            .toThrow(SchemaCompilationError);
+        expect(seen.some((e) => e.code === "INVALID_PATTERN")).toBe(true);
+    });
+
+    it("pattern with subtraction works end-to-end", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:simpleType name="ConsonantString">
+                    <xsd:restriction base="xsd:string">
+                        <xsd:pattern value="[a-z-[aeiou]]+"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+                <xsd:element name="e" type="ConsonantString"/>
+            </xsd:schema>
+        `;
+        const schema = compileSchema(xsd);
+        expect(validate(`<e>bcd</e>`, schema).valid).toBe(true);
+        expect(validate(`<e>aei</e>`, schema).valid).toBe(false);
+    });
+
+    it("multiple pattern facets: all must match", () => {
+        const xsd = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:simpleType name="AlphaNum">
+                    <xsd:restriction base="xsd:string">
+                        <xsd:pattern value="[a-z]+"/>
+                        <xsd:pattern value=".{3,5}"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+                <xsd:element name="e" type="AlphaNum"/>
+            </xsd:schema>
+        `;
+        const schema = compileSchema(xsd);
+        // "abc" matches both [a-z]+ and .{3,5}
+        expect(validate(`<e>abc</e>`, schema).valid).toBe(true);
+        // "ab" matches [a-z]+ but not .{3,5}
+        expect(validate(`<e>ab</e>`, schema).valid).toBe(false);
+        // "ab123" matches .{3,5} but not [a-z]+
+        expect(validate(`<e>ab123</e>`, schema).valid).toBe(false);
+    });
+
+});
