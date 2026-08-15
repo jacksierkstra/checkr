@@ -10,6 +10,7 @@
 
 import { Facet, SimpleTypeDefinition, WhiteSpaceValue } from "@lib/types/component-graph";
 import { evaluateNumericFacet } from "@lib/xsd/numeric-types";
+import { evaluateDateTimeBoundFromType } from "@lib/xsd/datetime-types";
 
 // ---------------------------------------------------------------------------
 // Whitespace normalization (XSD 1.0 Part 2 §4.3.6)
@@ -229,6 +230,11 @@ export function validateFacets(
                     const message = evaluateNumericFacet(normalized, f.kind, f.value, type);
                     if (message !== null) {
                         violations.push({ facet: f.kind, message });
+                    }
+                    // Also try datetime bound evaluation (CHK-013) for date/time types
+                    const dtMessage = evaluateDateTimeBoundFromType(normalized, f.kind, f.value, type);
+                    if (dtMessage !== null) {
+                        violations.push({ facet: f.kind, message: dtMessage });
                     }
                 }
                 break;

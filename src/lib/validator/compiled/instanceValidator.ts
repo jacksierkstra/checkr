@@ -17,6 +17,7 @@ import { namespaceKey, NAMESPACE_XML, NAMESPACE_XMLNS, NAMESPACE_XSI } from "@li
 import { normalizeWhiteSpace, validateFacets } from "@lib/xsd/facets";
 import { checkStringFamilyLexicalSpace } from "@lib/xsd/string-types";
 import { checkNumericFamilyLexicalSpace } from "@lib/xsd/numeric-types";
+import { checkDateTimeFamilyLexicalSpace } from "@lib/xsd/datetime-types";
 import {
     SchemaError,
     SchemaErrorListener,
@@ -333,6 +334,13 @@ export class InstanceValidatorImpl implements InstanceValidator {
         if (numericLexicalError !== null) {
             report(this.error(node, "LEXICAL_SPACE_VIOLATION",
                 `Value '${normalized}' is ${numericLexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
+        }
+
+        // Check built-in lexical space (date/time family, CHK-013).
+        const datetimeLexicalError = checkDateTimeFamilyLexicalSpace(normalized, type);
+        if (datetimeLexicalError !== null) {
+            report(this.error(node, "LEXICAL_SPACE_VIOLATION",
+                `Value '${normalized}' is ${datetimeLexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
         }
 
         const violations = validateFacets(normalized, type.effectiveFacets, type);
