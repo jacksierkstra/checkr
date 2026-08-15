@@ -96,8 +96,8 @@
     {
       "id": "CHK-011",
       "title": "String family built-in types",
-      "file": "docs/backlog/active/CHK-011-string-family-built-ins.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-011-string-family-built-ins.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

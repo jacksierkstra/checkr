@@ -42,6 +42,8 @@ export type SchemaErrorCode =
     | "INVALID_ELEMENT_CONTENT"
     /** An instance value fails a facet of its simple type (length family, enumeration, ...). */
     | "FACET_VIOLATION"
+    /** An instance value violates a built-in type's lexical space (CHK-011..014). */
+    | "LEXICAL_SPACE_VIOLATION"
     /** A compiled construct exists but the processor does not validate it yet. */
     | "UNSUPPORTED_FEATURE";
 

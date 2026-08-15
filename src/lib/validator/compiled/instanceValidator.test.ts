@@ -480,4 +480,204 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("string-family lexical-space validation (CHK-011)", () => {
+
+        it("accepts valid NCName values and rejects invalid ones", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyNCN">
+                        <xsd:restriction base="xsd:NCName">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyNCN"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>validName</e>`, schema).valid).toBe(true);
+            expect(check(`<e>_underscore</e>`, schema).valid).toBe(true);
+            // NCName cannot contain colons
+            const r1 = check(`<e>ns:bad</e>`, schema);
+            expect(r1.valid).toBe(false);
+            expect(r1.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+            // NCName cannot start with a digit
+            const r2 = check(`<e>1nope</e>`, schema);
+            expect(r2.valid).toBe(false);
+            expect(r2.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:Name values (allows colons, rejects digit-start)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyName">
+                        <xsd:restriction base="xsd:Name">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyName"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>validName</e>`, schema).valid).toBe(true);
+            expect(check(`<e>ns:prefixed</e>`, schema).valid).toBe(true);
+            // Name cannot start with a digit
+            const r = check(`<e>1nope</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:NMTOKEN (any combination of NameChars including digits first)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyTok">
+                        <xsd:restriction base="xsd:NMTOKEN">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyTok"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>valid</e>`, schema).valid).toBe(true);
+            expect(check(`<e>123</e>`, schema).valid).toBe(true);
+            expect(check(`<e>-hyphen</e>`, schema).valid).toBe(true);
+            // NMTOKEN cannot contain spaces
+            const r = check(`<e>bad value</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("reports both LEXICAL_SPACE_VIOLATION and FACET_VIOLATION when both fail", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="ShortNCN">
+                        <xsd:restriction base="xsd:NCName">
+                            <xsd:minLength value="3"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="ShortNCN"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // "ab" fails both: not an NCName (actually it is an NCName since it passes isNameStartChar)
+            // Let's use something that fails both: "1" fails NCName and minLength
+            const { errors } = check(`<e>1</e>`, schema);
+            const lexicalErrors = errors.filter((e) => e.code === "LEXICAL_SPACE_VIOLATION");
+            const facetErrors = errors.filter((e) => e.code === "FACET_VIOLATION");
+            expect(lexicalErrors.length).toBeGreaterThanOrEqual(1);
+            expect(facetErrors.length).toBeGreaterThanOrEqual(1);
+        });
+
+        it("validates NMTOKENS as a space-separated list of NMTOKEN", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyToks">
+                        <xsd:restriction base="xsd:NMTOKENS">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyToks"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>tok1 tok2 tok3</e>`, schema).valid).toBe(true);
+            // Each NMTOKEN individually valid
+            expect(check(`<e>123 abc _foo</e>`, schema).valid).toBe(true);
+            // Invalid NMTOKENS value: one token has invalid char
+            const r = check(`<e>tok1 invalid@tok tok3</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates language through the end-to-end pipeline", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyLang">
+                        <xsd:restriction base="xsd:language">
+                            <xsd:minLength value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyLang"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>en</e>`, schema).valid).toBe(true);
+            expect(check(`<e>en-US</e>`, schema).valid).toBe(true);
+            expect(check(`<e>sgn-US</e>`, schema).valid).toBe(true);
+            // Violates language lexical space (uppercase in the middle matches the pattern)
+            const r = check(`<e>en@us</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates attribute values against NCName (xs:ID / xs:IDREF)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyId">
+                        <xsd:restriction base="xsd:ID">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute name="id" type="MyId" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root id="validId"/>`, schema).valid).toBe(true);
+            // ID cannot contain colons
+            const r = check(`<root id="ns:bad"/>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates ENTITIES as space-separated list of NCName", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyEnts">
+                        <xsd:restriction base="xsd:ENTITIES">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyEnts"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>ent1 ent2 ent3</e>`, schema).valid).toBe(true);
+            const r = check(`<e>ent1 ns:bad ent3</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("passes through for xs:string directly (no lexical check)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>any value at all !@#$%</e>`, schema).valid).toBe(true);
+            expect(check(`<e></e>`, schema).valid).toBe(true);
+        });
+
+        it("passes through for xs:token-derived types (whitespace handles it)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyTok">
+                        <xsd:restriction base="xsd:token">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyTok"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // Whitespace gets collapsed, so this is valid
+            expect(check(`<e>  abc  </e>`, schema).valid).toBe(true);
+        });
+
+    });
+
 });
