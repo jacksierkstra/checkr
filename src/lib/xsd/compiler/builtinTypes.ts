@@ -8,6 +8,7 @@ import {
 } from "@lib/types/component-graph";
 import { deepFreeze } from "@lib/types/immutable";
 import { NAMESPACE_XSD } from "@lib/types/namespaces";
+import { computeEffectiveFacets } from "@lib/xsd/facets";
 
 /**
  * The XSD 1.0 built-in datatype grammar: the components every schema can
@@ -50,8 +51,8 @@ interface BuiltinDef {
     whiteSpace: WhiteSpaceValue;
     /** Base type localName, or null for primitives. */
     baseName: string | null;
-    /** Fixed facets baked into the type (e.g. whiteSpace). */
-    fixedFacets?: Facet[];
+    /** Fixed facets baked into the type definition (e.g. fractionDigits=0 on integer). */
+    facets?: Facet[];
 }
 
 const BUILTIN_DEFS: BuiltinDef[] = [
@@ -82,29 +83,29 @@ const BUILTIN_DEFS: BuiltinDef[] = [
     { localName: "token", whiteSpace: WS_COLLAPSE, baseName: "normalizedString" },
     { localName: "language", whiteSpace: WS_COLLAPSE, baseName: "token" },
     { localName: "NMTOKEN", whiteSpace: WS_COLLAPSE, baseName: "token" },
-    { localName: "NMTOKENS", whiteSpace: WS_COLLAPSE, baseName: "NMTOKEN", fixedFacets: [{ kind: "whiteSpace", value: "collapse" }] },
+    { localName: "NMTOKENS", whiteSpace: WS_COLLAPSE, baseName: "NMTOKEN", facets: [{ kind: "whiteSpace", value: "collapse" }] },
     { localName: "Name", whiteSpace: WS_COLLAPSE, baseName: "token" },
     { localName: "NCName", whiteSpace: WS_COLLAPSE, baseName: "Name" },
     { localName: "ID", whiteSpace: WS_COLLAPSE, baseName: "NCName" },
     { localName: "IDREF", whiteSpace: WS_COLLAPSE, baseName: "NCName" },
-    { localName: "IDREFS", whiteSpace: WS_COLLAPSE, baseName: "IDREF", fixedFacets: [{ kind: "whiteSpace", value: "collapse" }] },
+    { localName: "IDREFS", whiteSpace: WS_COLLAPSE, baseName: "IDREF", facets: [{ kind: "whiteSpace", value: "collapse" }] },
     { localName: "ENTITY", whiteSpace: WS_COLLAPSE, baseName: "NCName" },
-    { localName: "ENTITIES", whiteSpace: WS_COLLAPSE, baseName: "ENTITY", fixedFacets: [{ kind: "whiteSpace", value: "collapse" }] },
+    { localName: "ENTITIES", whiteSpace: WS_COLLAPSE, baseName: "ENTITY", facets: [{ kind: "whiteSpace", value: "collapse" }] },
 
     // Numeric family (derived from decimal)
-    { localName: "integer", whiteSpace: WS_COLLAPSE, baseName: "decimal" },
-    { localName: "nonPositiveInteger", whiteSpace: WS_COLLAPSE, baseName: "integer" },
-    { localName: "negativeInteger", whiteSpace: WS_COLLAPSE, baseName: "nonPositiveInteger" },
-    { localName: "long", whiteSpace: WS_COLLAPSE, baseName: "integer" },
-    { localName: "int", whiteSpace: WS_COLLAPSE, baseName: "long" },
-    { localName: "short", whiteSpace: WS_COLLAPSE, baseName: "int" },
-    { localName: "byte", whiteSpace: WS_COLLAPSE, baseName: "short" },
-    { localName: "nonNegativeInteger", whiteSpace: WS_COLLAPSE, baseName: "integer" },
-    { localName: "unsignedLong", whiteSpace: WS_COLLAPSE, baseName: "nonNegativeInteger" },
-    { localName: "unsignedInt", whiteSpace: WS_COLLAPSE, baseName: "unsignedLong" },
-    { localName: "unsignedShort", whiteSpace: WS_COLLAPSE, baseName: "unsignedInt" },
-    { localName: "unsignedByte", whiteSpace: WS_COLLAPSE, baseName: "unsignedShort" },
-    { localName: "positiveInteger", whiteSpace: WS_COLLAPSE, baseName: "nonNegativeInteger" },
+    { localName: "integer", whiteSpace: WS_COLLAPSE, baseName: "decimal", facets: [{ kind: "fractionDigits", value: "0" }] },
+    { localName: "nonPositiveInteger", whiteSpace: WS_COLLAPSE, baseName: "integer", facets: [{ kind: "maxInclusive", value: "0" }] },
+    { localName: "negativeInteger", whiteSpace: WS_COLLAPSE, baseName: "nonPositiveInteger", facets: [{ kind: "maxExclusive", value: "0" }] },
+    { localName: "long", whiteSpace: WS_COLLAPSE, baseName: "integer", facets: [{ kind: "minInclusive", value: "-9223372036854775808" }, { kind: "maxInclusive", value: "9223372036854775807" }] },
+    { localName: "int", whiteSpace: WS_COLLAPSE, baseName: "long", facets: [{ kind: "minInclusive", value: "-2147483648" }, { kind: "maxInclusive", value: "2147483647" }] },
+    { localName: "short", whiteSpace: WS_COLLAPSE, baseName: "int", facets: [{ kind: "minInclusive", value: "-32768" }, { kind: "maxInclusive", value: "32767" }] },
+    { localName: "byte", whiteSpace: WS_COLLAPSE, baseName: "short", facets: [{ kind: "minInclusive", value: "-128" }, { kind: "maxInclusive", value: "127" }] },
+    { localName: "nonNegativeInteger", whiteSpace: WS_COLLAPSE, baseName: "integer", facets: [{ kind: "minInclusive", value: "0" }] },
+    { localName: "unsignedLong", whiteSpace: WS_COLLAPSE, baseName: "nonNegativeInteger", facets: [{ kind: "minInclusive", value: "0" }, { kind: "maxInclusive", value: "18446744073709551615" }] },
+    { localName: "unsignedInt", whiteSpace: WS_COLLAPSE, baseName: "unsignedLong", facets: [{ kind: "minInclusive", value: "0" }, { kind: "maxInclusive", value: "4294967295" }] },
+    { localName: "unsignedShort", whiteSpace: WS_COLLAPSE, baseName: "unsignedInt", facets: [{ kind: "minInclusive", value: "0" }, { kind: "maxInclusive", value: "65535" }] },
+    { localName: "unsignedByte", whiteSpace: WS_COLLAPSE, baseName: "unsignedShort", facets: [{ kind: "minInclusive", value: "0" }, { kind: "maxInclusive", value: "255" }] },
+    { localName: "positiveInteger", whiteSpace: WS_COLLAPSE, baseName: "nonNegativeInteger", facets: [{ kind: "minExclusive", value: "0" }] },
 ];
 
 // Build the types map in two passes so we can wire baseType references.
@@ -118,19 +119,17 @@ for (const def of BUILTIN_DEFS) {
         variety: "atomic",
         itemType: def.baseName ? builtinQName(def.baseName) : null,
         memberTypes: [],
-        facets: def.fixedFacets ?? [],
+        facets: def.facets ?? [],
         baseType: null,
         whiteSpace: def.whiteSpace,
-        effectiveFacets: def.fixedFacets ?? [],
+        effectiveFacets: def.facets ?? [],
     };
     byName.set(def.localName, st);
 }
 
-// Pass 2: wire baseType references.
-// whiteSpace and effectiveFacets are NOT recomputed through inheritance here:
-// each built-in's whiteSpace is a FIXED facet per XSD 1.0 Part 2 §4.3.6
-// (token is collapse even though normalizedString is replace), and built-ins
-// carry no other facets until their lexical spaces land (CHK-011..CHK-014).
+// Pass 2: wire baseType references and compute effectiveFacets through the chain.
+// The iteration order is topological (bases before derivations) so each type's
+// base already has its effectiveFacets computed when visited.
 for (const def of BUILTIN_DEFS) {
     const st = byName.get(def.localName)!;
     if (def.baseName) {
@@ -138,6 +137,11 @@ for (const def of BUILTIN_DEFS) {
         if (base) {
             // Mutation before freeze: wire baseType
             (st as { baseType: SimpleTypeDefinition | null }).baseType = base;
+            // Compute effective facets through the restriction chain.
+            // computeEffectiveFacets filters whiteSpace facets; those are
+            // tracked separately via the whiteSpace field.
+            const eff = computeEffectiveFacets(st.facets, base);
+            (st as { effectiveFacets: ReadonlyArray<Facet> }).effectiveFacets = eff;
         }
     }
 }

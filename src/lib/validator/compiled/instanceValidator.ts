@@ -16,6 +16,7 @@ import { XMLParser } from "@lib/xml/parser";
 import { namespaceKey, NAMESPACE_XML, NAMESPACE_XMLNS, NAMESPACE_XSI } from "@lib/types/namespaces";
 import { normalizeWhiteSpace, validateFacets } from "@lib/xsd/facets";
 import { checkStringFamilyLexicalSpace } from "@lib/xsd/string-types";
+import { checkNumericFamilyLexicalSpace } from "@lib/xsd/numeric-types";
 import {
     SchemaError,
     SchemaErrorListener,
@@ -321,15 +322,20 @@ export class InstanceValidatorImpl implements InstanceValidator {
     ): void {
         const normalized = normalizeWhiteSpace(raw, type.whiteSpace);
 
-        // Check built-in lexical space (string family, CHK-011).
         const lexicalError = checkStringFamilyLexicalSpace(normalized, type);
         if (lexicalError !== null) {
             report(this.error(node, "LEXICAL_SPACE_VIOLATION",
                 `Value '${normalized}' is ${lexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
-            // Continue to facet checks — violations may compound.
         }
 
-        const violations = validateFacets(normalized, type.effectiveFacets);
+        // Check built-in lexical space (numeric family, CHK-012).
+        const numericLexicalError = checkNumericFamilyLexicalSpace(normalized, type);
+        if (numericLexicalError !== null) {
+            report(this.error(node, "LEXICAL_SPACE_VIOLATION",
+                `Value '${normalized}' is ${numericLexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
+        }
+
+        const violations = validateFacets(normalized, type.effectiveFacets, type);
         for (const v of violations) {
             report(this.error(node, "FACET_VIOLATION",
                 `Value '${normalized}' violates ${v.facet} facet of type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}: ${v.message}`));

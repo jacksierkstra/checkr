@@ -9,6 +9,7 @@
  */
 
 import { Facet, SimpleTypeDefinition, WhiteSpaceValue } from "@lib/types/component-graph";
+import { evaluateNumericFacet } from "@lib/xsd/numeric-types";
 
 // ---------------------------------------------------------------------------
 // Whitespace normalization (XSD 1.0 Part 2 §4.3.6)
@@ -141,16 +142,20 @@ export interface FacetViolation {
 /**
  * Validate a normalized value against a set of effective facets.
  *
- * Evaluates: length, minLength, maxLength, enumeration.
- * Numeric bounds (minInclusive, maxInclusive, minExclusive, maxExclusive),
- * totalDigits, fractionDigits are reserved for CHK-012.
+ * Evaluates: length, minLength, maxLength, enumeration, the four numeric
+ * bound facets, totalDigits and fractionDigits (CHK-012).
  * pattern is reserved for CHK-015.
+ *
+ * The optional `type` provides the value-space context needed to evaluate
+ * numeric facets (decimal vs float vs double). Without it, numeric facets
+ * are skipped.
  *
  * Returns an array of violations (empty = valid).
  */
 export function validateFacets(
     normalized: string,
     facets: ReadonlyArray<Facet>,
+    type?: SimpleTypeDefinition | null,
 ): FacetViolation[] {
     const violations: FacetViolation[] = [];
 
@@ -213,15 +218,21 @@ export function validateFacets(
                 }
                 break;
             }
-            // Numeric bounds — CHK-012
+            // Numeric bounds and scale facets — CHK-012
             case "minInclusive":
             case "maxInclusive":
             case "minExclusive":
             case "maxExclusive":
             case "totalDigits":
-            case "fractionDigits":
-                // Not evaluated yet; attached to effectiveFacets but not checked.
+            case "fractionDigits": {
+                if (type) {
+                    const message = evaluateNumericFacet(normalized, f.kind, f.value, type);
+                    if (message !== null) {
+                        violations.push({ facet: f.kind, message });
+                    }
+                }
                 break;
+            }
             // Pattern — CHK-015
             case "pattern":
                 // Not evaluated yet.

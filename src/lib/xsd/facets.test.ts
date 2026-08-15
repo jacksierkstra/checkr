@@ -105,8 +105,8 @@ describe("facet framework (CHK-010)", () => {
 
     describe("facet validation", () => {
 
-        function violations(normalized: string, facets: Facet[]): FacetViolation[] {
-            return validateFacets(normalized, facets);
+        function violations(normalized: string, facets: Facet[], type?: SimpleTypeDefinition | null): FacetViolation[] {
+            return validateFacets(normalized, facets, type);
         }
 
         it("length: exact code-point count", () => {
@@ -143,9 +143,56 @@ describe("facet framework (CHK-010)", () => {
             expect(violations("abc", facets)).toHaveLength(0);
         });
 
-        it("numeric bound facets are attached but not evaluated (CHK-012)", () => {
+        it("numeric bound facets are evaluated when a type is provided (CHK-012)", () => {
+            const decimalType: SimpleTypeDefinition = {
+                kind: "simple-type",
+                name: { namespaceURI: "http://www.w3.org/2001/XMLSchema", localName: "decimal" },
+                variety: "atomic",
+                itemType: null,
+                memberTypes: [],
+                facets: [],
+                baseType: null,
+                whiteSpace: "collapse",
+                effectiveFacets: [],
+            };
+            // Without type: skipped
             expect(violations("0", [{ kind: "minInclusive", value: "1" }])).toHaveLength(0);
+            // With type: evaluated
+            expect(violations("0", [{ kind: "minInclusive", value: "1" }], decimalType)).toHaveLength(1);
+            expect(violations("1", [{ kind: "minInclusive", value: "1" }], decimalType)).toHaveLength(0);
             expect(violations("abc", [{ kind: "pattern", value: "[a-z]+" }])).toHaveLength(0); // CHK-015
+        });
+
+        it("totalDigits facet evaluated when type is decimal", () => {
+            const decimalType: SimpleTypeDefinition = {
+                kind: "simple-type",
+                name: { namespaceURI: "http://www.w3.org/2001/XMLSchema", localName: "decimal" },
+                variety: "atomic",
+                itemType: null,
+                memberTypes: [],
+                facets: [],
+                baseType: null,
+                whiteSpace: "collapse",
+                effectiveFacets: [],
+            };
+            expect(violations("123", [{ kind: "totalDigits", value: "3" }], decimalType)).toHaveLength(0);
+            expect(violations("1234", [{ kind: "totalDigits", value: "3" }], decimalType)).toHaveLength(1);
+        });
+
+        it("fractionDigits facet evaluated when type is decimal", () => {
+            const decimalType: SimpleTypeDefinition = {
+                kind: "simple-type",
+                name: { namespaceURI: "http://www.w3.org/2001/XMLSchema", localName: "decimal" },
+                variety: "atomic",
+                itemType: null,
+                memberTypes: [],
+                facets: [],
+                baseType: null,
+                whiteSpace: "collapse",
+                effectiveFacets: [],
+            };
+            expect(violations("1.23", [{ kind: "fractionDigits", value: "2" }], decimalType)).toHaveLength(0);
+            expect(violations("1.234", [{ kind: "fractionDigits", value: "2" }], decimalType)).toHaveLength(1);
         });
 
     });
