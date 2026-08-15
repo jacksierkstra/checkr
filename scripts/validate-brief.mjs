@@ -102,12 +102,16 @@ function parseBrief(filePath) {
   }
 
   // --- Acceptance Criteria bullets ---
-  const acMatch = text.match(/^## Acceptance Criteria\n\n([\s\S]*?)(?=\n## |$)/m);
-  if (acMatch) {
-    const acBody = acMatch[1];
-    const bullets = acBody.split("\n").filter(l => l.trim().startsWith("- [ ]"));
-    if (bullets.length === 0) {
-      errors.push("Acceptance Criteria must have at least one bullet (- [ ])");
+  // Terminal briefs (done, cancelled, superseded) may have all bullets checked;
+  // only active briefs must have at least one open task.
+  if (fm.status !== "done" && fm.status !== "cancelled" && fm.status !== "superseded") {
+    const acMatch = text.match(/^## Acceptance Criteria\n\n([\s\S]*?)(?=\n## |$)/m);
+    if (acMatch) {
+      const acBody = acMatch[1];
+      const bullets = acBody.split("\n").filter(l => l.trim().startsWith("- [ ]"));
+      if (bullets.length === 0) {
+        errors.push("Acceptance Criteria must have at least one bullet (- [ ])");
+      }
     }
   }
 
