@@ -680,4 +680,146 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("remaining-family lexical-space validation (CHK-014)", () => {
+
+        it("validates xs:boolean with whitespace collapse", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:boolean"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>true</e>`, schema).valid).toBe(true);
+            expect(check(`<e>false</e>`, schema).valid).toBe(true);
+            expect(check(`<e>1</e>`, schema).valid).toBe(true);
+            expect(check(`<e>0</e>`, schema).valid).toBe(true);
+            // Whitespace is collapsed before lexing
+            expect(check(`<e>  true  </e>`, schema).valid).toBe(true);
+            // Invalid boolean
+            const r = check(`<e>yes</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:hexBinary", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:hexBinary"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>0FB7</e>`, schema).valid).toBe(true);
+            expect(check(`<e>deadbeef</e>`, schema).valid).toBe(true);
+            expect(check(`<e></e>`, schema).valid).toBe(true); // empty = zero octets
+            // Odd number of hex digits
+            const r = check(`<e>0FB</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates length facet in octets for hexBinary", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="TwoOctetHex">
+                        <xsd:restriction base="xsd:hexBinary">
+                            <xsd:length value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="TwoOctetHex"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // "0FB7" = 2 octets (4 hex digits)
+            expect(check(`<e>0FB7</e>`, schema).valid).toBe(true);
+            // "0F" = 1 octet, violates length=2
+            const r = check(`<e>0F</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "FACET_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:base64Binary", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:base64Binary"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>Zm9v</e>`, schema).valid).toBe(true); // "foo"
+            expect(check(`<e>Zm8=</e>`, schema).valid).toBe(true); // "fo"
+            expect(check(`<e>Zg==</e>`, schema).valid).toBe(true); // "f"
+            expect(check(`<e></e>`, schema).valid).toBe(true); // empty
+            // Invalid base64 (length not multiple of 4)
+            const r = check(`<e>Zm9vZ</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates length facet in octets for base64Binary", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="OneOctetB64">
+                        <xsd:restriction base="xsd:base64Binary">
+                            <xsd:length value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="OneOctetB64"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // "Zg==" = 1 octet
+            expect(check(`<e>Zg==</e>`, schema).valid).toBe(true);
+            // "Zm8=" = 2 octets, violates length=1
+            const r = check(`<e>Zm8=</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "FACET_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:anyURI", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:anyURI"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>http://example.com</e>`, schema).valid).toBe(true);
+            expect(check(`<e>../relative</e>`, schema).valid).toBe(true);
+            expect(check(`<e></e>`, schema).valid).toBe(true); // empty is valid
+            // Control characters are rejected
+            const r = check(`<e>http://example.com/\npath</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:QName lexical form", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:QName"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>foo</e>`, schema).valid).toBe(true);
+            expect(check(`<e>ns:foo</e>`, schema).valid).toBe(true);
+            // Multiple colons not allowed
+            const r = check(`<e>a:b:c</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("validates xs:NOTATION lexical form (same as QName)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e" type="xsd:NOTATION"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>foo</e>`, schema).valid).toBe(true);
+            expect(check(`<e>ns:foo</e>`, schema).valid).toBe(true);
+            // Empty string not allowed for QName/NOTATION
+            const r = check(`<e></e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+    });
+
 });

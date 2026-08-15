@@ -11,6 +11,7 @@
 import { Facet, SimpleTypeDefinition, WhiteSpaceValue } from "@lib/types/component-graph";
 import { evaluateNumericFacet } from "@lib/xsd/numeric-types";
 import { evaluateDateTimeBoundFromType } from "@lib/xsd/datetime-types";
+import { binaryOctetLength } from "@lib/xsd/remaining-types";
 
 // ---------------------------------------------------------------------------
 // Whitespace normalization (XSD 1.0 Part 2 §4.3.6)
@@ -188,33 +189,35 @@ export function validateFacets(
         switch (f.kind) {
             case "length": {
                 const expected = Number(f.value);
-                const actual = codePointLength(normalized);
+                // hexBinary/base64Binary measure length in octets (XSD 1.0 §4.3.3);
+                // all other types measure in code points (CHK-014).
+                const actual = type ? (binaryOctetLength(normalized, type) ?? codePointLength(normalized)) : codePointLength(normalized);
                 if (actual !== expected) {
                     violations.push({
                         facet: "length",
-                        message: `Value must have exactly ${expected} character(s) (code points), but has ${actual}.`,
+                        message: `Value must have exactly ${expected} octet(s) (${expected} character(s) for non-binary types), but has ${actual}.`,
                     });
                 }
                 break;
             }
             case "minLength": {
                 const min = Number(f.value);
-                const actual = codePointLength(normalized);
+                const actual = type ? (binaryOctetLength(normalized, type) ?? codePointLength(normalized)) : codePointLength(normalized);
                 if (actual < min) {
                     violations.push({
                         facet: "minLength",
-                        message: `Value must have at least ${min} character(s) (code points), but has ${actual}.`,
+                        message: `Value must have at least ${min} octet(s) (${min} character(s) for non-binary types), but has ${actual}.`,
                     });
                 }
                 break;
             }
             case "maxLength": {
                 const max = Number(f.value);
-                const actual = codePointLength(normalized);
+                const actual = type ? (binaryOctetLength(normalized, type) ?? codePointLength(normalized)) : codePointLength(normalized);
                 if (actual > max) {
                     violations.push({
                         facet: "maxLength",
-                        message: `Value must have at most ${max} character(s) (code points), but has ${actual}.`,
+                        message: `Value must have at most ${max} octet(s) (${max} character(s) for non-binary types), but has ${actual}.`,
                     });
                 }
                 break;

@@ -5,7 +5,7 @@
   "briefs": [
     {
       "id": "CHK-001",
-      "title": "XSD 1.0 Spec Compliance \u00e2\u20ac\u201d Wayfinder Map",
+      "title": "XSD 1.0 Spec Compliance â€” Wayfinder Map",
       "file": "docs/backlog/active/CHK-001-map-xsd-spec-compliance.md",
       "status": "in-progress",
       "area": "meta",
@@ -52,7 +52,7 @@
       "id": "CHK-006",
       "title": "Decide test runner architecture for XSTS",
       "file": "docs/backlog/active/CHK-006-test-runner-design.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -61,7 +61,7 @@
       "id": "CHK-007",
       "title": "Decide feature implementation order for XSTS progress",
       "file": "docs/backlog/active/CHK-007-feature-implementation-order.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -123,7 +123,7 @@
     {
       "id": "CHK-014",
       "title": "Remaining built-in types",
-      "file": "docs/backlog/active/CHK-014-remaining-built-in-types.md",
+      "file": "docs/backlog/archive/CHK-014-remaining-built-in-types.md",
       "status": "done",
       "area": "meta",
       "priority": "high",
@@ -133,7 +133,7 @@
       "id": "CHK-015",
       "title": "XSD regex engine",
       "file": "docs/backlog/active/CHK-015-xsd-regex-engine.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -142,7 +142,7 @@
       "id": "CHK-016",
       "title": "List and union types",
       "file": "docs/backlog/active/CHK-016-list-and-union-types.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -151,7 +151,7 @@
       "id": "CHK-017",
       "title": "QName resolution and namespace-correct declarations",
       "file": "docs/backlog/active/CHK-017-qname-resolution-namespace-declarations.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -160,7 +160,7 @@
       "id": "CHK-018",
       "title": "Content models: sequence, choice, all",
       "file": "docs/backlog/active/CHK-018-content-models-sequence-choice-all.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -169,7 +169,7 @@
       "id": "CHK-019",
       "title": "Named model groups and attribute groups",
       "file": "docs/backlog/active/CHK-019-named-model-groups-attribute-groups.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -178,7 +178,7 @@
       "id": "CHK-020",
       "title": "Complex-content derivation",
       "file": "docs/backlog/active/CHK-020-complex-content-derivation.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -187,7 +187,7 @@
       "id": "CHK-021",
       "title": "Wildcards",
       "file": "docs/backlog/active/CHK-021-wildcards.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -196,7 +196,7 @@
       "id": "CHK-022",
       "title": "Identity constraints",
       "file": "docs/backlog/active/CHK-022-identity-constraints.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -205,7 +205,7 @@
       "id": "CHK-023",
       "title": "Substitution groups and declaration attributes",
       "file": "docs/backlog/active/CHK-023-substitution-groups-declaration-attributes.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -214,7 +214,7 @@
       "id": "CHK-024",
       "title": "Multi-document schemas",
       "file": "docs/backlog/active/CHK-024-multi-document-schemas.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -223,7 +223,7 @@
       "id": "CHK-025",
       "title": "Schema-for-schemas conformance",
       "file": "docs/backlog/active/CHK-025-schema-for-schemas-conformance.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -232,7 +232,7 @@
       "id": "CHK-026",
       "title": "Notations and annotations",
       "file": "docs/backlog/active/CHK-026-notations-and-annotations.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "medium",
       "type": "ticket"
@@ -241,7 +241,7 @@
       "id": "CHK-027",
       "title": "Errata 1.0 sweep",
       "file": "docs/backlog/active/CHK-027-errata-1-0-sweep.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "medium",
       "type": "ticket"
@@ -250,7 +250,7 @@
       "id": "CHK-028",
       "title": "XSTS-derived regression corpus",
       "file": "docs/backlog/active/CHK-028-xsts-derived-regression-corpus.md",
-      "status": "done",
+      "status": "draft",
       "area": "meta",
       "priority": "medium",
       "type": "ticket"
