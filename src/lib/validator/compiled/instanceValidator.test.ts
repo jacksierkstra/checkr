@@ -150,7 +150,7 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
             expect(errors.some((e) => e.code === "INVALID_ELEMENT_CONTENT")).toBe(true);
         });
 
-        it("reports choice content models as unsupported rather than guessing", () => {
+        it("validates choice: exactly one alternative matches, others are rejected", () => {
             const xsd = `
                 <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
                     <xsd:element name="root">
@@ -164,9 +164,243 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
                 </xsd:schema>
             `;
             const schema = compile(xsd);
-            const { valid, errors } = check(`<root><a>x</a></root>`, schema);
-            expect(valid).toBe(false);
-            expect(errors.some((e) => e.code === "UNSUPPORTED_FEATURE")).toBe(true);
+            // Valid: one matching alternative
+            expect(check(`<root><a>x</a></root>`, schema).valid).toBe(true);
+            expect(check(`<root><b>y</b></root>`, schema).valid).toBe(true);
+            // Invalid: multiple children in a choice with maxOccurs=1
+            const r1 = check(`<root><a>x</a><b>y</b></root>`, schema);
+            expect(r1.valid).toBe(false);
+            expect(r1.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+            // Invalid: no matching alternative
+            const r2 = check(`<root><c>z</c></root>`, schema);
+            expect(r2.valid).toBe(false);
+            expect(r2.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+        });
+
+        describe("choice semantics (CHK-018)", () => {
+
+            it("accepts a choice with minOccurs=0 when no children match", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:choice minOccurs="0">
+                                    <xsd:element name="a" type="xsd:string"/>
+                                    <xsd:element name="b" type="xsd:string"/>
+                                </xsd:choice>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root></root>`, schema).valid).toBe(true);
+            });
+
+            it("rejects a choice element that does not match any alternative", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:choice>
+                                    <xsd:element name="a" type="xsd:string"/>
+                                </xsd:choice>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                const r = check(`<root><b>y</b></root>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+            });
+
+        });
+
+        describe("all-group (CHK-018)", () => {
+
+            it("accepts an all-group with all children in any order", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:complexType name="Order">
+                            <xsd:all>
+                                <xsd:element name="name" type="xsd:string"/>
+                                <xsd:element name="price" type="xsd:decimal"/>
+                                <xsd:element name="qty" type="xsd:integer"/>
+                            </xsd:all>
+                        </xsd:complexType>
+                        <xsd:element name="order" type="Order"/>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                // In order
+                expect(check(`<order><name>foo</name><price>10.0</price><qty>5</qty></order>`, schema).valid).toBe(true);
+                // Out of order
+                expect(check(`<order><price>10.0</price><qty>5</qty><name>foo</name></order>`, schema).valid).toBe(true);
+                // Another order
+                expect(check(`<order><qty>5</qty><name>foo</name><price>10.0</price></order>`, schema).valid).toBe(true);
+            });
+
+            it("rejects duplicate children in an all-group", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:complexType name="Order">
+                            <xsd:all>
+                                <xsd:element name="name" type="xsd:string"/>
+                                <xsd:element name="price" type="xsd:decimal"/>
+                            </xsd:all>
+                        </xsd:complexType>
+                        <xsd:element name="order" type="Order"/>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                const r = check(`<order><name>foo</name><price>10.0</price><name>bar</name></order>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+            });
+
+            it("rejects an undeclared child in an all-group", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:complexType name="Order">
+                            <xsd:all>
+                                <xsd:element name="name" type="xsd:string"/>
+                            </xsd:all>
+                        </xsd:complexType>
+                        <xsd:element name="order" type="Order"/>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                const r = check(`<order><name>foo</name><extra>bad</extra></order>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "UNEXPECTED_ELEMENT" && e.message.includes("extra"))).toBe(true);
+            });
+
+            it("accepts an all-group with minOccurs=0 when empty", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:complexType name="Order">
+                            <xsd:all minOccurs="0">
+                                <xsd:element name="name" type="xsd:string"/>
+                            </xsd:all>
+                        </xsd:complexType>
+                        <xsd:element name="order" type="Order"/>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<order></order>`, schema).valid).toBe(true);
+            });
+
+            it("accepts an all-group with optional children", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:complexType name="Order">
+                            <xsd:all>
+                                <xsd:element name="name" type="xsd:string"/>
+                                <xsd:element name="note" type="xsd:string" minOccurs="0"/>
+                            </xsd:all>
+                        </xsd:complexType>
+                        <xsd:element name="order" type="Order"/>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<order><name>foo</name></order>`, schema).valid).toBe(true);
+                expect(check(`<order><note>hello</note><name>foo</name></order>`, schema).valid).toBe(true);
+            });
+
+        });
+
+        describe("nested compositors (CHK-018)", () => {
+
+            it("validates a sequence containing a choice", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:sequence>
+                                    <xsd:element name="a" type="xsd:string"/>
+                                    <xsd:choice>
+                                        <xsd:element name="b" type="xsd:string"/>
+                                        <xsd:element name="c" type="xsd:string"/>
+                                    </xsd:choice>
+                                </xsd:sequence>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root><a>1</a><b>2</b></root>`, schema).valid).toBe(true);
+                expect(check(`<root><a>1</a><c>3</c></root>`, schema).valid).toBe(true);
+                // a followed by something not b or c: not matching choice
+                const r = check(`<root><a>1</a><d>4</d></root>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+            });
+
+            it("validates a choice containing a sequence", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:choice>
+                                    <xsd:sequence>
+                                        <xsd:element name="a" type="xsd:string"/>
+                                        <xsd:element name="b" type="xsd:string"/>
+                                    </xsd:sequence>
+                                    <xsd:element name="c" type="xsd:string"/>
+                                </xsd:choice>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root><a>1</a><b>2</b></root>`, schema).valid).toBe(true);
+                expect(check(`<root><c>3</c></root>`, schema).valid).toBe(true);
+                // a without b: the choice matches a (sequence starts with a) but not enough for min b
+                const r = check(`<root><a>1</a></root>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT")).toBe(true);
+            });
+
+            it("validates a sequence containing a sequence (nested)", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:sequence>
+                                    <xsd:sequence>
+                                        <xsd:element name="a" type="xsd:string"/>
+                                        <xsd:element name="b" type="xsd:string"/>
+                                    </xsd:sequence>
+                                    <xsd:element name="c" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root><a>1</a><b>2</b><c>3</c></root>`, schema).valid).toBe(true);
+            });
+
+            it("validates a choice with maxOccurs=unbounded (repeating choice)", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:choice maxOccurs="unbounded">
+                                    <xsd:element name="a" type="xsd:string"/>
+                                    <xsd:element name="b" type="xsd:string"/>
+                                </xsd:choice>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root><a>1</a><b>2</b><a>3</a></root>`, schema).valid).toBe(true);
+                expect(check(`<root><b>1</b><b>2</b><b>3</b></root>`, schema).valid).toBe(true);
+                expect(check(`<root><a>1</a><a>2</a></root>`, schema).valid).toBe(true);
+                expect(check(`<root></root>`, schema).valid).toBe(true);
+            });
+
         });
 
     });

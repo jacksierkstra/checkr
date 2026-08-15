@@ -198,75 +198,271 @@ export class InstanceValidatorImpl implements InstanceValidator {
         report: (error: SchemaError) => void
     ): void {
         const term = particle.term;
+
+        // Handle occurrence wrapper: repeat the group match per minOccurs/maxOccurs
+        if (term.kind === "sequence" || term.kind === "choice" || term.kind === "all") {
+            this.validateRepeatingGroup(node, children, particle, schema, report);
+            return;
+        }
+
+        if (term.kind === "element") {
+            // Single element particle: consume matching children, then report leftovers
+            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report);
+            for (let i = consumed; i < children.length; i++) {
+                report(this.error(children[i]!, "UNEXPECTED_ELEMENT",
+                    `Element <${children[i]!.localName}> is not allowed inside <${node.localName}> at this position.`));
+            }
+            return;
+        }
+
         if (term.kind === "wildcard") {
             report(this.error(node, "UNSUPPORTED_FEATURE",
                 "Wildcard content (xs:any) is compiled but not validated yet."));
             return;
         }
-        if (term.kind === "element") {
-            this.validateSequence(node, children, [particle], schema, report);
-            return;
-        }
-        // Model group
-        if (term.kind === "sequence") {
-            this.validateSequence(node, children, term.particles, schema, report);
-            return;
-        }
-        report(this.error(node, "UNSUPPORTED_FEATURE",
-            `The ${term.kind} content model is not validated yet (CHK-018).`));
     }
 
     /**
-     * Greedy sequence matching: walk the instance children in order, consuming
-     * each particle up to its maxOccurs, then flag unsatisfied minOccurs and
-     * leftover children. Greedy, not lookahead-based — a child that matches a
-     * later particle after an out-of-order sibling is reported both as missing
-     * and unexpected. Proper content-model validation is CHK-018.
+     * Handle a particle wrapping a group: apply the particle's minOccurs/maxOccurs
+     * to the group match, repeating as needed (greedy).
      */
-    private validateSequence(
+    private validateRepeatingGroup(
+        node: Element,
+        children: Element[],
+        particle: Particle,
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): void {
+        const group = particle.term as { kind: string; particles: ReadonlyArray<Particle> };
+        let idx = 0;
+        let count = 0;
+
+        // Try at least one occurrence if there are children or the group is required
+        while (idx < children.length || (count === 0 && particle.minOccurs > 0)) {
+            const groupChildren = children.slice(idx);
+            const consumed = this.validateGroupOnce(node, groupChildren, group, schema, report);
+            if (consumed === 0 && count > 0) break; // empty repeat — stop
+            idx += consumed;
+            count++;
+            if (consumed === 0) break; // empty match, no more occurrences
+            if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
+        }
+
+        if (count < particle.minOccurs) {
+            report(this.error(node, "MISSING_REQUIRED_ELEMENT",
+                `The ${group.kind} group must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs ${count}.`));
+        }
+
+        // Report remaining unmatched children
+        while (idx < children.length) {
+            report(this.error(children[idx]!, "UNEXPECTED_ELEMENT",
+                `Element <${children[idx]!.localName}> is not allowed inside <${node.localName}> at this position.`));
+            idx++;
+        }
+    }
+
+    /**
+     * Match a single occurrence of a group against the front of the children array.
+     * Returns the number of children consumed.
+     */
+    private validateGroupOnce(
+        node: Element,
+        children: Element[],
+        group: { kind: string; particles: ReadonlyArray<Particle> },
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): number {
+        if (group.kind === "sequence") {
+            return this.validateSequenceOnce(node, children, group.particles, schema, report);
+        }
+        if (group.kind === "choice") {
+            return this.validateChoiceOnce(node, children, group.particles, schema, report);
+        }
+        if (group.kind === "all") {
+            return this.validateAllOnce(node, children, group.particles, schema, report);
+        }
+        return 0;
+    }
+
+    /**
+     * Greedy sequence matching (one occurrence): consume children matching the
+     * sequence particles in order, returns the number of children consumed.
+     */
+    private validateSequenceOnce(
         node: Element,
         children: Element[],
         particles: ReadonlyArray<Particle>,
         schema: CompiledSchema,
         report: (error: SchemaError) => void
-    ): void {
+    ): number {
         let idx = 0;
         for (const particle of particles) {
-            let count = 0;
-            while (idx < children.length) {
-                const child = children[idx];
-                if (!this.matches(child, particle.term)) break;
-                count++;
-                idx++;
-                const term = particle.term;
-                if (term.kind === "element") {
-                    this.validateElement(child, term, schema, report);
-                } else {
-                    report(this.error(node, "UNSUPPORTED_FEATURE",
-                        "Nested model groups are not validated yet (CHK-018)."));
-                }
-                if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
-            }
-            if (count < particle.minOccurs) {
-                const termName = this.termName(particle.term);
-                report(this.error(node, "MISSING_REQUIRED_ELEMENT",
-                    `Element ${termName} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs ${count}.`));
+            const consumed = this.consumeMatchingChildren(node, children, idx, particle, schema, report);
+            idx += consumed;
+            if (consumed === 0 && particle.minOccurs > 0) {
+                // Particle couldn't match and is required — stop the sequence
+                break;
             }
         }
-        while (idx < children.length) {
-            const child = children[idx];
-            report(this.error(child, "UNEXPECTED_ELEMENT",
-                `Element <${child.localName}> is not allowed inside <${node.localName}> at this position.`));
-            idx++;
-        }
+        return idx;
     }
 
+    /**
+     * Consume children starting at `startIdx` that match the given particle.
+     * Returns the number of children consumed.
+     */
+    private consumeMatchingChildren(
+        node: Element,
+        children: Element[],
+        startIdx: number,
+        particle: Particle,
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): number {
+        const term = particle.term;
+
+        // Element term: check if next child matches by name
+        if (term.kind === "element") {
+            if (startIdx >= children.length) {
+                if (particle.minOccurs > 0) {
+                    report(this.error(node, "MISSING_REQUIRED_ELEMENT",
+                        `Element ${displayQName(term.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs 0.`));
+                }
+                return 0;
+            }
+            const child = children[startIdx]!;
+            if (!qnameEqual(
+                { namespaceURI: child.namespaceURI, localName: child.localName ?? "" },
+                term.name
+            )) {
+                if (particle.minOccurs > 0) {
+                    report(this.error(node, "MISSING_REQUIRED_ELEMENT",
+                        `Element ${displayQName(term.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs 0.`));
+                }
+                return 0;
+            }
+            let count = 0;
+            let idx = startIdx;
+            while (idx < children.length) {
+                const c = children[idx]!;
+                if (!qnameEqual(
+                    { namespaceURI: c.namespaceURI, localName: c.localName ?? "" },
+                    term.name
+                )) break;
+                count++;
+                idx++;
+                this.validateElement(c, term, schema, report);
+                if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
+            }
+            return idx - startIdx;
+        }
+
+        // Group term: dispatch to the group handler
+        if (term.kind === "sequence") {
+            return this.validateSequenceOnce(node, children.slice(startIdx), term.particles, schema, report);
+        }
+        if (term.kind === "choice") {
+            return this.validateChoiceOnce(node, children.slice(startIdx), term.particles, schema, report);
+        }
+        if (term.kind === "all") {
+            return this.validateAllOnce(node, children.slice(startIdx), term.particles, schema, report);
+        }
+
+        // Wildcard — skip
+        return 0;
+    }
+
+    /**
+     * Choice semantics (one occurrence): match exactly one alternative.
+     * Returns the number of children consumed (0 if none matched, >0 if one matched).
+     */
+    private validateChoiceOnce(
+        node: Element,
+        children: Element[],
+        particles: ReadonlyArray<Particle>,
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): number {
+        if (children.length === 0) return 0;
+
+        const firstChild = children[0]!;
+        for (const particle of particles) {
+            if (!this.matches(firstChild, particle.term)) continue;
+
+            // Found a matching alternative — consume children matching this particle
+            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report);
+            return consumed;
+        }
+
+        // No matching alternative — return 0 without reporting errors
+        // The parent (validateRepeatingGroup or validateSequenceOnce) handles leftover reporting.
+        return 0;
+    }
+
+    /**
+     * All-group semantics (one occurrence, XSD 1.0 §3.8.4):
+     * unordered, each child particle at most once (maxOccurs=1).
+     * Returns the number of children consumed.
+     */
+    private validateAllOnce(
+        node: Element,
+        children: Element[],
+        particles: ReadonlyArray<Particle>,
+        schema: CompiledSchema,
+        report: (error: SchemaError) => void
+    ): number {
+        const matched = new Set<number>();
+
+        for (const particle of particles) {
+            const matchingIndices: number[] = [];
+            for (let i = 0; i < children.length; i++) {
+                if (matched.has(i)) continue;
+                if (this.matches(children[i]!, particle.term)) {
+                    matchingIndices.push(i);
+                }
+            }
+
+            if (matchingIndices.length === 0) {
+                if (particle.minOccurs > 0) {
+                    const termName = this.termName(particle.term);
+                    report(this.error(node, "MISSING_REQUIRED_ELEMENT",
+                        `Required element ${termName} is missing inside <${node.localName}> (all-group).`));
+                }
+            } else {
+                const max = particle.maxOccurs === "unbounded" ? matchingIndices.length : Math.min(matchingIndices.length, particle.maxOccurs);
+                for (let k = 0; k < max; k++) {
+                    const idx = matchingIndices[k]!;
+                    matched.add(idx);
+                    if (particle.term.kind === "element") {
+                        this.validateElement(children[idx]!, particle.term, schema, report);
+                    }
+                }
+            }
+        }
+
+        return matched.size;
+    }
+
+    /**
+     * Validate the content of a matched child element against a particle.
+     * For element particles, validates the element instance.
+     * For group particles, dispatches to the appropriate handler.
+     */
     private matches(child: Element, term: ParticleTerm): boolean {
-        if (term.kind !== "element") return false;
-        return qnameEqual(
-            { namespaceURI: child.namespaceURI, localName: child.localName ?? "" },
-            term.name
-        );
+        if (term.kind === "element") {
+            return qnameEqual(
+                { namespaceURI: child.namespaceURI, localName: child.localName ?? "" },
+                term.name
+            );
+        }
+        if (term.kind === "sequence" || term.kind === "choice" || term.kind === "all") {
+            // For a group term, check if the child matches any of the group's particles
+            for (const p of term.particles) {
+                if (this.matches(child, p.term)) return true;
+            }
+            return false;
+        }
+        return false; // wildcard (not handled yet)
     }
 
     private termName(term: ParticleTerm): string {

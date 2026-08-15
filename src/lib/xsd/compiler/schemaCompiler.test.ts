@@ -841,4 +841,210 @@ describe("SchemaCompiler — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("all-group occurrence limits (CHK-018)", () => {
+
+        it("rejects xs:all with maxOccurs=2 at compile time", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="BadAll">
+                        <xsd:all maxOccurs="2">
+                            <xsd:element name="a"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("rejects xs:all with maxOccurs=unbounded at compile time", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="BadAll">
+                        <xsd:all maxOccurs="unbounded">
+                            <xsd:element name="a"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("rejects xs:all with minOccurs=2 at compile time", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="BadAll">
+                        <xsd:all minOccurs="2">
+                            <xsd:element name="a"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("accepts xs:all with valid occurrence (minOccurs=0, maxOccurs=1)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="GoodAll">
+                        <xsd:all minOccurs="0">
+                            <xsd:element name="a"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                    <xsd:element name="e" type="GoodAll"/>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).not.toThrow();
+        });
+
+        it("rejects xs:all child with maxOccurs > 1 at compile time", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="BadAll">
+                        <xsd:all>
+                            <xsd:element name="a" maxOccurs="2"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+    });
+
+    describe("UPA determinism (CHK-018)", () => {
+
+        it("rejects a choice with overlapping element names", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:choice>
+                                <xsd:element name="a" type="xsd:string"/>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:choice>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("rejects a sequence with nullable-first overlapping particle", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string" minOccurs="0"/>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("rejects a sequence with repeatable-first overlapping particle", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string" maxOccurs="unbounded"/>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("accepts a sequence with non-nullable non-repeatable overlapping elements (UPA-val)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string"/>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).not.toThrow();
+        });
+
+        it("accepts a sequence with an optional separator between same-named elements", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string" maxOccurs="1"/>
+                                <xsd:element name="b" type="xsd:string" minOccurs="0"/>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).not.toThrow();
+        });
+
+        it("accepts a determinstic choice (disjoint element names)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:choice>
+                                <xsd:element name="a" type="xsd:string"/>
+                                <xsd:element name="b" type="xsd:string"/>
+                            </xsd:choice>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).not.toThrow();
+        });
+
+        it("rejects an all-group with overlapping element names", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="BadAll">
+                        <xsd:all>
+                            <xsd:element name="a"/>
+                            <xsd:element name="a"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                    <xsd:element name="e" type="BadAll"/>
+                </xsd:schema>
+            `;
+            expect(() => compiler.compile(xsd)).toThrow("Schema compilation failed");
+        });
+
+        it("reports AMBIGUOUS_CONTENT_MODEL error code for UPA violations", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:choice>
+                                <xsd:element name="a" type="xsd:string"/>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:choice>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const errors: SchemaError[] = [];
+            try {
+                compiler.compile(xsd, { listener: (e) => errors.push(e) });
+            } catch {}
+            expect(errors.some((e) => e.code === "AMBIGUOUS_CONTENT_MODEL")).toBe(true);
+        });
+
+    });
+
 });

@@ -51,7 +51,9 @@ export type SchemaErrorCode =
     /** A pattern facet value is not a valid XSD regular expression (CHK-015). */
     | "INVALID_PATTERN"
     /** A compiled construct exists but the processor does not validate it yet. */
-    | "UNSUPPORTED_FEATURE";
+    | "UNSUPPORTED_FEATURE"
+    /** The content model has a Unique Particle Attribution (UPA) violation (XSD 1.0 §3.8.6). */
+    | "AMBIGUOUS_CONTENT_MODEL";
 
 export interface SchemaError {
     severity: SchemaSeverity;

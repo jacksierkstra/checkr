@@ -159,8 +159,8 @@
     {
       "id": "CHK-018",
       "title": "Content models: sequence, choice, all",
-      "file": "docs/backlog/active/CHK-018-content-models-sequence-choice-all.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-018-content-models-sequence-choice-all.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

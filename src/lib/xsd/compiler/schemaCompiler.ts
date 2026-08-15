@@ -30,6 +30,7 @@ import { XMLParser } from "@lib/xml/parser";
 import { BUILTIN_GRAMMAR } from "@lib/xsd/compiler/builtinTypes";
 import { computeWhiteSpace, computeEffectiveFacets } from "@lib/xsd/facets";
 import { compileXsdRegex, XsdRegexError } from "@lib/xsd/regex";
+import { checkUPA, UpaViolation, buildParticleInfo } from "@lib/xsd/content-model";
 
 export interface CompileOptions {
     listener?: SchemaErrorListener;
@@ -55,6 +56,8 @@ interface BuildContext {
     allSimpleTypes: SimpleTypeDefinition[];
     /** Source location of each element declaration, for compile-error reporting. */
     locations: Map<ElementDeclaration, SchemaLocation>;
+    /** Source element for each particle, for UPA/constraint error reporting. */
+    particleNodes: Map<Particle, Element>;
     report: (error: SchemaError) => void;
 }
 
@@ -116,6 +119,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             refs: [],
             allSimpleTypes: [],
             locations: new Map(),
+            particleNodes: new Map(),
             report,
         };
 
@@ -234,8 +238,16 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 case "sequence":
                 case "choice":
                 case "all":
-                    particle = this.wrapParticle(contentChild, this.buildModelGroup(contentChild, ctx));
+                    particle = this.wrapParticle(ctx, contentChild, this.buildModelGroup(contentChild, ctx));
                     contentType = "element-only";
+                    // Validate all-group occurrence limits (XSD 1.0 §3.8.4)
+                    if (contentChild.localName === "all") {
+                        this.validateAllGroup(ctx, particle, contentChild);
+                    }
+                    // Run UPA check on the content model
+                    if (particle) {
+                        this.checkContentModelUPA(ctx, particle, contentChild);
+                    }
                     break;
                 case "any":
                     particle = this.buildAnyParticle(contentChild, ctx);
@@ -428,7 +440,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 case "sequence":
                 case "choice":
                 case "all":
-                    particles.push(this.wrapParticle(child, this.buildModelGroup(child, ctx)));
+                    particles.push(this.wrapParticle(ctx, child, this.buildModelGroup(child, ctx)));
                     break;
                 case "any":
                     particles.push(this.buildAnyParticle(child, ctx));
@@ -468,7 +480,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         };
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
-        return this.wrapParticle(el, decl);
+        return this.wrapParticle(ctx, el, decl);
     }
 
     private buildAttributeUse(el: Element, ctx: BuildContext): AttributeUse | null {
@@ -504,7 +516,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             location: locationOf(el),
             phase: "schema-compilation",
         });
-        return this.wrapParticle(el, this.buildWildcard(el));
+        return this.wrapParticle(ctx, el, this.buildWildcard(el));
     }
 
     private buildWildcard(el: Element): Wildcard {
@@ -512,11 +524,13 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         return { kind: "wildcard", processContents };
     }
 
-    private wrapParticle(el: Element, term: ParticleTerm): Particle {
+    private wrapParticle(ctx: BuildContext, el: Element, term: ParticleTerm): Particle {
         const minOccurs = this.readOccurs(el, "minOccurs", 1);
         const maxRaw = el.getAttribute("maxOccurs");
         const maxOccurs = maxRaw === UNBOUNDED ? UNBOUNDED : this.readOccurs(el, "maxOccurs", 1);
-        return { minOccurs, maxOccurs, term };
+        const particle: Particle = { minOccurs, maxOccurs, term };
+        ctx.particleNodes.set(particle, el);
+        return particle;
     }
 
     private localElementName(el: Element, ctx: BuildContext): QName {
@@ -782,6 +796,71 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         if (!raw) return fallback;
         const n = Number.parseInt(raw, 10);
         return Number.isFinite(n) ? n : fallback;
+    }
+
+    /**
+     * Validate all-group occurrence limits per XSD 1.0 §3.8.4:
+     * minOccurs ∈ {0, 1}, maxOccurs = 1; all children minOccurs ∈ {0, 1}, maxOccurs = 1.
+     */
+    private validateAllGroup(ctx: BuildContext, particle: Particle, el: Element): void {
+        if (particle.minOccurs < 0 || particle.minOccurs > 1) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `xs:all minOccurs must be 0 or 1, got ${particle.minOccurs}.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        if (particle.maxOccurs !== 1) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `xs:all maxOccurs must be 1, got ${particle.maxOccurs === "unbounded" ? "unbounded" : String(particle.maxOccurs)}.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        // Validate children
+        const group = particle.term as ModelGroup;
+        for (const child of group.particles) {
+            const childEl = ctx.particleNodes.get(child);
+            if (child.minOccurs < 0 || child.minOccurs > 1) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `An xs:all child particle minOccurs must be 0 or 1, got ${child.minOccurs}.`,
+                    location: childEl ? locationOf(childEl) : { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
+            if (child.maxOccurs !== 1) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `An xs:all child particle maxOccurs must be 1, got ${child.maxOccurs === "unbounded" ? "unbounded" : String(child.maxOccurs)}.`,
+                    location: childEl ? locationOf(childEl) : { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
+        }
+    }
+
+    /**
+     * Run UPA (Unique Particle Attribution) determinism check on a content-model particle.
+     * Reports AMBIGUOUS_CONTENT_MODEL errors for any violation.
+     */
+    private checkContentModelUPA(ctx: BuildContext, particle: Particle, el: Element): void {
+        const violations = checkUPA(particle);
+        for (const v of violations) {
+            ctx.report({
+                severity: "error",
+                code: "AMBIGUOUS_CONTENT_MODEL",
+                message: v.message,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
     }
 
     private checkPatternFacets(facets: ReadonlyArray<{ kind: string; value: string; node: Element }>, ctx: BuildContext): void {
