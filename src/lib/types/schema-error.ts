@@ -85,7 +85,13 @@ export type SchemaErrorCode =
     /** An element's value does not equal its fixed value constraint (CHK-023). */
     | "FIXED_VALUE_VIOLATION"
     /** A type marked final (or the schema's finalDefault) forbids the derivation method used with it as base (CHK-023). */
-    | "INVALID_FINAL";
+    | "INVALID_FINAL"
+    /**
+     * A schemaLocation (xs:include/import/redefine at compile time, or
+     * xsi:schemaLocation/xsi:noNamespaceSchemaLocation at validation time)
+     * cannot be resolved to a schema document / grammar (CHK-024).
+     */
+    | "SCHEMA_LOCATION_UNRESOLVED";
 
 export interface SchemaError {
     severity: SchemaSeverity;

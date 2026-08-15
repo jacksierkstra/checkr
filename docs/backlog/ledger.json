@@ -213,8 +213,8 @@
     {
       "id": "CHK-024",
       "title": "Multi-document schemas",
-      "file": "docs/backlog/active/CHK-024-multi-document-schemas.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-024-multi-document-schemas.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

@@ -58,10 +58,32 @@ import {
 
 export interface CompileOptions {
     listener?: SchemaErrorListener;
+    /**
+     * Resolves a schemaLocation URI (from xs:include, xs:import, or
+     * xs:redefine) to the content of the referenced schema document.
+     *
+     * Multi-document compilation (CHK-024) requires a resolver; without one,
+     * any schemaLocation reference is a compile error. The resolver receives
+     * the raw schemaLocation attribute value; relative-URI resolution against
+     * the including document's location is the caller's responsibility. Return
+     * null (or undefined) when the location cannot be resolved.
+     */
+    resolve?: (location: string) => string | null;
 }
 
 export interface SchemaCompiler {
     compile(xsd: string, options?: CompileOptions): CompiledSchema;
+}
+
+/** The per-document defaults that local declarations inherit (XSD 1.0 §3.3.1/§3.4.1). */
+interface SchemaDocumentDefaults {
+    targetNamespace: string | null;
+    elementFormDefault: boolean;
+    attributeFormDefault: boolean;
+    blockDefault: string;
+    finalDefault: string;
+    /** The grammar the document's globals register into. */
+    grammar: MutableGrammar;
 }
 
 interface BuildContext {
@@ -82,12 +104,27 @@ interface BuildContext {
     finalDefault: string;
     /** Mutable during pass 1; frozen as part of the final CompiledSchema. */
     grammar: MutableGrammar;
+    /**
+     * Every grammar being built across the schema document set, keyed by
+     * namespace (grammar-per-namespace, AD §4; CHK-024): the root document's
+     * grammar plus the grammars of every imported namespace. `grammar` is the
+     * grammar the current document registers into; this map is the whole set.
+     */
+    grammarsByNamespace: Map<string, MutableGrammar>;
     /** Every element declaration built during pass 1, for pass 2 resolution. */
     allElements: ElementDeclaration[];
     /** Every attribute declaration built during pass 1, for pass 2 resolution. */
     allAttributes: AttributeDeclaration[];
     /** Every remaining QName reference (simple-type bases, union members). */
     refs: Array<{ ref: QName; node: Element }>;
+    /**
+     * Active during the registration of a redefining schema document
+     * (xs:redefine, CHK-024): rewrites QName references to a redefined name
+     * onto a sentinel key holding the original (pre-redefinition) component,
+     * so augmentation references like `base="T"` resolve to the original.
+     * Null when no redefine is being registered.
+     */
+    refRewrite: ((q: QName) => QName) | null;
     /** Every simple type definition built during pass 1, for pass 2 facet resolution. */
     allSimpleTypes: SimpleTypeDefinition[];
     /** Source location of each element declaration, for compile-error reporting. */
@@ -141,6 +178,26 @@ const COMPLEX_FINAL_TOKENS = ["extension", "restriction"];
 /** Legal tokens of a simple type's final attribute (XSD 1.0 Part 2 §3.3.2). */
 const SIMPLE_FINAL_TOKENS = ["list", "union", "restriction"];
 
+/**
+ * The four component kinds that can be redefined in XSD 1.0 (§4.2.3), mapped
+ * to the grammar map they live in. Notation redefinition is an XSD 1.1 feature.
+ */
+type RedefineCategory = {
+    kind: "complexType" | "simpleType" | "group" | "attributeGroup";
+    mapName: "types" | "modelGroups" | "attributeGroups";
+};
+
+const REDEFINE_CATEGORIES: Record<string, RedefineCategory> = {
+    complexType: { kind: "complexType", mapName: "types" },
+    simpleType: { kind: "simpleType", mapName: "types" },
+    group: { kind: "group", mapName: "modelGroups" },
+    attributeGroup: { kind: "attributeGroup", mapName: "attributeGroups" },
+};
+
+function redefineCategory(localName: string | null): RedefineCategory | null {
+    return localName ? (REDEFINE_CATEGORIES[localName] ?? null) : null;
+}
+
 interface MutableGrammar {
     namespaceURI: string | null;
     elements: Map<string, ElementDeclaration>;
@@ -185,22 +242,26 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             throw new SchemaCompilationError(errors);
         }
 
+        const rootNamespace = root.getAttribute("targetNamespace") || null;
+        const rootGrammar: MutableGrammar = {
+            namespaceURI: rootNamespace,
+            elements: new Map(),
+            attributes: new Map(),
+            types: new Map(),
+            modelGroups: new Map(),
+            attributeGroups: new Map(),
+            identityConstraints: new Map(),
+            substitutionGroups: new Map(),
+        };
         const ctx: BuildContext = {
-            targetNamespace: root.getAttribute("targetNamespace") || null,
+            targetNamespace: rootNamespace,
             elementFormDefault: root.getAttribute("elementFormDefault") === "qualified",
             attributeFormDefault: root.getAttribute("attributeFormDefault") === "qualified",
             blockDefault: this.normalizeTokens(root.getAttribute("blockDefault"), "", BLOCK_TOKENS),
             finalDefault: this.normalizeTokens(root.getAttribute("finalDefault"), "", [...COMPLEX_FINAL_TOKENS, ...SIMPLE_FINAL_TOKENS]),
-            grammar: {
-                namespaceURI: root.getAttribute("targetNamespace") || null,
-                elements: new Map(),
-                attributes: new Map(),
-                types: new Map(),
-                modelGroups: new Map(),
-                attributeGroups: new Map(),
-                identityConstraints: new Map(),
-                substitutionGroups: new Map(),
-            },
+            grammar: rootGrammar,
+            grammarsByNamespace: new Map([[namespaceKey(rootNamespace), rootGrammar]]),
+            refRewrite: null,
             allElements: [],
             allAttributes: [],
             refs: [],
@@ -219,34 +280,17 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             report,
         };
 
-        // Pass 1 — register global components.
-        for (const child of childElements(root)) {
-            if (child.namespaceURI !== NAMESPACE_XSD) continue;
-            if (child.localName === "element") {
-                const decl = this.buildGlobalElement(child, ctx);
-                ctx.grammar.elements.set(decl.name.localName, decl);
-            } else if (child.localName === "attribute") {
-                const decl = this.buildGlobalAttribute(child, ctx);
-                if (decl) ctx.grammar.attributes.set(decl.name.localName, decl);
-            } else if (child.localName === "complexType") {
-                const type = this.buildComplexType(child, ctx, ctx.targetNamespace);
-                if (type.name) ctx.grammar.types.set(type.name.localName, type);
-            } else if (child.localName === "simpleType") {
-                const type = this.buildSimpleType(child, ctx, ctx.targetNamespace);
-                if (type.name) ctx.grammar.types.set(type.name.localName, type);
-            } else if (child.localName === "group") {
-                const def = this.buildModelGroupDefinition(child, ctx);
-                if (def) ctx.grammar.modelGroups.set(def.name.localName, def);
-            } else if (child.localName === "attributeGroup") {
-                const def = this.buildAttributeGroupDefinition(child, ctx);
-                if (def) ctx.grammar.attributeGroups.set(def.name.localName, def);
-            }
-            // include/import/redefine/annotation/notation: later tickets.
-        }
+        // Pass 1 — assemble the schema document set (include/import/redefine,
+        // CHK-024) and register every global component into its target-namespace
+        // grammar (AD §4). Pass 1a of compile() resolves multi-document sources
+        // through the resolver; registerSchemaSet owns the whole source graph.
+        this.registerSchemaSet(ctx, root, options);
 
         const grammars = new Map<string, CompiledGrammar>();
         grammars.set(NAMESPACE_XSD, BUILTIN_GRAMMAR);
-        grammars.set(namespaceKey(ctx.targetNamespace), ctx.grammar);
+        for (const [key, grammar] of ctx.grammarsByNamespace) {
+            grammars.set(key, grammar);
+        }
 
         // Pass 2 — eager multi-pass reference resolution (AD §5).
         this.resolveReferencePass(ctx, grammars);
@@ -293,6 +337,423 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     // -----------------------------------------------------------------------
+    // Pass 1 — multi-document schema assembly (CHK-024)
+    // -----------------------------------------------------------------------
+
+    /** Get-or-create the mutable grammar for a namespace across the schema set. */
+    private getOrCreateGrammar(ctx: BuildContext, namespaceURI: string | null): MutableGrammar {
+        const key = namespaceKey(namespaceURI);
+        let grammar = ctx.grammarsByNamespace.get(key);
+        if (!grammar) {
+            grammar = {
+                namespaceURI,
+                elements: new Map(),
+                attributes: new Map(),
+                types: new Map(),
+                modelGroups: new Map(),
+                attributeGroups: new Map(),
+                identityConstraints: new Map(),
+                substitutionGroups: new Map(),
+            };
+            ctx.grammarsByNamespace.set(key, grammar);
+        }
+        return grammar;
+    }
+
+    /** Snapshot the per-document defaults so a nested document can be processed and the caller restored. */
+    private snapshotDefaults(ctx: BuildContext): SchemaDocumentDefaults {
+        return {
+            targetNamespace: ctx.targetNamespace,
+            elementFormDefault: ctx.elementFormDefault,
+            attributeFormDefault: ctx.attributeFormDefault,
+            blockDefault: ctx.blockDefault,
+            finalDefault: ctx.finalDefault,
+            grammar: ctx.grammar,
+        };
+    }
+
+    /** Restore per-document defaults captured by {@link snapshotDefaults}. */
+    private restoreDefaults(ctx: BuildContext, saved: SchemaDocumentDefaults): void {
+        ctx.targetNamespace = saved.targetNamespace;
+        ctx.elementFormDefault = saved.elementFormDefault;
+        ctx.attributeFormDefault = saved.attributeFormDefault;
+        ctx.blockDefault = saved.blockDefault;
+        ctx.finalDefault = saved.finalDefault;
+        ctx.grammar = saved.grammar;
+    }
+
+    /**
+     * Register one schema document's per-document defaults onto the shared
+     * build context (target namespace, forms, defaults) and return its grammar.
+     */
+    private adoptDocument(ctx: BuildContext, docRoot: Element): MutableGrammar {
+        const targetNamespace = docRoot.getAttribute("targetNamespace") || null;
+        ctx.targetNamespace = targetNamespace;
+        ctx.grammar = this.getOrCreateGrammar(ctx, targetNamespace);
+        ctx.elementFormDefault = docRoot.getAttribute("elementFormDefault") === "qualified";
+        ctx.attributeFormDefault = docRoot.getAttribute("attributeFormDefault") === "qualified";
+        ctx.blockDefault = this.normalizeTokens(docRoot.getAttribute("blockDefault"), "", BLOCK_TOKENS);
+        ctx.finalDefault = this.normalizeTokens(docRoot.getAttribute("finalDefault"), "", [...COMPLEX_FINAL_TOKENS, ...SIMPLE_FINAL_TOKENS]);
+        return ctx.grammar;
+    }
+
+    /**
+     * Assemble the multi-document schema set rooted at `root` and register
+     * every global component (XSD 1.0 §4.2, CHK-024):
+     *
+     * - `xs:include` merges a same-namespace document into the including
+     *   document's grammar; duplicate component definitions are compile errors.
+     * - `xs:import` creates a foreign grammar for the imported namespace;
+     *   QName resolution crosses grammars in pass 2.
+     * - `xs:redefine` augments components from a same-namespace document:
+     *   references to a redefined name inside the redefining document resolve
+     *   to the original component; the redefinition replaces it in the set.
+     *
+     * Locations are tracked for cycle detection; a document whose location has
+     * already been processed is not re-processed (its components were already
+     * registered, and re-registration would only duplicate them).
+     */
+    private registerSchemaSet(ctx: BuildContext, root: Element, options: CompileOptions): void {
+        const resolve = options.resolve;
+        const processed = new Set<string>();
+        const processing = new Set<string>();
+
+        /** Resolve a schemaLocation to a parsed schema document, reporting errors. */
+        const resolveDocument = (location: string, sourceEl: Element, what: string): Element | null => {
+            if (!resolve) {
+                ctx.report({
+                    severity: "error",
+                    code: "SCHEMA_LOCATION_UNRESOLVED",
+                    message: `Cannot process ${what} schemaLocation '${location}': no schema resolver is configured (compile option 'resolve').`,
+                    location: locationOf(sourceEl),
+                    phase: "schema-compilation",
+                });
+                return null;
+            }
+            const content = resolve(location);
+            if (content === null || content === undefined) {
+                ctx.report({
+                    severity: "error",
+                    code: "SCHEMA_LOCATION_UNRESOLVED",
+                    message: `Cannot resolve ${what} schemaLocation '${location}' to a schema document.`,
+                    location: locationOf(sourceEl),
+                    phase: "schema-compilation",
+                });
+                return null;
+            }
+            return this.parseSchemaRoot(content, ctx.report);
+        };
+
+        /**
+         * Register a schema document and, recursively, everything it includes,
+         * imports, or redefines. `expectedNamespace` is the namespace the
+         * document must declare as its target namespace per the including
+         * construct; `undefined` means no constraint (the root document).
+         */
+        const registerDoc = (
+            docRoot: Element,
+            location: string | null,
+            expectedNamespace: string | null | undefined,
+            via: "root" | "include" | "import" | "redefine",
+            sourceEl: Element | null,
+        ): void => {
+            if (location !== null) {
+                if (processing.has(location)) {
+                    ctx.report({
+                        severity: "error",
+                        code: "CIRCULAR_REFERENCE",
+                        message: `Circular schema document reference: '${location}' includes, imports, or redefines itself (directly or transitively).`,
+                        location: sourceEl ? locationOf(sourceEl) : { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                    return;
+                }
+                if (processed.has(location)) return;
+                processing.add(location);
+            }
+
+            const targetNamespace = docRoot.getAttribute("targetNamespace") || null;
+            if (expectedNamespace !== undefined && targetNamespace !== expectedNamespace) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `A ${via === "import" ? "imported" : via === "redefine" ? "redefined" : "included"} schema document ${location ? `('${location}') ` : ""}must have the same target namespace as the ${via === "import" ? "import declaration" : "including document"} (expected ${expectedNamespace === null ? "(none)" : `'${expectedNamespace}'`}, found ${targetNamespace === null ? "(none)" : `'${targetNamespace}'`}).`,
+                    location: sourceEl ? locationOf(sourceEl) : { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
+
+            const saved = this.snapshotDefaults(ctx);
+            this.adoptDocument(ctx, docRoot);
+
+            // Phase A — register the documents this document redefines first, so
+            // the originals exist before any references are read (redefinition
+            // references resolve against the original, XSD 1.0 §4.2.3).
+            const redefineEls: Element[] = [];
+            for (const child of childElements(docRoot)) {
+                if (child.namespaceURI !== NAMESPACE_XSD) continue;
+                if (child.localName !== "redefine") continue;
+                redefineEls.push(child);
+                const loc = child.getAttribute("schemaLocation");
+                if (!loc) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_SCHEMA_DOCUMENT",
+                        message: "An xs:redefine element must carry a schemaLocation attribute.",
+                        location: locationOf(child),
+                        phase: "schema-compilation",
+                    });
+                    continue;
+                }
+                const redefined = resolveDocument(loc, child, "redefine");
+                if (!redefined) continue;
+                // The redefined document shares this document's grammar (same
+                // target namespace) but has its own defaults; the recursive call
+                // adopts and restores them.
+                registerDoc(redefined, loc, ctx.targetNamespace, "redefine", child);
+            }
+
+            // Phase B — register this document's globals. While the redefined
+            // names are in scope, QName references to them are rewritten to
+            // sentinel keys holding the original components.
+            const redefinedNames = new Map<string, { category: RedefineCategory; sentinel: string }>();
+            const invalidRedefinitions = new Set<string>();
+            for (const redefineEl of redefineEls) {
+                for (const rdChild of childElements(redefineEl)) {
+                    if (rdChild.namespaceURI !== NAMESPACE_XSD) continue;
+                    const category = redefineCategory(rdChild.localName);
+                    if (!category) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: `Only complexType, simpleType, group, and attributeGroup can be redefined in XSD 1.0; xs:${rdChild.localName ?? "?"} cannot be redefined.`,
+                            location: locationOf(rdChild),
+                            phase: "schema-compilation",
+                        });
+                        continue;
+                    }
+                    const name = rdChild.getAttribute("name");
+                    if (!name) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: `A redefinition must carry a name attribute.`,
+                            location: locationOf(rdChild),
+                            phase: "schema-compilation",
+                        });
+                        continue;
+                    }
+                    if (redefinedNames.has(name)) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: `Component '${name}' is redefined more than once; a component can only be redefined a single time.`,
+                            location: locationOf(rdChild),
+                            phase: "schema-compilation",
+                        });
+                        invalidRedefinitions.add(name);
+                        continue;
+                    }
+                    const original = (ctx.grammar[category.mapName] as Map<string, unknown>).get(name);
+                    if (!original) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: `Cannot redefine '${name}': it is not defined by the redefined schema document.`,
+                            location: locationOf(rdChild),
+                            phase: "schema-compilation",
+                        });
+                        invalidRedefinitions.add(name);
+                        continue;
+                    }
+                    const sentinel = `__checkr_redefine_${name}`;
+                    (ctx.grammar[category.mapName] as Map<string, unknown>).set(sentinel, original);
+                    redefinedNames.set(name, { category, sentinel });
+                }
+            }
+            // Phase B — register this document's globals. References from the
+            // redefining document's own definitions (outside the redefine
+            // element) resolve to the redefined (replacement) components, which
+            // is the XSD 1.0 §4.2.3 behavior: only the redefine element's
+            // children (built in Phase C) see the originals via the sentinel.
+            this.registerGlobals(docRoot, ctx);
+
+            // Phase C — build the redefinitions (references to the redefined
+            // name still resolve to the original via the sentinel) and replace
+            // the original components in the grammar.
+            if (redefinedNames.size > 0) {
+                ctx.refRewrite = (q: QName): QName => {
+                    const entry = redefinedNames.get(q.localName);
+                    if (entry && (q.namespaceURI ?? null) === (ctx.targetNamespace ?? null)) {
+                        return { namespaceURI: q.namespaceURI, localName: entry.sentinel };
+                    }
+                    return q;
+                };
+            }
+            for (const redefineEl of redefineEls) {
+                for (const rdChild of childElements(redefineEl)) {
+                    if (rdChild.namespaceURI !== NAMESPACE_XSD) continue;
+                    const name = rdChild.getAttribute("name") ?? "";
+                    if (!name) continue;
+                    if (invalidRedefinitions.has(name)) continue;
+                    const entry = redefinedNames.get(name);
+                    if (!entry) continue;
+                    this.buildRedefinition(rdChild, name, entry.category, ctx);
+                }
+            }
+            ctx.refRewrite = null;
+
+            // Phase D — discover this document's includes and imports.
+            for (const child of childElements(docRoot)) {
+                if (child.namespaceURI !== NAMESPACE_XSD) continue;
+                if (child.localName === "include") {
+                    const loc = child.getAttribute("schemaLocation");
+                    if (!loc) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:include element must carry a schemaLocation attribute.",
+                            location: locationOf(child),
+                            phase: "schema-compilation",
+                        });
+                        continue;
+                    }
+                    const included = resolveDocument(loc, child, "include");
+                    if (!included) continue;
+                    registerDoc(included, loc, ctx.targetNamespace, "include", child);
+                } else if (child.localName === "import") {
+                    // The namespace attribute may be absent (importing the
+                    // no-namespace schema); schemaLocation is optional (a
+                    // locationless import contributes no grammar and simply
+                    // declares intent).
+                    const importedNs = child.getAttribute("namespace") || null;
+                    if (importedNs !== null && importedNs === ctx.targetNamespace) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:import cannot import the schema document's own target namespace; use xs:include instead.",
+                            location: locationOf(child),
+                            phase: "schema-compilation",
+                        });
+                        continue;
+                    }
+                    const loc = child.getAttribute("schemaLocation");
+                    if (!loc) continue;
+                    const imported = resolveDocument(loc, child, "import");
+                    if (!imported) continue;
+                    registerDoc(imported, loc, importedNs, "import", child);
+                }
+            }
+
+            this.restoreDefaults(ctx, saved);
+            if (location !== null) {
+                processing.delete(location);
+                processed.add(location);
+            }
+        };
+
+        registerDoc(root, null, undefined, "root", null);
+    }
+
+    /**
+     * Register the global component definitions of one schema document into
+     * its target-namespace grammar, with duplicate-component detection (two
+     * schema documents may not define the same component, XSD 1.0 §4.2.1).
+     */
+    private registerGlobals(docRoot: Element, ctx: BuildContext): void {
+        for (const child of childElements(docRoot)) {
+            if (child.namespaceURI !== NAMESPACE_XSD) continue;
+            switch (child.localName) {
+                case "element": {
+                    const decl = this.buildGlobalElement(child, ctx);
+                    this.registerComponent(ctx, "elements", decl.name.localName, decl, "element", child);
+                    break;
+                }
+                case "attribute": {
+                    const decl = this.buildGlobalAttribute(child, ctx);
+                    if (decl) this.registerComponent(ctx, "attributes", decl.name.localName, decl, "attribute", child);
+                    break;
+                }
+                case "complexType": {
+                    const type = this.buildComplexType(child, ctx, ctx.targetNamespace);
+                    if (type.name) this.registerComponent(ctx, "types", type.name.localName, type, "complexType", child);
+                    break;
+                }
+                case "simpleType": {
+                    const type = this.buildSimpleType(child, ctx, ctx.targetNamespace);
+                    if (type.name) this.registerComponent(ctx, "types", type.name.localName, type, "simpleType", child);
+                    break;
+                }
+                case "group": {
+                    const def = this.buildModelGroupDefinition(child, ctx);
+                    if (def) this.registerComponent(ctx, "modelGroups", def.name.localName, def, "group", child);
+                    break;
+                }
+                case "attributeGroup": {
+                    const def = this.buildAttributeGroupDefinition(child, ctx);
+                    if (def) this.registerComponent(ctx, "attributeGroups", def.name.localName, def, "attributeGroup", child);
+                    break;
+                }
+                // include/import/redefine handled by registerSchemaSet;
+                // annotation/notation are later tickets.
+            }
+        }
+    }
+
+    /** Register one global component, rejecting duplicate definitions. */
+    private registerComponent(
+        ctx: BuildContext,
+        mapName: "elements" | "attributes" | "types" | "modelGroups" | "attributeGroups",
+        localName: string,
+        component: unknown,
+        kind: string,
+        el: Element,
+    ): void {
+        const map = ctx.grammar[mapName] as Map<string, unknown>;
+        if (map.has(localName)) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `Duplicate definition of ${kind} '${localName}' in namespace ${ctx.targetNamespace === null ? "(none)" : `'${ctx.targetNamespace}'`}; a schema document set may only define a component once.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            return;
+        }
+        map.set(localName, component);
+    }
+
+    /**
+     * Build a single redefinition (xs:complexType/xs:simpleType/xs:group/
+     * xs:attributeGroup inside an xs:redefine element) and replace the
+     * original component in the grammar (XSD 1.0 §4.2.3).
+     */
+    private buildRedefinition(
+        el: Element,
+        name: string,
+        category: RedefineCategory,
+        ctx: BuildContext,
+    ): void {
+        const grammar = ctx.grammar[category.mapName] as Map<string, unknown>;
+        let replacement: unknown = null;
+        switch (category.kind) {
+            case "complexType":
+                replacement = this.buildComplexType(el, ctx, ctx.targetNamespace);
+                break;
+            case "simpleType":
+                replacement = this.buildSimpleType(el, ctx, ctx.targetNamespace);
+                break;
+            case "group":
+                replacement = this.buildModelGroupDefinition(el, ctx);
+                break;
+            case "attributeGroup":
+                replacement = this.buildAttributeGroupDefinition(el, ctx);
+                break;
+        }
+        if (replacement) grammar.set(name, replacement);
+    }
+
+    // -----------------------------------------------------------------------
     // Pass 1 — builders
     // -----------------------------------------------------------------------
 
@@ -308,7 +769,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             });
         }
         const name: QName = { namespaceURI: ctx.targetNamespace, localName };
-        const typeRef = this.readQName(el, "type");
+        const typeRef = this.readQName(el, "type", ctx);
         const inlineType = typeRef ? null : this.buildInlineType(el, ctx);
         const decl: ElementDeclaration = {
             kind: "element",
@@ -319,7 +780,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             nillable: el.getAttribute("nillable") === "true",
             ref: null,
             identityConstraints: this.buildIdentityConstraints(el, ctx),
-            substitutionGroup: this.readQName(el, "substitutionGroup"),
+            substitutionGroup: this.readQName(el, "substitutionGroup", ctx),
             abstract: el.getAttribute("abstract") === "true",
             default: el.getAttribute("default") ?? null,
             fixed: el.getAttribute("fixed") ?? null,
@@ -346,7 +807,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         const decl: AttributeDeclaration = {
             kind: "attribute",
             name: { namespaceURI: ctx.targetNamespace, localName },
-            typeRef: this.readQName(el, "type"),
+            typeRef: this.readQName(el, "type", ctx),
             type: null,
             ref: null,
         };
@@ -406,7 +867,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     }
                     attributeParent = derivation;
                     derivationNode = derivation;
-                    baseRef = this.readQName(derivation, "base");
+                    baseRef = this.readQName(derivation, "base", ctx);
                     if (baseRef) this.trackRef(ctx, derivation, baseRef);
                     derivationMethod = derivation.localName === "extension" ? "extension" : "restriction";
                     contentType = "simple";
@@ -432,7 +893,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     }
                     attributeParent = derivation;
                     derivationNode = derivation;
-                    baseRef = this.readQName(derivation, "base");
+                    baseRef = this.readQName(derivation, "base", ctx);
                     if (baseRef) this.trackRef(ctx, derivation, baseRef);
                     derivationMethod = derivation.localName === "extension" ? "extension" : "restriction";
                     // The derivation's own content particle (extension splices
@@ -524,7 +985,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         let result: SimpleTypeDefinition;
         switch (derivation.localName) {
             case "restriction": {
-                const base = this.readQName(derivation, "base");
+                const base = this.readQName(derivation, "base", ctx);
                 if (base) this.trackRef(ctx, derivation, base);
                 result = {
                     kind: "simple-type",
@@ -544,7 +1005,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 break;
             }
             case "list": {
-                const itemType = this.readQName(derivation, "itemType");
+                const itemType = this.readQName(derivation, "itemType", ctx);
                 if (itemType) this.trackRef(ctx, derivation, itemType);
                 // Inline anonymous item type (XSD 1.0 Part 2 §3.4.1): allowed
                 // only when there is no itemType attribute. Build it either way
@@ -570,7 +1031,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 const raw = derivation.getAttribute("memberTypes");
                 if (raw) {
                     for (const part of raw.trim().split(/\s+/)) {
-                        const member = this.readQNameString(derivation, part);
+                        const member = this.readQNameString(derivation, part, ctx);
                         if (member) {
                             memberTypes.push(member);
                             this.trackRef(ctx, derivation, member);
@@ -621,7 +1082,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
      * type with simple content (resolved in pass 3 / pass 2e+2f, CHK-020).
      */
     private buildSimpleContentRestriction(el: Element, ctx: BuildContext): SimpleTypeDefinition {
-        const base = this.readQName(el, "base");
+        const base = this.readQName(el, "base", ctx);
         const facets = this.readFacets(el);
         this.checkPatternFacets(facets, ctx);
         const st: SimpleTypeDefinition = {
@@ -664,7 +1125,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 const use = this.buildAttributeUse(child, ctx);
                 if (use) uses.push(use);
             } else if (child.localName === "attributeGroup") {
-                const ref = this.readQName(child, "ref");
+                const ref = this.readQName(child, "ref", ctx);
                 if (ref) {
                     groupRefs.push(ref);
                     const placeholder = this.placeholderAttributeGroupUse(child, ref);
@@ -703,7 +1164,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     particles.push(this.buildAnyParticle(child, ctx));
                     break;
                 case "group": {
-                    const ref = this.readQName(child, "ref");
+                    const ref = this.readQName(child, "ref", ctx);
                     if (ref) {
                         // A placeholder group; pass 2 replaces its content with the
                         // referenced definition's particles (CHK-019).
@@ -809,8 +1270,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     private buildLocalElementParticle(el: Element, ctx: BuildContext): Particle {
-        const refAttr = this.readQName(el, "ref");
-        const typeRef = refAttr ? null : this.readQName(el, "type");
+        const refAttr = this.readQName(el, "ref", ctx);
+        const typeRef = refAttr ? null : this.readQName(el, "type", ctx);
         const inlineType = refAttr || typeRef ? null : this.buildInlineType(el, ctx);
         const decl: ElementDeclaration = {
             kind: "element",
@@ -841,8 +1302,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     private buildAttributeUse(el: Element, ctx: BuildContext): AttributeUse | null {
-        const refAttr = this.readQName(el, "ref");
-        const typeRef = refAttr ? null : this.readQName(el, "type");
+        const refAttr = this.readQName(el, "ref", ctx);
+        const typeRef = refAttr ? null : this.readQName(el, "type", ctx);
         // A ref attribute use's identity is the referenced QName; its type is
         // resolved in pass 2 to the referenced global declaration (CHK-017).
         const name = refAttr
@@ -991,7 +1452,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             };
 
             if (category === "keyref") {
-                const refer = this.readQName(child, "refer");
+                const refer = this.readQName(child, "refer", ctx);
                 if (!refer) {
                     ctx.report({
                         severity: "error",
@@ -1222,8 +1683,6 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     private buildSubstitutionGroups(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
         // member -> resolved head (only successful affiliations).
         const memberOf: Array<{ member: ElementDeclaration; head: ElementDeclaration }> = [];
-        // head local name -> direct members.
-        const directMembers = new Map<string, ElementDeclaration[]>();
 
         for (const decl of ctx.allElements) {
             if (decl.scope !== "global") continue;
@@ -1262,10 +1721,6 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 continue;
             }
             memberOf.push({ member: decl, head });
-            const key = head.name.localName;
-            const list = directMembers.get(key);
-            if (list) list.push(decl);
-            else directMembers.set(key, [decl]);
         }
 
         // Cycle detection on the affiliation graph: following substitutionGroup
@@ -1290,43 +1745,61 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         }
 
         // Transitive closure per head: {head} ∪ members ∪ members-of-member-heads.
-        const groups = new Map<string, ElementDeclaration[]>();
-        const headNames = new Set(memberOf.map((m) => m.head.name.localName));
-        for (const headName of headNames) {
-            const out: ElementDeclaration[] = [];
-            const queue: ElementDeclaration[] = [];
-            const head = ctx.grammar.elements.get(headName);
-            if (!head) continue;
-            out.push(head);
-            queue.push(head);
-            const seen = new Set<ElementDeclaration>([head]);
-            while (queue.length > 0) {
-                const cur = queue.pop()!;
-                for (const member of directMembers.get(cur.name.localName) ?? []) {
-                    if (seen.has(member)) continue;
-                    seen.add(member);
-                    // XSD 1.0 §3.3.6 (cos-element-decl-consistent): if the
-                    // head has a type, the member's type must be validly
-                    // derived from the head's type (any derivation method
-                    // is accepted, including extension).
-                    if (head.type && member.type && !this.isValidlyDerived(member.type, head.type)) {
-                        ctx.report({
-                            severity: "error",
-                            code: "INVALID_SCHEMA_DOCUMENT",
-                            message: `Element ${displayQName(member.name)} is a member of the substitution group of ${displayQName(head.name)} but its type is not validly derived from the head's type.`,
-                            location: ctx.locations.get(member) ?? { line: 0, column: 0 },
-                            phase: "schema-compilation",
-                        });
-                        continue;
-                    }
-                    out.push(member);
-                    // A member that is itself a head brings its own members.
-                    queue.push(member);
-                }
-            }
-            groups.set(headName, out);
+        // Members share the head's namespace (checked above), so every head
+        // lives in exactly one grammar; groups are keyed by head local name on
+        // that grammar (CompiledGrammar.substitutionGroups, CHK-023). Keying
+        // direct members by full QName avoids cross-namespace collisions in a
+        // multi-document schema set (CHK-024).
+        const directByQName = new Map<string, ElementDeclaration[]>();
+        for (const m of memberOf) {
+            const key = qnameKey(m.head.name);
+            const list = directByQName.get(key);
+            if (list) list.push(m.member);
+            else directByQName.set(key, [m.member]);
         }
-        ctx.grammar.substitutionGroups = groups;
+
+        for (const [, grammar] of ctx.grammarsByNamespace) {
+            const headNames = new Set<string>();
+            for (const m of memberOf) {
+                if (m.head.name.namespaceURI === grammar.namespaceURI) headNames.add(m.head.name.localName);
+            }
+            const groups = new Map<string, ElementDeclaration[]>();
+            for (const headName of headNames) {
+                const out: ElementDeclaration[] = [];
+                const queue: ElementDeclaration[] = [];
+                const head = grammar.elements.get(headName);
+                if (!head) continue;
+                out.push(head);
+                queue.push(head);
+                const seen = new Set<ElementDeclaration>([head]);
+                while (queue.length > 0) {
+                    const cur = queue.pop()!;
+                    for (const member of directByQName.get(qnameKey(cur.name)) ?? []) {
+                        if (seen.has(member)) continue;
+                        seen.add(member);
+                        // XSD 1.0 §3.3.6 (cos-element-decl-consistent): if the
+                        // head has a type, the member's type must be validly
+                        // derived from the head's type (any derivation method
+                        // is accepted, including extension).
+                        if (head.type && member.type && !this.isValidlyDerived(member.type, head.type)) {
+                            ctx.report({
+                                severity: "error",
+                                code: "INVALID_SCHEMA_DOCUMENT",
+                                message: `Element ${displayQName(member.name)} is a member of the substitution group of ${displayQName(head.name)} but its type is not validly derived from the head's type.`,
+                                location: ctx.locations.get(member) ?? { line: 0, column: 0 },
+                                phase: "schema-compilation",
+                            });
+                            continue;
+                        }
+                        out.push(member);
+                        // A member that is itself a head brings its own members.
+                        queue.push(member);
+                    }
+                }
+                groups.set(headName, out);
+            }
+            grammar.substitutionGroups = groups;
+        }
     }
 
     private lookupType(grammars: Map<string, CompiledGrammar>, q: QName): TypeDefinition | null {
@@ -2575,24 +3048,30 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         }
     }
 
-    private readQName(el: Element, attrName: string): QName | null {
+    private readQName(el: Element, attrName: string, ctx: BuildContext): QName | null {
         const value = el.getAttribute(attrName);
         if (!value) return null;
-        return this.readQNameString(el, value);
+        return this.readQNameString(el, value, ctx);
     }
 
-    private readQNameString(el: Element, value: string): QName | null {
+    private readQNameString(el: Element, value: string, ctx: BuildContext): QName | null {
         const colon = value.indexOf(":");
+        let q: QName;
         if (colon === -1) {
             // The default namespace: per Namespaces in XML an unprefixed QName
             // resolves against it. xmldom stores it under the '' key, so a
             // null lookup must fall back to an empty-string lookup.
             const namespaceURI = el.lookupNamespaceURI(null) ?? el.lookupNamespaceURI("");
-            return { namespaceURI, localName: value };
+            q = { namespaceURI, localName: value };
+        } else {
+            const prefix = value.slice(0, colon);
+            const localName = value.slice(colon + 1);
+            q = { namespaceURI: el.lookupNamespaceURI(prefix), localName };
         }
-        const prefix = value.slice(0, colon);
-        const localName = value.slice(colon + 1);
-        return { namespaceURI: el.lookupNamespaceURI(prefix), localName };
+        // Inside a redefining schema document, references to a redefined name
+        // resolve to the original (pre-redefinition) component (XSD 1.0 §4.2.3).
+        if (ctx.refRewrite) return ctx.refRewrite(q);
+        return q;
     }
 
     private readOccurs(el: Element, attrName: string, fallback: number): number {

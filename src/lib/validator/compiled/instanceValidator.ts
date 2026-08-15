@@ -105,6 +105,12 @@ export class InstanceValidatorImpl implements InstanceValidator {
             return { valid: false, errors };
         }
 
+        // xsi:schemaLocation / xsi:noNamespaceSchemaLocation hints (XSD 1.0
+        // §4.3.2, CHK-024): the instance declares where its schemas live. The
+        // compiled schema's grammars are the source of truth; a hint whose
+        // namespace has no grammar cannot be honored and is an error.
+        this.checkSchemaLocationHints(root, schema, report);
+
         this.validateElement(root, decl, schema, report, new IdentityConstraintEvaluator());
         const valid = !errors.some((e) => e.severity === "error" || e.severity === "fatal");
         return { valid, errors };
@@ -919,6 +925,42 @@ export class InstanceValidatorImpl implements InstanceValidator {
     private xsiNilRequested(node: Element): boolean {
         const value = node.getAttributeNS(NAMESPACE_XSI, "nil");
         return value === "true" || value === "1";
+    }
+
+    /**
+     * Validate the instance's xsi:schemaLocation / xsi:noNamespaceSchemaLocation
+     * hints (XSD 1.0 §4.3.2, CHK-024): every namespace the instance declares a
+     * schema location for must resolve to a grammar in the compiled schema.
+     *
+     * The hints never add grammars (the schema is already compiled; that is the
+     * two-phase contract) — they are honored when the grammar exists and are
+     * reported as SCHEMA_LOCATION_UNRESOLVED when it does not.
+     */
+    private checkSchemaLocationHints(root: Element, schema: CompiledSchema, report: (error: SchemaError) => void): void {
+        const schemaLocation = root.getAttributeNS(NAMESPACE_XSI, "schemaLocation");
+        if (schemaLocation) {
+            const tokens = schemaLocation.trim().split(/\s+/);
+            if (tokens.length % 2 !== 0) {
+                report(this.error(root, "SCHEMA_LOCATION_UNRESOLVED",
+                    "xsi:schemaLocation must contain an even number of tokens (namespace/location pairs)."));
+            }
+            for (let i = 0; i + 1 < tokens.length; i += 2) {
+                const ns = tokens[i]!;
+                const location = tokens[i + 1]!;
+                if (ns === "") continue;
+                if (!schema.grammars.has(namespaceKey(ns))) {
+                    report(this.error(root, "SCHEMA_LOCATION_UNRESOLVED",
+                        `xsi:schemaLocation declares a schema for namespace '${ns}' at '${location}', but the compiled schema has no grammar for that namespace.`));
+                }
+            }
+        }
+        const noNamespace = root.getAttributeNS(NAMESPACE_XSI, "noNamespaceSchemaLocation");
+        if (noNamespace) {
+            if (!schema.grammars.has("")) {
+                report(this.error(root, "SCHEMA_LOCATION_UNRESOLVED",
+                    `xsi:noNamespaceSchemaLocation points at '${noNamespace}', but the compiled schema has no no-namespace grammar.`));
+            }
+        }
     }
 
     /**
