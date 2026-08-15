@@ -67,14 +67,11 @@ Pass the W3C XML Schema Test Suite (XSTS) for XSD 1.0, Parts 1 and 2 — both sc
 <!-- the index — one line per closed ticket: enough to judge relevance, then zoom the link for the detail the ticket holds -->
 
 - [Research reference XSD validator architectures](docs/backlog/archive/CHK-003-reference-architectures.md) — Xerces-J uses a grammar-per-namespace component model; libxml2 uses a flat struct model. Both share a two-phase architecture (schema compilation → instance validation) with eager multi-pass reference resolution. The full analysis covers all seven research questions and includes a summary of design recommendations.
+- [Decide checkr's XSD component model architecture](docs/backlog/archive/CHK-004-architecture-decision.md) — ADR at `docs/adr/architecture-component-model.md`: checkr adopts a typed component graph (discriminated union mirroring XSD Part 1 components) with a two-phase API (`compileSchema` → immutable `CompiledSchema` → `validate`). QName `{ns}localName` identity; grammar-per-namespace; eager multi-pass resolution (unresolved refs = compile errors); `SchemaError` taxonomy via listener; schema-for-schemas validation at compile time; no formal PSVI but internal hooks kept. This also settles the schema-validation-infrastructure fog entry: schema-for-schemas, at compile time.
 
 ## Not yet specified
 
-- **Test runner design** — Once we understand the XSTS format, we need to decide: how does the runner parse manifests, feed cases through checkr, compare results, and report progress? What's the API surface? Should it be a CLI tool, a library, or both? This is blocked on [Research the XSTS structure and acquisition](#CHK-002).
-- **Architecture decision** — [CHK-004: Decide checkr's XSD component model architecture](docs/backlog/active/CHK-004-architecture-decision.md) — What component model should checkr adopt? References the CHK-003 research. Unblocked.
-- **Gap analysis** — A detailed feature-by-feature comparison of checkr's current capabilities against the XSTS. Which features are missing, which are incomplete, which are correct? Blocked on both XSTS research and architecture research.
-- **Feature implementation order** — Once we have the architecture and gap analysis, in what order should features be implemented to maximize early progress on the XSTS? This is a scheduling decision, blocked on the gap analysis.
-- **Schema validation infrastructure** — Currently checkr doesn't validate schemas at all. We need to decide: validate against the schema-for-schemas (XSD spec), or use a simpler conformance check? Blocked on architecture decision.
+- **Feature implementation order** — Once we have the architecture and gap analysis, in what order should features be implemented to maximize early progress on the XSTS? This is a scheduling decision, blocked on the gap analysis (CHK-005).
 
 ## Out of scope
 

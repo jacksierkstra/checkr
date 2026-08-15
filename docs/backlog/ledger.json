@@ -33,7 +33,25 @@
     {
       "id": "CHK-004",
       "title": "Decide checkr's XSD component model architecture",
-      "file": "docs/backlog/active/CHK-004-architecture-decision.md",
+      "file": "docs/backlog/archive/CHK-004-architecture-decision.md",
+      "status": "done",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-005",
+      "title": "Gap analysis: checkr capabilities vs XSTS",
+      "file": "docs/backlog/active/CHK-005-gap-analysis.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-006",
+      "title": "Decide test runner architecture for XSTS",
+      "file": "docs/backlog/active/CHK-006-test-runner-design.md",
       "status": "draft",
       "area": "meta",
       "priority": "high",

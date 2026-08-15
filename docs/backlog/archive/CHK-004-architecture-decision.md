@@ -6,11 +6,11 @@ wayfinder_type: "grilling"
 parent: "CHK-001"
 area: "meta"
 priority: "high"
-status: "draft"
+status: "done"
 depends_on: ["CHK-003"]
 required_context: ["docs/research/reference-xsd-validator-architectures.md"]
 optional_context: []
-assignee: null
+assignee: "jacks"
 estimate: null
 ---
 
@@ -70,4 +70,8 @@ What component model architecture should checkr adopt for its XSD 1.0 processor,
 
 ## Answer
 
-*(to be filled on resolution)*
+The ADR is at [docs/adr/architecture-component-model.md](../../adr/architecture-component-model.md).
+
+Checkr adopts a **typed component graph** (discriminated union of TypeScript interfaces mirroring XSD Part 1 components) with a **two-phase architecture**: eager multi-pass schema compilation → immutable `CompiledSchema` → instance validation. Cross-references are **QName `{ns}localName`** keys; anonymous components get parent-derived synthesized identities. Namespace organization is **grammar-per-namespace** (Xerces-J model over libxml2's flat structs). Reference resolution is **eager, multi-pass** (4 passes); unresolvable references are compile-time errors. Errors are `SchemaError` unions (severity/code/message/location/phase) reported via a **callback/listener**, continuing after non-fatal errors. Schemas are validated against the **schema-for-schemas at compile time**. **No formal PSVI** in the core, but internal typed-value/effective-type hooks keep the option open.
+
+All eight Deliver areas are covered and each decision is justified against Xerces-J, libxml2, or XSD spec requirements.
