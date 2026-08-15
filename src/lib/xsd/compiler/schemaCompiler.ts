@@ -10,6 +10,8 @@ import {
     DerivationMethod,
     ElementDeclaration,
     Facet,
+    IdentityConstraintCategory,
+    IdentityConstraintDefinition,
     ModelGroup,
     ModelGroupDefinition,
     NamespaceConstraint,
@@ -48,6 +50,11 @@ import { BUILTIN_GRAMMAR } from "@lib/xsd/compiler/builtinTypes";
 import { computeWhiteSpace, computeEffectiveFacets } from "@lib/xsd/facets";
 import { compileXsdRegex, XsdRegexError } from "@lib/xsd/regex";
 import { checkUPA, UpaViolation, buildParticleInfo } from "@lib/xsd/content-model";
+import {
+    IdentityPathError,
+    compileField,
+    compileSelector,
+} from "@lib/xsd/identity-constraints";
 
 export interface CompileOptions {
     listener?: SchemaErrorListener;
@@ -103,6 +110,10 @@ interface BuildContext {
     }>;
     /** Anonymous simple types from simpleContent restrictions (base may be a complex type with simple content, CHK-020). */
     simpleContentRestrictions: Set<SimpleTypeDefinition>;
+    /** Every identity constraint definition built during pass 1, for pass 2 resolution. */
+    allIdentityConstraints: IdentityConstraintDefinition[];
+    /** Every keyref definition that needs its @refer resolved in pass 2. */
+    identityConstraintRefs: Array<{ ic: IdentityConstraintDefinition; node: Element }>;
     report: (error: SchemaError) => void;
 }
 
@@ -116,6 +127,7 @@ interface MutableGrammar {
     types: Map<string, TypeDefinition>;
     modelGroups: Map<string, ModelGroupDefinition>;
     attributeGroups: Map<string, AttributeGroupDefinition>;
+    identityConstraints: Map<string, IdentityConstraintDefinition>;
 }
 
 /**
@@ -162,6 +174,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 types: new Map(),
                 modelGroups: new Map(),
                 attributeGroups: new Map(),
+                identityConstraints: new Map(),
             },
             allElements: [],
             allAttributes: [],
@@ -176,6 +189,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             particleNodes: new Map(),
             attributeGroupRefNodes: new Map(),
             attributeGroupWildcardRefs: new Map(),
+            allIdentityConstraints: [],
+            identityConstraintRefs: [],
             report,
         };
 
@@ -274,6 +289,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             type: inlineType,
             nillable: el.getAttribute("nillable") === "true",
             ref: null,
+            identityConstraints: this.buildIdentityConstraints(el, ctx),
         };
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
@@ -765,6 +781,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             type: inlineType,
             nillable: el.getAttribute("nillable") === "true",
             ref: refAttr,
+            identityConstraints: refAttr ? [] : this.buildIdentityConstraints(el, ctx),
         };
         ctx.locations.set(decl, locationOf(el));
         ctx.allElements.push(decl);
@@ -816,6 +833,145 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         }
         const namespaceConstraint = parseNamespaceConstraint(namespaceAttr, ctx.targetNamespace);
         return { kind: "wildcard", processContents, namespaceConstraint };
+    }
+
+    /**
+     * Parse the identity-constraint children (xs:key, xs:unique, xs:keyref)
+     * of an element declaration (XSD 1.0 §3.11.2, CHK-022).
+     *
+     * Selector/field XPath expressions are parsed and their namespace prefixes
+     * resolved at compile time; a syntax error is a compile-time error. The
+     * resolved definitions are registered on the grammar (for keyref @refer
+     * resolution in pass 2) and returned in document order.
+     */
+    private buildIdentityConstraints(el: Element, ctx: BuildContext): IdentityConstraintDefinition[] {
+        const out: IdentityConstraintDefinition[] = [];
+        for (const child of childElements(el)) {
+            if (child.namespaceURI !== NAMESPACE_XSD) continue;
+            const category = child.localName;
+            if (category !== "key" && category !== "unique" && category !== "keyref") continue;
+
+            const loc = locationOf(child);
+            const nameAttr = child.getAttribute("name");
+            if (!nameAttr) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `An xs:${category} identity constraint must carry a name attribute.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+
+            // Read the selector and fields (in document order).
+            let selector: string | null = null;
+            const fields: string[] = [];
+            for (const c of childElements(child)) {
+                if (c.namespaceURI !== NAMESPACE_XSD) continue;
+                if (c.localName === "selector") {
+                    const xpath = c.getAttribute("xpath");
+                    if (xpath !== null && xpath !== undefined) selector = xpath;
+                } else if (c.localName === "field") {
+                    const xpath = c.getAttribute("xpath");
+                    if (xpath !== null && xpath !== undefined) fields.push(xpath);
+                }
+            }
+            if (selector === null) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Identity constraint ${nameAttr} must contain exactly one xs:selector element.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            if (fields.length === 0) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Identity constraint ${nameAttr} must contain at least one xs:field element.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+
+            const resolvePrefix = (prefix: string) => child.lookupNamespaceURI(prefix);
+            let compiledSelector: ReturnType<typeof compileSelector> | null = null;
+            try {
+                compiledSelector = compileSelector(selector, resolvePrefix);
+            } catch (e) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_IDENTITY_PATH",
+                    message: `Invalid selector XPath '${selector}' in identity constraint ${nameAttr}: ${e instanceof IdentityPathError ? e.message : String(e)}`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+            let compiledFields: ReturnType<typeof compileField>[] = [];
+            try {
+                compiledFields = fields.map((f) => compileField(f, resolvePrefix));
+            } catch (e) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_IDENTITY_PATH",
+                    message: `Invalid field XPath in identity constraint ${nameAttr}: ${e instanceof IdentityPathError ? e.message : String(e)}`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+            if (compiledSelector === null || compiledFields.length !== fields.length) continue;
+
+            const name: QName = { namespaceURI: ctx.targetNamespace, localName: nameAttr };
+            const ic: IdentityConstraintDefinition = {
+                kind: "identity-constraint",
+                name,
+                category: category as IdentityConstraintCategory,
+                selector,
+                fields,
+                refer: null,
+                referencedConstraint: null,
+                compiledSelector,
+                compiledFields,
+            };
+
+            if (category === "keyref") {
+                const refer = this.readQName(child, "refer");
+                if (!refer) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_SCHEMA_DOCUMENT",
+                        message: `A keyref identity constraint must carry a refer attribute.`,
+                        location: loc,
+                        phase: "schema-compilation",
+                    });
+                    continue;
+                }
+                (ic as { refer: QName | null }).refer = refer;
+                ctx.identityConstraintRefs.push({ ic, node: child });
+            }
+
+            ctx.allIdentityConstraints.push(ic);
+            // Register by local name for keyref @refer resolution (identity
+            // constraint names live in a single symbol space per target
+            // namespace, XSD 1.0 §3.11.1).
+            if (!ctx.grammar.identityConstraints.has(nameAttr)) {
+                ctx.grammar.identityConstraints.set(nameAttr, ic);
+            } else {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Identity constraint name ${nameAttr} is already declared in this schema.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+            out.push(ic);
+        }
+        return out;
     }
 
     private wrapParticle(ctx: BuildContext, el: Element, term: ParticleTerm): Particle {
@@ -935,6 +1091,45 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 });
             }
         }
+
+        // Pass 2d — resolve keyref @refer references to their key/unique
+        // identity-constraint definitions (CHK-022). A keyref must have the
+        // same number of fields as the referenced key (XSD 1.0 §3.11.6).
+        for (const { ic, node } of ctx.identityConstraintRefs) {
+            const refer = ic.refer!;
+            const referenced = this.lookupIdentityConstraint(grammars, refer);
+            if (!referenced) {
+                ctx.report({
+                    severity: "error",
+                    code: "UNRESOLVED_REFERENCE",
+                    message: `Keyref ${displayQName(ic.name)} refers to identity constraint ${displayQName(refer)} which is not declared.`,
+                    location: locationOf(node),
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            if (referenced.category === "keyref") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Keyref ${displayQName(ic.name)} refers to ${displayQName(refer)}, which is itself a keyref; a keyref must refer to a key or unique.`,
+                    location: locationOf(node),
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            if (referenced.fields.length !== ic.fields.length) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: `Keyref ${displayQName(ic.name)} has ${ic.fields.length} field(s) but the referenced ${referenced.category} ${displayQName(refer)} has ${referenced.fields.length}; they must be equal.`,
+                    location: locationOf(node),
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            (ic as { referencedConstraint: IdentityConstraintDefinition | null }).referencedConstraint = referenced;
+        }
     }
 
     private lookupType(grammars: Map<string, CompiledGrammar>, q: QName): TypeDefinition | null {
@@ -955,6 +1150,10 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
     private lookupAttributeGroup(grammars: Map<string, CompiledGrammar>, q: QName): AttributeGroupDefinition | null {
         return grammars.get(namespaceKey(q.namespaceURI))?.attributeGroups.get(q.localName) ?? null;
+    }
+
+    private lookupIdentityConstraint(grammars: Map<string, CompiledGrammar>, q: QName): IdentityConstraintDefinition | null {
+        return grammars.get(namespaceKey(q.namespaceURI))?.identityConstraints.get(q.localName) ?? null;
     }
 
     // -----------------------------------------------------------------------

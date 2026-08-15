@@ -176,6 +176,7 @@ export const BUILTIN_GRAMMAR: CompiledGrammar = deepFreeze({
     attributes: new Map(),
     modelGroups: new Map(),
     attributeGroups: new Map(),
+    identityConstraints: new Map(),
     types,
 });
 

@@ -195,8 +195,8 @@
     {
       "id": "CHK-022",
       "title": "Identity constraints",
-      "file": "docs/backlog/active/CHK-022-identity-constraints.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-022-identity-constraints.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

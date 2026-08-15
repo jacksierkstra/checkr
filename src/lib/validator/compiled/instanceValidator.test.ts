@@ -2,7 +2,7 @@ import { XMLParserImpl } from "@lib/xml/parser";
 import { SchemaCompilerImpl } from "@lib/xsd/compiler/schemaCompiler";
 import { InstanceValidatorImpl } from "@lib/validator/compiled/instanceValidator";
 import { CompiledSchema } from "@lib/types/component-graph";
-import { NAMESPACE_XSD } from "@lib/types/namespaces";
+import { NAMESPACE_XSD, NAMESPACE_XSI } from "@lib/types/namespaces";
 import { SchemaError, SchemaValidationResult } from "@lib/types/schema-error";
 
 const compiler = new SchemaCompilerImpl(new XMLParserImpl());
@@ -2152,6 +2152,715 @@ describe("wildcards — xs:any and xs:anyAttribute (CHK-021)", () => {
             const schema = compile(xsd);
             expect(check(`<t:root xmlns:t="urn:t" note="hi" x:e="1" xmlns:x="urn:extra"/>`, schema).valid).toBe(true);
             expect(check(`<t:root xmlns:t="urn:t" note="hi" y:o="1" xmlns:y="urn:other"/>`, schema).valid).toBe(false);
+        });
+
+    });
+
+});
+
+describe("identity constraints — key, unique, keyref (CHK-022)", () => {
+
+    describe("XPath-subset evaluator", () => {
+
+        it("selects .// descendants", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // All unique val values
+            expect(check(`<root><uid val="1"/><uid val="2"/><uid val="3"/></root>`, schema).valid).toBe(true);
+            // Duplicate val values
+            const r = check(`<root><uid val="1"/><uid val="1"/></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "IDENTITY_CONSTRAINT_VIOLATION")).toBe(true);
+        });
+
+        it("handles * wildcard in selector", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" maxOccurs="unbounded" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//*"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><a>1</a><a>2</a></root>`, schema).valid).toBe(true);
+            expect(check(`<root><a>1</a><a>1</a></root>`, schema).valid).toBe(false);
+        });
+
+        it("evaluates child axis with / steps", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="container" maxOccurs="unbounded">
+                                    <xsd:complexType>
+                                        <xsd:sequence>
+                                            <xsd:element name="item" type="xsd:string"/>
+                                        </xsd:sequence>
+                                    </xsd:complexType>
+                                </xsd:element>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//container/item"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><container><item>a</item></container><container><item>b</item></container></root>`, schema).valid).toBe(true);
+            expect(check(`<root><container><item>a</item></container><container><item>a</item></container></root>`, schema).valid).toBe(false);
+        });
+
+        it("evaluates field attribute @ syntax", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="a" maxOccurs="unbounded">
+                                    <xsd:complexType>
+                                        <xsd:attribute name="id" type="xsd:string"/>
+                                    </xsd:complexType>
+                                </xsd:element>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//a"/>
+                            <xsd:field xpath="@id"/>
+                        </xsd:unique>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><a id="x"/><a id="y"/></root>`, schema).valid).toBe(true);
+            expect(check(`<root><a id="x"/><a id="x"/></root>`, schema).valid).toBe(false);
+        });
+
+        it("evaluates the self axis .", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><uid>a</uid><uid>b</uid></root>`, schema).valid).toBe(true);
+            expect(check(`<root><uid>a</uid><uid>a</uid></root>`, schema).valid).toBe(false);
+        });
+
+    });
+
+    describe("unique", () => {
+
+        it("accepts unique values across elements", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="item" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//item"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><item>a</item><item>b</item><item>c</item></root>`, schema).valid).toBe(true);
+        });
+
+        it("rejects duplicate values", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="item" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//item"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            const r = check(`<root><item>a</item><item>a</item></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "IDENTITY_CONSTRAINT_VIOLATION")).toBe(true);
+        });
+
+        it("excludes nodes with missing fields from the uniqueness check (empty field = not qualified)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // The second uid has no val attribute — excluded from uniqueness check, so no collision
+            // (XSTS idF009 semantics)
+            expect(check(`<root><uid val="1"/><uid/><uid val="2"/></root>`, schema).valid).toBe(true);
+            // All three have values — two collide
+            expect(check(`<root><uid val="1"/><uid val="1"/></root>`, schema).valid).toBe(false);
+        });
+
+        it("rejects a field that selects more than one node", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="pid"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="pid" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // Each uid has multiple pid children — field selects more than 1 node
+            const r = check(`<root><uid><pid>a</pid><pid>b</pid></uid></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "IDENTITY_CONSTRAINT_VIOLATION")).toBe(true);
+        });
+
+        it("rejects a field that selects a complex element (not simple type)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="pid"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="pid">
+                                    <xsd:complexType>
+                                        <xsd:attribute name="p" type="xsd:string"/>
+                                    </xsd:complexType>
+                                </xsd:element>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // pid has a complex type (element-only content) — not simple
+            const r = check(`<root><uid><pid p="11"/></uid></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "IDENTITY_CONSTRAINT_VIOLATION")).toBe(true);
+        });
+
+        it("detects value-space equality for decimal types (3.0 == 3)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:decimal"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // 3.0 and 3 are equal as decimal values
+            expect(check(`<root><uid val="3.0"/><uid val="3"/></root>`, schema).valid).toBe(false);
+            // Different values are still unique
+            expect(check(`<root><uid val="3.0"/><uid val="4"/></root>`, schema).valid).toBe(true);
+        });
+
+        it("uses string equality for string types (3.0 != 3)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // 3.0 and 3 are different strings
+            expect(check(`<root><uid val="3.0"/><uid val="3"/></root>`, schema).valid).toBe(true);
+        });
+
+        it("default values participate in the key-sequence", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="uuid">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:string" default="test"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // The first uid has val="test", the second gets default="test" — both produce "test" → duplicate
+            expect(check(`<root><uid val="test"/><uid/></root>`, schema).valid).toBe(false);
+        });
+
+    });
+
+    describe("key", () => {
+
+        it("accepts unique key values", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="item" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//item"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><item>a</item><item>b</item></root>`, schema).valid).toBe(true);
+        });
+
+        it("rejects duplicate key values", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="item" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//item"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><item>a</item><item>a</item></root>`, schema).valid).toBe(false);
+        });
+
+        it("rejects a missing field value (key requires every field to be present)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:key>
+                    </xsd:element>
+                    <xsd:element name="uid">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            const r = check(`<root><uid val="a"/><uid/></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "KEY_FIELD_MISSING")).toBe(true);
+        });
+
+        it("rejects a nilled element in a key field", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="@val"/>
+                        </xsd:key>
+                    </xsd:element>
+                    <xsd:element name="uid" nillable="true">
+                        <xsd:complexType>
+                            <xsd:attribute name="val" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // A nilled element as a field value would be a nillability issue
+            // (key field selects a node that is xsi:nil). But for @val attribute,
+            // the attribute is not nillable — so this would be a regular missing field error
+            // if the attribute is absent. A nilled uid with no val attr → missing field.
+            const r = check(`<root><uid val="a"/><uid xsi:nil="true" xmlns:xsi="${NAMESPACE_XSI}"/></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "KEY_FIELD_MISSING")).toBe(true);
+        });
+
+        it("rejects a nilled element when the field selects the element itself", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="uid" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                    </xsd:element>
+                    <xsd:element name="uid" nillable="true" type="xsd:string"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // Each uid is a nilled element; the field selects the uid itself.
+            // The field value is nil (element is nilled) → key violation.
+            const r = check(`<root><uid xsi:nil="true" xmlns:xsi="${NAMESPACE_XSI}"/><uid xsi:nil="true" xmlns:xsi="${NAMESPACE_XSI}"/></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "KEY_FIELD_NIL")).toBe(true);
+        });
+
+    });
+
+    describe("keyref", () => {
+
+        it("accepts a keyref that matches a key", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="uid" type="xsd:string" maxOccurs="unbounded"/>
+                                <xsd:element name="ref" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                        <xsd:keyref name="r" refer="k">
+                            <xsd:selector xpath=".//ref"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // ref values "a" and "b" both match uid values "a" and "b"
+            expect(check(`<root><uid>a</uid><uid>b</uid><ref>a</ref><ref>b</ref></root>`, schema).valid).toBe(true);
+        });
+
+        it("rejects a keyref that does not match any key", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="uid" type="xsd:string" maxOccurs="unbounded"/>
+                                <xsd:element name="ref" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                        <xsd:keyref name="r" refer="k">
+                            <xsd:selector xpath=".//ref"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // ref value "c" has no matching uid
+            const r = check(`<root><uid>a</uid><uid>b</uid><ref>c</ref></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "KEYREF_VIOLATION")).toBe(true);
+        });
+
+        it("accepts a keyref referencing a unique", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="uid" type="xsd:string" maxOccurs="unbounded"/>
+                                <xsd:element name="ref" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                        <xsd:keyref name="r" refer="u">
+                            <xsd:selector xpath=".//ref"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><uid>a</uid><uid>b</uid><ref>a</ref><ref>b</ref></root>`, schema).valid).toBe(true);
+        });
+
+        it("rejects a keyref with a field count mismatch at compile time", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="uid" type="xsd:string" maxOccurs="unbounded"/>
+                                <xsd:element name="ref" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:key name="k">
+                            <xsd:selector xpath=".//uid"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                        <xsd:keyref name="r" refer="k">
+                            <xsd:selector xpath=".//ref"/>
+                            <xsd:field xpath="@id"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compile(xsd)).toThrow();
+        });
+
+    });
+
+    describe("multi-field constraints", () => {
+
+        it("enforces uniqueness on composite key (two fields)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element ref="item" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//item"/>
+                            <xsd:field xpath="@a"/>
+                            <xsd:field xpath="@b"/>
+                        </xsd:unique>
+                    </xsd:element>
+                    <xsd:element name="item">
+                        <xsd:complexType>
+                            <xsd:attribute name="a" type="xsd:string"/>
+                            <xsd:attribute name="b" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // (a=1,b=1) and (a=1,b=2) are different tuples
+            expect(check(`<root><item a="1" b="1"/><item a="1" b="2"/></root>`, schema).valid).toBe(true);
+            // (a=1,b=1) and (a=1,b=1) are duplicates
+            expect(check(`<root><item a="1" b="1"/><item a="1" b="1"/></root>`, schema).valid).toBe(false);
+        });
+
+    });
+
+    describe("compile-time validation", () => {
+
+        it("rejects a keyref with an unresolvable refer", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="x" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:keyref name="r" refer="nonexistent">
+                            <xsd:selector xpath=".//x"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compile(xsd)).toThrow();
+        });
+
+        it("rejects a keyref that refers to another keyref", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="x" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:keyref name="r1" refer="r2">
+                            <xsd:selector xpath=".//x"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                        <xsd:keyref name="r2" refer="r1">
+                            <xsd:selector xpath=".//x"/>
+                            <xsd:field xpath="."/>
+                        </xsd:keyref>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compile(xsd)).toThrow();
+        });
+
+        it("rejects duplicate identity constraint names", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="x" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath=".//x"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                        <xsd:key name="u">
+                            <xsd:selector xpath=".//x"/>
+                            <xsd:field xpath="."/>
+                        </xsd:key>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compile(xsd)).toThrow();
+        });
+
+        it("rejects a selector with invalid XPath syntax", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}" elementFormDefault="qualified">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:element name="x" type="xsd:string" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:unique name="u">
+                            <xsd:selector xpath="//[@illegal"/>
+                            <xsd:field xpath="."/>
+                        </xsd:unique>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            expect(() => compile(xsd)).toThrow();
         });
 
     });

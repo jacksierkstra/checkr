@@ -63,7 +63,17 @@ export type SchemaErrorCode =
     /** Complex type restriction with an xs:all group is rejected (CTR-all-compile, CHK-020). */
     | "ALL_GROUP_RESTRICTION"
     /** A complex type derives from itself (directly or transitively, CHK-020). */
-    | "CIRCULAR_DERIVATION";
+    | "CIRCULAR_DERIVATION"
+    /** An identity-constraint selector/field XPath is not in the XSD subset (CHK-022). */
+    | "INVALID_IDENTITY_PATH"
+    /** A unique/key/keyref tuple violates the identity constraint (CHK-022). */
+    | "IDENTITY_CONSTRAINT_VIOLATION"
+    /** A key field node-set is empty (the field has no value, CHK-022). */
+    | "KEY_FIELD_MISSING"
+    /** A key field's value node is an element assessed against a nillable declaration with xsi:nil (CHK-022). */
+    | "KEY_FIELD_NIL"
+    /** A keyref targets a key-sequence that has no entry in the referenced key/unique node table (CHK-022). */
+    | "KEYREF_VIOLATION";
 
 export interface SchemaError {
     severity: SchemaSeverity;

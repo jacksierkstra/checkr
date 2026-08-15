@@ -21,6 +21,7 @@ import { checkNumericFamilyLexicalSpace } from "@lib/xsd/numeric-types";
 import { checkDateTimeFamilyLexicalSpace } from "@lib/xsd/datetime-types";
 import { checkRemainingFamilyLexicalSpace } from "@lib/xsd/remaining-types";
 import { wildcardAllowsNamespace } from "@lib/xsd/wildcards";
+import { IdentityConstraintEvaluator } from "@lib/xsd/identity-constraints";
 import {
     SchemaError,
     SchemaErrorCode,
@@ -103,7 +104,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             return { valid: false, errors };
         }
 
-        this.validateElement(root, decl, schema, report);
+        this.validateElement(root, decl, schema, report, new IdentityConstraintEvaluator());
         const valid = !errors.some((e) => e.severity === "error" || e.severity === "fatal");
         return { valid, errors };
     }
@@ -116,16 +117,22 @@ export class InstanceValidatorImpl implements InstanceValidator {
         node: Element,
         decl: ElementDeclaration,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): void {
         const type = decl.type;
-        if (!type) return; // untyped element behaves as xs:anyType for now (CHK-023).
+        if (type) evaluator.nodeTypes.set(node, type);
 
-        if (type.kind === "simple-type") {
+        if (type?.kind === "simple-type") {
             this.validateSimpleContent(node, type, report);
-            return;
+        } else if (type?.kind === "complex-type") {
+            this.validateComplex(node, type, schema, report, evaluator);
         }
-        this.validateComplex(node, type, schema, report);
+
+        // Identity constraints are evaluated after the element's content and
+        // attributes are validated, so children's node tables are available
+        // (CHK-022).
+        evaluator.evaluateElement(node, decl, schema, report);
     }
 
     private validateSimpleContent(
@@ -149,7 +156,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         node: Element,
         type: ComplexTypeDefinition,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): void {
         const elementChildren = childElements(node);
         const text = this.nonWhitespaceText(node);
@@ -180,7 +188,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                         `Element <${node.localName}> has character data but its type is element-only.`));
                 }
                 if (type.particle) {
-                    this.validateParticle(node, elementChildren, type.particle, schema, report);
+                    this.validateParticle(node, elementChildren, type.particle, schema, report, evaluator);
                 } else if (elementChildren.length > 0) {
                     report(this.error(node, "INVALID_ELEMENT_CONTENT",
                         `Element <${node.localName}> has child elements but its content model is empty.`));
@@ -188,7 +196,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 break;
             case "mixed":
                 if (type.particle) {
-                    this.validateParticle(node, elementChildren, type.particle, schema, report);
+                    this.validateParticle(node, elementChildren, type.particle, schema, report, evaluator);
                 } else if (elementChildren.length > 0) {
                     // mixed="true" with no compositor: empty particle — character
                     // data only, no element children (CHK-020).
@@ -198,7 +206,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 break;
         }
 
-        this.validateAttributes(node, type, schema, report);
+        this.validateAttributes(node, type, schema, report, evaluator);
     }
 
     // -----------------------------------------------------------------------
@@ -210,19 +218,20 @@ export class InstanceValidatorImpl implements InstanceValidator {
         children: Element[],
         particle: Particle,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): void {
         const term = particle.term;
 
         // Handle occurrence wrapper: repeat the group match per minOccurs/maxOccurs
         if (term.kind === "sequence" || term.kind === "choice" || term.kind === "all") {
-            this.validateRepeatingGroup(node, children, particle, schema, report);
+            this.validateRepeatingGroup(node, children, particle, schema, report, true, evaluator);
             return;
         }
 
         if (term.kind === "element") {
             // Single element particle: consume matching children, then report leftovers
-            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report);
+            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report, evaluator);
             for (let i = consumed; i < children.length; i++) {
                 report(this.error(children[i]!, "UNEXPECTED_ELEMENT",
                     `Element <${children[i]!.localName}> is not allowed inside <${node.localName}> at this position.`));
@@ -233,7 +242,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
         if (term.kind === "wildcard") {
             // Single wildcard particle: consume all children matching the
             // namespace constraint, then report leftovers (CHK-021).
-            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report);
+            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report, evaluator);
             for (let i = consumed; i < children.length; i++) {
                 report(this.error(children[i]!, "UNEXPECTED_ELEMENT",
                     `Element <${children[i]!.localName}> is not allowed inside <${node.localName}> at this position.`));
@@ -258,7 +267,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         particle: Particle,
         schema: CompiledSchema,
         report: (error: SchemaError) => void,
-        reportLeftovers = true
+        reportLeftovers = true,
+        evaluator: IdentityConstraintEvaluator
     ): number {
         const group = particle.term as { kind: string; particles: ReadonlyArray<Particle> };
         let idx = 0;
@@ -267,7 +277,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
         // Try at least one occurrence if there are children or the group is required
         while (idx < children.length || (count === 0 && particle.minOccurs > 0)) {
             const groupChildren = children.slice(idx);
-            const consumed = this.validateGroupOnce(node, groupChildren, group, schema, report);
+            const consumed = this.validateGroupOnce(node, groupChildren, group, schema, report, evaluator);
             if (consumed === 0 && count > 0) break; // empty repeat — stop
             idx += consumed;
             count++;
@@ -298,16 +308,17 @@ export class InstanceValidatorImpl implements InstanceValidator {
         children: Element[],
         group: { kind: string; particles: ReadonlyArray<Particle> },
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): number {
         if (group.kind === "sequence") {
-            return this.validateSequenceOnce(node, children, group.particles, schema, report);
+            return this.validateSequenceOnce(node, children, group.particles, schema, report, evaluator);
         }
         if (group.kind === "choice") {
-            return this.validateChoiceOnce(node, children, group.particles, schema, report);
+            return this.validateChoiceOnce(node, children, group.particles, schema, report, evaluator);
         }
         if (group.kind === "all") {
-            return this.validateAllOnce(node, children, group.particles, schema, report);
+            return this.validateAllOnce(node, children, group.particles, schema, report, evaluator);
         }
         return 0;
     }
@@ -321,11 +332,12 @@ export class InstanceValidatorImpl implements InstanceValidator {
         children: Element[],
         particles: ReadonlyArray<Particle>,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): number {
         let idx = 0;
         for (const particle of particles) {
-            const consumed = this.consumeMatchingChildren(node, children, idx, particle, schema, report);
+            const consumed = this.consumeMatchingChildren(node, children, idx, particle, schema, report, evaluator);
             idx += consumed;
             if (consumed === 0 && particle.minOccurs > 0) {
                 // Particle couldn't match and is required — stop the sequence
@@ -345,7 +357,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         startIdx: number,
         particle: Particle,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): number {
         const term = particle.term;
 
@@ -379,7 +392,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 )) break;
                 count++;
                 idx++;
-                this.validateElement(c, term, schema, report);
+                this.validateElement(c, term, schema, report, evaluator);
                 if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
             }
             return idx - startIdx;
@@ -395,7 +408,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             const tempErrors: SchemaError[] = [];
             const capturingReport = (e: SchemaError) => { tempErrors.push(e); };
             const consumed = this.validateRepeatingGroup(
-                node, children.slice(startIdx), particle, schema, capturingReport, false
+                node, children.slice(startIdx), particle, schema, capturingReport, false, evaluator
             );
             if (consumed > 0 || particle.minOccurs > 0) {
                 for (const e of tempErrors) report(e);
@@ -412,7 +425,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             while (idx < children.length) {
                 const c = children[idx]!;
                 if (!wildcardAllowsNamespace(wildcard.namespaceConstraint, c.namespaceURI)) break;
-                this.validateWildcardElement(c, wildcard, schema, report);
+                this.validateWildcardElement(c, wildcard, schema, report, evaluator);
                 count++;
                 idx++;
                 if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
@@ -437,7 +450,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         node: Element,
         wildcard: Wildcard,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): void {
         if (wildcard.processContents === "skip") return;
         const decl = this.lookupElementDeclaration(node, schema);
@@ -446,7 +460,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 `Element <${node.localName}> matches a strict wildcard but has no declaration in the schema.`));
             return;
         }
-        if (decl) this.validateElement(node, decl, schema, report);
+        if (decl) this.validateElement(node, decl, schema, report, evaluator);
     }
 
     /** Resolve an instance element's global declaration by QName. */
@@ -463,7 +477,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         children: Element[],
         particles: ReadonlyArray<Particle>,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): number {
         if (children.length === 0) return 0;
 
@@ -472,7 +487,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             if (!this.matches(firstChild, particle.term)) continue;
 
             // Found a matching alternative — consume children matching this particle
-            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report);
+            const consumed = this.consumeMatchingChildren(node, children, 0, particle, schema, report, evaluator);
             return consumed;
         }
 
@@ -491,7 +506,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         children: Element[],
         particles: ReadonlyArray<Particle>,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): number {
         const matched = new Set<number>();
 
@@ -516,9 +532,9 @@ export class InstanceValidatorImpl implements InstanceValidator {
                     const idx = matchingIndices[k]!;
                     matched.add(idx);
                     if (particle.term.kind === "element") {
-                        this.validateElement(children[idx]!, particle.term, schema, report);
+                        this.validateElement(children[idx]!, particle.term, schema, report, evaluator);
                     } else if (particle.term.kind === "wildcard") {
-                        this.validateWildcardElement(children[idx]!, particle.term, schema, report);
+                        this.validateWildcardElement(children[idx]!, particle.term, schema, report, evaluator);
                     }
                 }
             }
@@ -566,7 +582,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
         node: Element,
         type: ComplexTypeDefinition,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        evaluator: IdentityConstraintEvaluator
     ): void {
         const instanceAttrs = Array.from(node.attributes).filter(
             (a) => a.namespaceURI !== NAMESPACE_XMLNS
@@ -585,6 +602,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
             } else if (use.declaration.type) {
                 // Validate attribute value against the declaration's simple type.
                 this.validateTextValue(node, attr.value ?? "", use.declaration.type, report);
+                // Record the attribute type for identity-constraint field evaluation (CHK-022).
+                evaluator.attrTypes.set(attr, use.declaration.type);
             }
         }
 

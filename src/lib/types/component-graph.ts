@@ -125,6 +125,70 @@ export type TypeDefinition = SimpleTypeDefinition | ComplexTypeDefinition;
 // Declarations
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Identity constraints
+// ---------------------------------------------------------------------------
+
+export type IdentityConstraintCategory = "key" | "keyref" | "unique";
+
+// ---------------------------------------------------------------------------
+// Compiled identity-constraint XPath (XSD 1.0 §3.11.6 subset)
+// ---------------------------------------------------------------------------
+
+/** A single name test in an identity-constraint XPath. */
+export interface NameTest {
+    /** The namespace URI; "*" means any namespace, null means no namespace. */
+    readonly namespace: string | null | "*";
+    /** The local name; "*" matches any local name. */
+    readonly local: string | "*";
+}
+
+/** A single step in a compiled identity-constraint path. */
+export type CompiledStep =
+    | { readonly kind: "self" }
+    | { readonly kind: "child"; readonly nameTest: NameTest }
+    | { readonly kind: "attribute"; readonly nameTest: NameTest };
+
+/**
+ * A compiled identity-constraint path (selector or field). Prefixes are
+ * already resolved to namespace URIs at compile time. The `descendant` flag
+ * records a leading `.//` (descendant-or-self from the context node).
+ */
+export interface CompiledPath {
+    readonly descendant: boolean;
+    readonly steps: ReadonlyArray<CompiledStep>;
+}
+
+/**
+ * An identity-constraint definition (XSD 1.0 Part 1 §3.11).
+ * Carries the parsed selector and field XPath expressions, and (for keyref)
+ * the QName of the referenced key/unique definition.
+ */
+export interface IdentityConstraintDefinition {
+    readonly kind: "identity-constraint";
+    readonly name: QName;
+    readonly category: IdentityConstraintCategory;
+    /** The selector XPath expression string (e.g. ".//person"). */
+    readonly selector: string;
+    /** The field XPath expression strings (e.g. ["forename", "surname"]). */
+    readonly fields: ReadonlyArray<string>;
+    /**
+     * For keyref, the QName of the referenced key/unique definition.
+     * Null for key and unique.
+     */
+    readonly refer: QName | null;
+    /**
+     * The resolved identity-constraint definition referenced by a keyref.
+     * Set at compile time (pass 2). Null for key/unique, or when the
+     * reference could not be resolved.
+     */
+    readonly referencedConstraint: IdentityConstraintDefinition | null;
+    /** The selector parsed and prefix-resolved at compile time (CHK-022). */
+    readonly compiledSelector: ReadonlyArray<CompiledPath>;
+    /** The fields parsed and prefix-resolved at compile time (CHK-022). */
+    readonly compiledFields: ReadonlyArray<CompiledPath>;
+}
+
 export interface ElementDeclaration {
     readonly kind: "element";
     readonly scope: "global" | "local";
@@ -141,6 +205,11 @@ export interface ElementDeclaration {
      * declaration. Null for non-ref declarations (CHK-017).
      */
     readonly ref: QName | null;
+    /**
+     * Identity constraints (xs:key, xs:unique, xs:keyref) declared on this
+     * element, in document order (CHK-022).
+     */
+    readonly identityConstraints: ReadonlyArray<IdentityConstraintDefinition>;
 }
 
 export interface AttributeDeclaration {
@@ -250,6 +319,11 @@ export interface CompiledGrammar {
     readonly types: ReadonlyMap<string, TypeDefinition>;
     readonly modelGroups: ReadonlyMap<string, ModelGroupDefinition>;
     readonly attributeGroups: ReadonlyMap<string, AttributeGroupDefinition>;
+    /**
+     * Identity-constraint definitions (xs:key, xs:unique, xs:keyref) keyed by
+     * local name, for keyref @refer resolution (CHK-022).
+     */
+    readonly identityConstraints: ReadonlyMap<string, IdentityConstraintDefinition>;
 }
 
 export interface CompiledSchema {
