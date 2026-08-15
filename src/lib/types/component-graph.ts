@@ -48,6 +48,20 @@ export interface SimpleTypeDefinition {
     readonly variety: SimpleTypeVariety;
     readonly itemType: QName | null;
     readonly memberTypes: ReadonlyArray<QName>;
+    /**
+     * The resolved item type of a `list`-variety type (from the `itemType`
+     * attribute or an inline anonymous `xs:simpleType`). Null for atomic and
+     * union varieties. For a list derived by restriction, inherited from the
+     * base list by the compiler (CHK-016).
+     */
+    readonly itemTypeDef: SimpleTypeDefinition | null;
+    /**
+     * The resolved member types of a `union`-variety type (from the
+     * `memberTypes` attribute followed by inline anonymous `xs:simpleType`
+     * children, in document order). Empty for atomic and list varieties. For
+     * a union derived by restriction, inherited from the base union (CHK-016).
+     */
+    readonly memberTypeDefs: ReadonlyArray<SimpleTypeDefinition>;
     /** This type's own facets, as declared on its restriction (CHK-010). */
     readonly facets: ReadonlyArray<Facet>;
     /**

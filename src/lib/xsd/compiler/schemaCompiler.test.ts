@@ -506,4 +506,160 @@ describe("SchemaCompiler — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("list and union types (CHK-016)", () => {
+
+        it("compiles a list type and resolves its item type definition", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntList">
+                        <xsd:list itemType="xsd:integer"/>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("IntList") as SimpleTypeDefinition;
+            expect(st.variety).toBe("list");
+            expect(st.itemType).toEqual({ namespaceURI: NAMESPACE_XSD, localName: "integer" });
+            expect(st.itemTypeDef?.name?.localName).toBe("integer");
+            // A list's whiteSpace is fixed to collapse (XSD 1.0 §3.4.1).
+            expect(st.whiteSpace).toBe("collapse");
+            // The item type's facets are NOT inherited by the list itself.
+            expect(st.effectiveFacets).toHaveLength(0);
+        });
+
+        it("compiles a list with an inline anonymous item type", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="TwoCharTokens">
+                        <xsd:list>
+                            <xsd:simpleType>
+                                <xsd:restriction base="xsd:token">
+                                    <xsd:length value="2"/>
+                                </xsd:restriction>
+                            </xsd:simpleType>
+                        </xsd:list>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("TwoCharTokens") as SimpleTypeDefinition;
+            expect(st.variety).toBe("list");
+            expect(st.itemType).toBeNull();
+            expect(st.itemTypeDef).not.toBeNull();
+            expect(st.itemTypeDef!.name).toBeNull(); // anonymous
+            expect(st.itemTypeDef!.effectiveFacets.find((f) => f.kind === "length")?.value).toBe("2");
+        });
+
+        it("resolves union memberTypes and keeps inline members in order", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="TokenOrTwo">
+                        <xsd:union memberTypes="xsd:token">
+                            <xsd:simpleType>
+                                <xsd:restriction base="xsd:string">
+                                    <xsd:length value="2"/>
+                                </xsd:restriction>
+                            </xsd:simpleType>
+                        </xsd:union>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("TokenOrTwo") as SimpleTypeDefinition;
+            expect(st.variety).toBe("union");
+            expect(st.memberTypeDefs).toHaveLength(2);
+            expect(st.memberTypeDefs[0]!.name?.localName).toBe("token");
+            expect(st.memberTypeDefs[1]!.name).toBeNull(); // inline member
+        });
+
+        it("resolves forward references in memberTypes", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="LaterOrNow">
+                        <xsd:union memberTypes="Later"/>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="Later">
+                        <xsd:restriction base="xsd:string"/>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("LaterOrNow") as SimpleTypeDefinition;
+            expect(st.memberTypeDefs).toHaveLength(1);
+            expect(st.memberTypeDefs[0]!.name?.localName).toBe("Later");
+        });
+
+        it("a restriction of a list type is itself a list with the base's item type", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntList">
+                        <xsd:list itemType="xsd:integer"/>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="TwoInts">
+                        <xsd:restriction base="IntList">
+                            <xsd:length value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const two = schema.grammars.get("")!.types.get("TwoInts") as SimpleTypeDefinition;
+            expect(two.variety).toBe("list");
+            expect(two.baseType?.name?.localName).toBe("IntList");
+            expect(two.itemTypeDef?.name?.localName).toBe("integer");
+            expect(two.effectiveFacets.find((f) => f.kind === "length")?.value).toBe("2");
+        });
+
+        it("a restriction of a union type is itself a union with the base's members", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntOrDate">
+                        <xsd:union memberTypes="xsd:integer xsd:date"/>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="RestrictedUnion">
+                        <xsd:restriction base="IntOrDate">
+                            <xsd:enumeration value="2020"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const ru = schema.grammars.get("")!.types.get("RestrictedUnion") as SimpleTypeDefinition;
+            expect(ru.variety).toBe("union");
+            expect(ru.memberTypeDefs.map((m) => m.name?.localName)).toEqual(["integer", "date"]);
+            expect(ru.effectiveFacets.find((f) => f.kind === "enumeration")?.value).toBe("2020");
+        });
+
+        it("reports an error when a list item type is not a simple type", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="NotSimple"/>
+                    <xsd:simpleType name="BrokenList">
+                        <xsd:list itemType="NotSimple"/>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "UNRESOLVED_TYPE" && e.message.includes("List item"))).toBe(true);
+        });
+
+        it("reports an error when a union member type is not a simple type", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="NotSimple"/>
+                    <xsd:simpleType name="BrokenUnion">
+                        <xsd:union memberTypes="NotSimple"/>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "UNRESOLVED_TYPE" && e.message.includes("Union member"))).toBe(true);
+        });
+
+    });
+
 });

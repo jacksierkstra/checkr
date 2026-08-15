@@ -264,3 +264,83 @@ describe("pattern facet end-to-end (CHK-015)", () => {
     });
 
 });
+
+// ---------------------------------------------------------------------------
+// List and union types — NIST-style end-to-end through the two-phase API (CHK-016)
+// ---------------------------------------------------------------------------
+
+describe("list and union types end-to-end (CHK-016)", () => {
+
+    // NIST-style datatypes: a list of integers, a union of integer/date, and
+    // a list whose item type is itself restricted, all used as element types.
+    const NIST_XSD = `
+        <xsd:schema xmlns:xsd="${NAMESPACE_XSD}"
+                    targetNamespace="urn:nist"
+                    xmlns:t="urn:nist">
+            <xsd:simpleType name="intList">
+                <xsd:list itemType="xsd:integer"/>
+            </xsd:simpleType>
+            <xsd:simpleType name="intOrDate">
+                <xsd:union memberTypes="xsd:integer xsd:date"/>
+            </xsd:simpleType>
+            <xsd:simpleType name="twoDigitTokens">
+                <xsd:list>
+                    <xsd:simpleType>
+                        <xsd:restriction base="xsd:token">
+                            <xsd:length value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:list>
+            </xsd:simpleType>
+            <xsd:element name="root">
+                <xsd:complexType>
+                    <xsd:sequence>
+                        <xsd:element name="sizes" type="t:intList"/>
+                        <xsd:element name="when" type="t:intOrDate"/>
+                        <xsd:element name="tags" type="t:twoDigitTokens"/>
+                    </xsd:sequence>
+                </xsd:complexType>
+            </xsd:element>
+        </xsd:schema>
+    `;
+
+    it("accepts a conforming instance end-to-end", () => {
+        const schema = compileSchema(NIST_XSD);
+        const xml = `<t:root xmlns:t="urn:nist"><sizes>1 2 3</sizes><when>2000-01-01</when><tags>ab cd</tags></t:root>`;
+        const { valid, errors } = validate(xml, schema);
+        expect(valid).toBe(true);
+        expect(errors).toHaveLength(0);
+    });
+
+    it("accepts the union via its other member and the list with one item", () => {
+        const schema = compileSchema(NIST_XSD);
+        const xml = `<t:root xmlns:t="urn:nist"><sizes>42</sizes><when>2020</when><tags>xy</tags></t:root>`;
+        expect(validate(xml, schema).valid).toBe(true);
+    });
+
+    it("rejects an instance with a non-integer list item", () => {
+        const schema = compileSchema(NIST_XSD);
+        const xml = `<t:root xmlns:t="urn:nist"><sizes>1 x 3</sizes><when>2020</when><tags>ab cd</tags></t:root>`;
+        const { valid, errors } = validate(xml, schema);
+        expect(valid).toBe(false);
+        expect(errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+    });
+
+    it("rejects a union value valid in no member and a list item failing its item type", () => {
+        const schema = compileSchema(NIST_XSD);
+        const xml = `<t:root xmlns:t="urn:nist"><sizes>1 2 3</sizes><when>hello</when><tags>abcd e</tags></t:root>`;
+        const { valid, errors } = validate(xml, schema);
+        expect(valid).toBe(false);
+        expect(errors.some((e) => e.code === "UNION_VIOLATION")).toBe(true);
+        expect(errors.some((e) => e.code === "FACET_VIOLATION")).toBe(true); // "abcd" violates length=2
+    });
+
+    it("keeps the compiled schema immutable and reusable across list/union runs", () => {
+        const schema = compileSchema(NIST_XSD);
+        expect(Object.isFrozen(schema)).toBe(true);
+        expect(validate(`<t:root xmlns:t="urn:nist"><sizes>1 2</sizes><when>2020</when><tags>ab</tags></t:root>`, schema).valid).toBe(true);
+        expect(validate(`<t:root xmlns:t="urn:nist"><sizes>a</sizes><when>2020</when><tags>ab</tags></t:root>`, schema).valid).toBe(false);
+        expect(validate(`<t:root xmlns:t="urn:nist"><sizes>1 2</sizes><when>2020</when><tags>ab</tags></t:root>`, schema).valid).toBe(true);
+    });
+
+});

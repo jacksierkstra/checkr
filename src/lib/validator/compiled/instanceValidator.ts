@@ -14,13 +14,14 @@ import {
 import { childElements, locationOf } from "@lib/xml/dom";
 import { XMLParser } from "@lib/xml/parser";
 import { namespaceKey, NAMESPACE_XML, NAMESPACE_XMLNS, NAMESPACE_XSI } from "@lib/types/namespaces";
-import { normalizeWhiteSpace, validateFacets } from "@lib/xsd/facets";
+import { normalizeWhiteSpace, splitListItems, validateFacets } from "@lib/xsd/facets";
 import { checkStringFamilyLexicalSpace } from "@lib/xsd/string-types";
 import { checkNumericFamilyLexicalSpace } from "@lib/xsd/numeric-types";
 import { checkDateTimeFamilyLexicalSpace } from "@lib/xsd/datetime-types";
 import { checkRemainingFamilyLexicalSpace } from "@lib/xsd/remaining-types";
 import {
     SchemaError,
+    SchemaErrorCode,
     SchemaErrorListener,
     SchemaLocation,
     SchemaValidationResult,
@@ -28,6 +29,12 @@ import {
 
 export interface ValidateOptions {
     listener?: SchemaErrorListener;
+}
+
+/** A value-space violation produced by simple-type validation (CHK-016). */
+interface SimpleValueViolation {
+    code: SchemaErrorCode;
+    message: string;
 }
 
 export interface InstanceValidator {
@@ -313,49 +320,118 @@ export class InstanceValidatorImpl implements InstanceValidator {
 
     /**
      * Validate a text value (element text or attribute value) against a simple
-     * type's facets: apply whitespace normalization, then check length-family
-     * facets and enumeration. Reports FACET_VIOLATION for each violation.
+     * type: apply the type's whitespace normalization, then check its variety:
+     * atomic (lexical space + facets), list (each item against the item type,
+     * then whole-form facets), or union (valid if any member type accepts).
+     * Returns the violations; the caller reports them through the listener.
      */
+    private checkSimpleValue(raw: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+        if (type.variety === "list") return this.checkListValue(raw, type);
+        if (type.variety === "union") return this.checkUnionValue(raw, type);
+        return this.checkAtomicValue(normalizeWhiteSpace(raw, type.whiteSpace), type);
+    }
+
+    /** Atomic variety: built-in lexical space + effective facets (CHK-011..015). */
+    private checkAtomicValue(normalized: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+        const out: SimpleValueViolation[] = [];
+        const typeName = this.simpleTypeName(type);
+
+        const lexicalError = checkStringFamilyLexicalSpace(normalized, type);
+        if (lexicalError !== null) {
+            out.push({ code: "LEXICAL_SPACE_VIOLATION", message: `Value '${normalized}' is ${lexicalError} (type ${typeName}).` });
+        }
+
+        const numericLexicalError = checkNumericFamilyLexicalSpace(normalized, type);
+        if (numericLexicalError !== null) {
+            out.push({ code: "LEXICAL_SPACE_VIOLATION", message: `Value '${normalized}' is ${numericLexicalError} (type ${typeName}).` });
+        }
+
+        const datetimeLexicalError = checkDateTimeFamilyLexicalSpace(normalized, type);
+        if (datetimeLexicalError !== null) {
+            out.push({ code: "LEXICAL_SPACE_VIOLATION", message: `Value '${normalized}' is ${datetimeLexicalError} (type ${typeName}).` });
+        }
+
+        const remainingLexicalError = checkRemainingFamilyLexicalSpace(normalized, type);
+        if (remainingLexicalError !== null) {
+            out.push({ code: "LEXICAL_SPACE_VIOLATION", message: `Value '${normalized}' is ${remainingLexicalError} (type ${typeName}).` });
+        }
+
+        for (const v of validateFacets(normalized, type.effectiveFacets, type)) {
+            out.push({ code: "FACET_VIOLATION", message: `Value '${normalized}' violates ${v.facet} facet of type ${typeName}: ${v.message}` });
+        }
+        return out;
+    }
+
+    /**
+     * List variety (XSD 1.0 Part 2 §3.4.1): the list's whiteSpace (collapse)
+     * normalizes the whole lexical form; each whitespace-separated item must be
+     * valid in the item type; length-family facets count items, pattern and
+     * enumeration apply to the whole form.
+     */
+    private checkListValue(raw: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+        const out: SimpleValueViolation[] = [];
+        const normalized = normalizeWhiteSpace(raw, type.whiteSpace);
+        const items = splitListItems(normalized);
+        const itemType = type.itemTypeDef;
+
+        if (itemType) {
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i]!;
+                for (const v of this.checkSimpleValue(item, itemType)) {
+                    out.push({ code: v.code, message: `List item ${i} ('${item}') of type ${this.simpleTypeName(type)}: ${v.message}` });
+                }
+            }
+        }
+
+        const typeName = this.simpleTypeName(type);
+        for (const v of validateFacets(normalized, type.effectiveFacets, type)) {
+            out.push({ code: "FACET_VIOLATION", message: `Value '${normalized}' violates ${v.facet} facet of type ${typeName}: ${v.message}` });
+        }
+        return out;
+    }
+
+    /**
+     * Union variety (XSD 1.0 Part 2 §3.4.2): a value is valid if at least one
+     * member type accepts it. The union's own whiteSpace is preserve, so each
+     * member applies its own normalization to the raw value. The union's own
+     * facets (enumeration/pattern from a restriction) apply to the whole form.
+     */
+    private checkUnionValue(raw: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+        const out: SimpleValueViolation[] = [];
+        const members = type.memberTypeDefs;
+        const accepted = members.some((member) => this.checkSimpleValue(raw, member).length === 0);
+        if (!accepted) {
+            const memberNames = members.length > 0
+                ? members.map((m) => this.simpleTypeName(m)).join(", ")
+                : "(no member types)";
+            out.push({
+                code: "UNION_VIOLATION",
+                message: `Value '${raw}' is not valid in any member type {${memberNames}} of union ${this.simpleTypeName(type)}.`,
+            });
+        }
+
+        const normalized = normalizeWhiteSpace(raw, type.whiteSpace);
+        const typeName = this.simpleTypeName(type);
+        for (const v of validateFacets(normalized, type.effectiveFacets, type)) {
+            out.push({ code: "FACET_VIOLATION", message: `Value '${normalized}' violates ${v.facet} facet of type ${typeName}: ${v.message}` });
+        }
+        return out;
+    }
+
+    /** Validate a text value against a simple type and report every violation. */
     private validateTextValue(
         node: Element,
         raw: string,
         type: SimpleTypeDefinition,
         report: (error: SchemaError) => void
     ): void {
-        const normalized = normalizeWhiteSpace(raw, type.whiteSpace);
-
-        const lexicalError = checkStringFamilyLexicalSpace(normalized, type);
-        if (lexicalError !== null) {
-            report(this.error(node, "LEXICAL_SPACE_VIOLATION",
-                `Value '${normalized}' is ${lexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
+        for (const v of this.checkSimpleValue(raw, type)) {
+            report(this.error(node, v.code, v.message));
         }
+    }
 
-        // Check built-in lexical space (numeric family, CHK-012).
-        const numericLexicalError = checkNumericFamilyLexicalSpace(normalized, type);
-        if (numericLexicalError !== null) {
-            report(this.error(node, "LEXICAL_SPACE_VIOLATION",
-                `Value '${normalized}' is ${numericLexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
-        }
-
-        // Check built-in lexical space (date/time family, CHK-013).
-        const datetimeLexicalError = checkDateTimeFamilyLexicalSpace(normalized, type);
-        if (datetimeLexicalError !== null) {
-            report(this.error(node, "LEXICAL_SPACE_VIOLATION",
-                `Value '${normalized}' is ${datetimeLexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
-        }
-
-        // Check built-in lexical space (boolean, binary, anyURI, QName/NOTATION — CHK-014).
-        const remainingLexicalError = checkRemainingFamilyLexicalSpace(normalized, type);
-        if (remainingLexicalError !== null) {
-            report(this.error(node, "LEXICAL_SPACE_VIOLATION",
-                `Value '${normalized}' is ${remainingLexicalError} (type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}).`));
-        }
-
-        const violations = validateFacets(normalized, type.effectiveFacets, type);
-        for (const v of violations) {
-            report(this.error(node, "FACET_VIOLATION",
-                `Value '${normalized}' violates ${v.facet} facet of type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}: ${v.message}`));
-        }
+    private simpleTypeName(type: SimpleTypeDefinition): string {
+        return displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" });
     }
 
     // -----------------------------------------------------------------------

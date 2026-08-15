@@ -134,6 +134,32 @@ function parseWhiteSpaceValue(value: string): WhiteSpaceValue {
 }
 
 // ---------------------------------------------------------------------------
+// List splitting (XSD 1.0 Part 2 §3.4.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Split a whitespace-normalized list value into its items.
+ *
+ * The value MUST already be whitespace-collapsed (a list type's `whiteSpace`
+ * is fixed to `collapse`), so only single #x20 separators remain. The empty
+ * string is the empty list (zero items).
+ */
+export function splitListItems(value: string): string[] {
+    const trimmed = value.trim();
+    if (trimmed.length === 0) return [];
+    return trimmed.split(/\s+/);
+}
+
+/** Item-wise equality of two list values (XSD 1.0 Part 2 §4.3.5.2). */
+function listItemsEqual(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // Facet validation
 // ---------------------------------------------------------------------------
 
@@ -195,9 +221,13 @@ export function validateFacets(
         }
     }
 
-    // Check enumeration: if present, value must match at least one
+    // Check enumeration: if present, value must match at least one.
+    // For list types the facet values are themselves list literals and the
+    // comparison is item-wise after whitespace splitting (XSD 1.0 §4.3.5.2).
     if (enumerations.length > 0) {
-        const matched = enumerations.some((e) => e === normalized);
+        const matched = type?.variety === "list"
+            ? enumerations.some((e) => listItemsEqual(splitListItems(e), splitListItems(normalized)))
+            : enumerations.some((e) => e === normalized);
         if (!matched) {
             violations.push({
                 facet: "enumeration",
@@ -207,39 +237,49 @@ export function validateFacets(
     }
 
     // Check length-family facets
+    // Length unit depends on the value space: list types count items,
+    // hexBinary/base64Binary count octets, all other types count code points.
+    const lengthUnit = (t: SimpleTypeDefinition | null | undefined): string => {
+        if (t?.variety === "list") return "item(s)";
+        if (t && binaryOctetLength("", t) !== null) return "octet(s)";
+        return "character(s)";
+    };
+    const lengthOf = (t: SimpleTypeDefinition | null | undefined, value: string): number => {
+        if (t?.variety === "list") return splitListItems(value).length;
+        if (t) return binaryOctetLength(value, t) ?? codePointLength(value);
+        return codePointLength(value);
+    };
     for (const f of nonEnumFacets) {
         switch (f.kind) {
             case "length": {
                 const expected = Number(f.value);
-                // hexBinary/base64Binary measure length in octets (XSD 1.0 §4.3.3);
-                // all other types measure in code points (CHK-014).
-                const actual = type ? (binaryOctetLength(normalized, type) ?? codePointLength(normalized)) : codePointLength(normalized);
+                const actual = lengthOf(type, normalized);
                 if (actual !== expected) {
                     violations.push({
                         facet: "length",
-                        message: `Value must have exactly ${expected} octet(s) (${expected} character(s) for non-binary types), but has ${actual}.`,
+                        message: `Value must have exactly ${expected} ${lengthUnit(type)}, but has ${actual}.`,
                     });
                 }
                 break;
             }
             case "minLength": {
                 const min = Number(f.value);
-                const actual = type ? (binaryOctetLength(normalized, type) ?? codePointLength(normalized)) : codePointLength(normalized);
+                const actual = lengthOf(type, normalized);
                 if (actual < min) {
                     violations.push({
                         facet: "minLength",
-                        message: `Value must have at least ${min} octet(s) (${min} character(s) for non-binary types), but has ${actual}.`,
+                        message: `Value must have at least ${min} ${lengthUnit(type)}, but has ${actual}.`,
                     });
                 }
                 break;
             }
             case "maxLength": {
                 const max = Number(f.value);
-                const actual = type ? (binaryOctetLength(normalized, type) ?? codePointLength(normalized)) : codePointLength(normalized);
+                const actual = lengthOf(type, normalized);
                 if (actual > max) {
                     violations.push({
                         facet: "maxLength",
-                        message: `Value must have at most ${max} octet(s) (${max} character(s) for non-binary types), but has ${actual}.`,
+                        message: `Value must have at most ${max} ${lengthUnit(type)}, but has ${actual}.`,
                     });
                 }
                 break;

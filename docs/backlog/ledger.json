@@ -141,8 +141,8 @@
     {
       "id": "CHK-016",
       "title": "List and union types",
-      "file": "docs/backlog/active/CHK-016-list-and-union-types.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-016-list-and-union-types.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

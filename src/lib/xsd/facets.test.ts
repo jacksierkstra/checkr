@@ -9,6 +9,7 @@ import {
     computeEffectiveFacets,
     computeWhiteSpace,
     validateFacets,
+    splitListItems,
     FacetViolation,
 } from "@lib/xsd/facets";
 
@@ -46,7 +47,7 @@ describe("facet framework (CHK-010)", () => {
     describe("facet inheritance down restriction chains", () => {
 
         function st(name: string, facets: ReadonlyArray<Facet>, base: SimpleTypeDefinition | null = null, ws: WhiteSpaceValue = "preserve", eff: ReadonlyArray<Facet> = facets): SimpleTypeDefinition {
-            return { kind: "simple-type", name: { namespaceURI: null, localName: name }, variety: "atomic", itemType: null, memberTypes: [], facets, baseType: base, whiteSpace: ws, effectiveFacets: eff };
+            return { kind: "simple-type", name: { namespaceURI: null, localName: name }, variety: "atomic", itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets, baseType: base, whiteSpace: ws, effectiveFacets: eff };
         }
 
         it("derived type overrides base facet of the same kind", () => {
@@ -150,6 +151,8 @@ describe("facet framework (CHK-010)", () => {
                 variety: "atomic",
                 itemType: null,
                 memberTypes: [],
+                itemTypeDef: null,
+                memberTypeDefs: [],
                 facets: [],
                 baseType: null,
                 whiteSpace: "collapse",
@@ -170,6 +173,8 @@ describe("facet framework (CHK-010)", () => {
                 variety: "atomic",
                 itemType: null,
                 memberTypes: [],
+                itemTypeDef: null,
+                memberTypeDefs: [],
                 facets: [],
                 baseType: null,
                 whiteSpace: "collapse",
@@ -186,6 +191,8 @@ describe("facet framework (CHK-010)", () => {
                 variety: "atomic",
                 itemType: null,
                 memberTypes: [],
+                itemTypeDef: null,
+                memberTypeDefs: [],
                 facets: [],
                 baseType: null,
                 whiteSpace: "collapse",
@@ -195,6 +202,63 @@ describe("facet framework (CHK-010)", () => {
             expect(violations("1.234", [{ kind: "fractionDigits", value: "2" }], decimalType)).toHaveLength(1);
         });
 
+    });
+
+});
+
+describe("list-aware facet semantics (CHK-016)", () => {
+
+    function listType(itemType: SimpleTypeDefinition | null, whiteSpace: WhiteSpaceValue = "collapse"): SimpleTypeDefinition {
+        return {
+            kind: "simple-type",
+            name: null,
+            variety: "list",
+            itemType: itemType?.name ?? null,
+            memberTypes: [],
+            itemTypeDef: itemType,
+            memberTypeDefs: [],
+            facets: [],
+            baseType: null,
+            whiteSpace,
+            effectiveFacets: [],
+        };
+    }
+
+    it("splitListItems splits on whitespace and treats the empty string as an empty list", () => {
+        expect(splitListItems("1 2 3")).toEqual(["1", "2", "3"]);
+        expect(splitListItems("a b")).toEqual(["a", "b"]);
+        expect(splitListItems("single")).toEqual(["single"]);
+        expect(splitListItems("")).toEqual([]);
+    });
+
+    it("length/minLength/maxLength measure the item count of a list", () => {
+        const t = listType(null);
+        expect(validateFacets("1 2", [{ kind: "length", value: "2" }], t)).toHaveLength(0);
+        expect(validateFacets("1 2 3", [{ kind: "length", value: "2" }], t)).toHaveLength(1);
+        expect(validateFacets("1", [{ kind: "minLength", value: "2" }], t)).toHaveLength(1);
+        expect(validateFacets("1 2 3", [{ kind: "maxLength", value: "2" }], t)).toHaveLength(1);
+    });
+
+    it("length facets on a list do not count code points of the whole form", () => {
+        const t = listType(null);
+        // "1 2 3" is 5 code points but 3 items: length=3 must pass.
+        expect(validateFacets("1 2 3", [{ kind: "length", value: "3" }], t)).toHaveLength(0);
+    });
+
+    it("enumeration compares list values item-wise after splitting", () => {
+        const t = listType(null);
+        const enums: Facet[] = [{ kind: "enumeration", value: "1 2 3" }];
+        expect(validateFacets("1 2 3", enums, t)).toHaveLength(0);
+        // Even with irregular whitespace in the facet value, item-wise
+        // comparison matches once both sides are split.
+        expect(validateFacets("1 2 3", [{ kind: "enumeration", value: " 1   2  3 " }], t)).toHaveLength(0);
+        expect(validateFacets("1 2", enums, t)).toHaveLength(1);
+        expect(validateFacets("1 2 4", enums, t)).toHaveLength(1);
+    });
+
+    it("enumeration on atomic types still compares the literal string", () => {
+        expect(validateFacets("red", [{ kind: "enumeration", value: "red" }], null)).toHaveLength(0);
+        expect(validateFacets("red", [{ kind: "enumeration", value: " red " }], null)).toHaveLength(1);
     });
 
 });

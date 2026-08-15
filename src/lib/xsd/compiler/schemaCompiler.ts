@@ -268,7 +268,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         if (!derivation) {
             const st: SimpleTypeDefinition = {
                 kind: "simple-type", name, variety: "atomic",
-                itemType: null, memberTypes: [], facets: [],
+                itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets: [],
                 baseType: null, whiteSpace: "preserve", effectiveFacets: [],
             };
             ctx.allSimpleTypes.push(st);
@@ -286,6 +286,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     variety: "atomic",
                     itemType: base,
                     memberTypes: [],
+                    itemTypeDef: null,
+                    memberTypeDefs: [],
                     facets: this.readFacets(derivation),
                     baseType: null,
                     whiteSpace: "preserve",
@@ -297,9 +299,20 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             case "list": {
                 const itemType = this.readQName(derivation, "itemType");
                 if (itemType) this.trackRef(ctx, derivation, itemType);
+                // Inline anonymous item type (XSD 1.0 Part 2 §3.4.1): allowed
+                // only when there is no itemType attribute. Build it either way
+                // so its references still get resolved/checked; the attribute
+                // wins as the item type when both are present.
+                let itemTypeDef: SimpleTypeDefinition | null = null;
+                const inlineItem = childElements(derivation).find(
+                    (c) => c.namespaceURI === NAMESPACE_XSD && c.localName === "simpleType"
+                );
+                if (inlineItem && !itemType) {
+                    itemTypeDef = this.buildSimpleType(inlineItem, ctx, null);
+                }
                 result = {
                     kind: "simple-type", name, variety: "list",
-                    itemType, memberTypes: [], facets: [],
+                    itemType, memberTypes: [], itemTypeDef, memberTypeDefs: [], facets: [],
                     baseType: null, whiteSpace: "collapse", effectiveFacets: [],
                 };
                 break;
@@ -316,9 +329,17 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                         }
                     }
                 }
+                // Inline anonymous member types follow the memberTypes
+                // attribute members in document order (XSD 1.0 Part 2 §3.4.2).
+                const memberTypeDefs: SimpleTypeDefinition[] = [];
+                for (const c of childElements(derivation)) {
+                    if (c.namespaceURI === NAMESPACE_XSD && c.localName === "simpleType") {
+                        memberTypeDefs.push(this.buildSimpleType(c, ctx, null));
+                    }
+                }
                 result = {
                     kind: "simple-type", name, variety: "union",
-                    itemType: null, memberTypes, facets: [],
+                    itemType: null, memberTypes, itemTypeDef: null, memberTypeDefs, facets: [],
                     baseType: null, whiteSpace: "preserve", effectiveFacets: [],
                 };
                 break;
@@ -326,7 +347,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             default:
                 result = {
                     kind: "simple-type", name, variety: "atomic",
-                    itemType: null, memberTypes: [], facets: [],
+                    itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets: [],
                     baseType: null, whiteSpace: "preserve", effectiveFacets: [],
                 };
                 break;
@@ -358,6 +379,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             variety: "atomic",
             itemType: base,
             memberTypes: [],
+            itemTypeDef: null,
+            memberTypeDefs: [],
             facets: derivation?.localName === "restriction" ? this.readFacets(derivation) : [], baseType: null, whiteSpace: "preserve", effectiveFacets: [],
         };
         if (derivation?.localName === "restriction") this.checkPatternFacets(this.readFacets(derivation), ctx);
@@ -564,26 +587,76 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     // -----------------------------------------------------------------------
 
     /**
-     * Resolve simple-type base references (restriction bases, list item types)
-     * and compute effective facets + whiteSpace for each simple type.
+     * Resolve simple-type references (restriction bases, list item types,
+     * union member types) and compute effective facets + whiteSpace for each
+     * simple type, bottom-up along the derivation chain (CHK-010, CHK-016).
      *
      * This must run after pass-2 reference resolution so that all type refs
      * (including to built-in types) are already resolvable.
      */
     private resolveSimpleTypes(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
-        // Phase 1: resolve baseType references
+        // Phase 1: resolve references.
+        // - atomic restrictions: itemType is the restriction base → baseType
+        // - list definitions: itemType is the item type → itemTypeDef
+        //   (an inline anonymous item type is already attached at build time)
+        // - union definitions: memberTypes are the member types → memberTypeDefs
+        //   (inline anonymous members are already attached at build time)
         for (const st of ctx.allSimpleTypes) {
-            if (st.variety === "union") continue;
+            if (st.variety === "union") {
+                const resolvedMembers: SimpleTypeDefinition[] = [];
+                for (const ref of st.memberTypes) {
+                    const resolved = this.lookupType(grammars, ref);
+                    if (resolved && resolved.kind === "simple-type") {
+                        resolvedMembers.push(resolved);
+                    } else if (resolved) {
+                        ctx.report({
+                            severity: "error",
+                            code: "UNRESOLVED_TYPE",
+                            message: `Union member type ${displayQName(ref)} must be a simple type.`,
+                            location: { line: 0, column: 0 },
+                            phase: "schema-compilation",
+                        });
+                    }
+                    // resolved == null: UNRESOLVED_TYPE already reported in pass 2.
+                }
+                (st as { memberTypeDefs: ReadonlyArray<SimpleTypeDefinition> }).memberTypeDefs = [
+                    ...resolvedMembers,
+                    ...st.memberTypeDefs,
+                ];
+                continue;
+            }
             const ref = st.itemType;
             if (!ref) continue;
             const resolved = this.lookupType(grammars, ref);
-            if (resolved && resolved.kind === "simple-type") {
+            if (!resolved) continue; // pass 2 already reported it
+            if (resolved.kind !== "simple-type") {
+                ctx.report({
+                    severity: "error",
+                    code: "UNRESOLVED_TYPE",
+                    message: `${st.variety === "list" ? "List item" : "Restriction base"} type ${displayQName(ref)} must be a simple type.`,
+                    location: { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            if (st.variety === "list") {
+                (st as { itemTypeDef: SimpleTypeDefinition | null }).itemTypeDef = resolved;
+            } else {
                 (st as { baseType: SimpleTypeDefinition | null }).baseType = resolved;
             }
         }
 
-        // Phase 2: compute effective facets and whiteSpace bottom-up
+        // Phase 2: a restriction of a list/union base inherits the base's
+        // variety (a restriction of xs:list is itself a list, XSD 1.0 §3.4.1).
+        for (const st of ctx.allSimpleTypes) {
+            if (st.variety === "atomic" && st.baseType && st.baseType.variety !== "atomic") {
+                (st as { variety: "list" | "union" }).variety = st.baseType.variety;
+            }
+        }
+
+        // Phase 3: compute effective facets and whiteSpace bottom-up
         // (bases are resolved; recursion terminates at baseType = null).
+        // Item/member definitions are inherited down restriction chains.
         const computed = new Set<SimpleTypeDefinition>();
         const compute = (st: SimpleTypeDefinition) => {
             if (computed.has(st)) return;
@@ -595,8 +668,23 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 computed.add(st);
                 return;
             }
+            // A list restricted from another list keeps the base's item type;
+            // a union restricted from another union keeps the base's members.
+            if (st.variety === "list" && !st.itemTypeDef && base) {
+                (st as { itemTypeDef: SimpleTypeDefinition | null }).itemTypeDef = base.itemTypeDef;
+            }
+            if (st.variety === "union" && st.memberTypeDefs.length === 0 && base) {
+                (st as { memberTypeDefs: ReadonlyArray<SimpleTypeDefinition> }).memberTypeDefs = base.memberTypeDefs;
+            }
             const eff = computeEffectiveFacets(st.facets, base);
-            const ws = computeWhiteSpace(st.facets, base);
+            // whiteSpace is fixed for list (collapse) and union (preserve)
+            // varieties (XSD 1.0 Part 2 §3.4.1/§3.4.2); restrictions inherit
+            // through the base chain for atomic types.
+            const ws = st.variety === "list"
+                ? "collapse"
+                : st.variety === "union"
+                    ? "preserve"
+                    : computeWhiteSpace(st.facets, base);
             (st as { effectiveFacets: ReadonlyArray<Facet> }).effectiveFacets = eff;
             (st as { whiteSpace: WhiteSpaceValue }).whiteSpace = ws;
             computed.add(st);

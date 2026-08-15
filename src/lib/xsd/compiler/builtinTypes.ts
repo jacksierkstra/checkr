@@ -119,6 +119,8 @@ for (const def of BUILTIN_DEFS) {
         variety: "atomic",
         itemType: def.baseName ? builtinQName(def.baseName) : null,
         memberTypes: [],
+        itemTypeDef: null,
+        memberTypeDefs: [],
         facets: def.facets ?? [],
         baseType: null,
         whiteSpace: def.whiteSpace,

@@ -822,4 +822,221 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("list and union types (CHK-016)", () => {
+
+        it("validates a list of integers item by item", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntList">
+                        <xsd:list itemType="xsd:integer"/>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="IntList"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>1 2 3</e>`, schema).valid).toBe(true);
+            expect(check(`<e> -1 0 42 </e>`, schema).valid).toBe(true); // collapse trims
+            // "1 2 x" — "x" is not a valid integer item
+            const r = check(`<e>1 2 x</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("applies length/minLength/maxLength to the item count, not code points", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntList">
+                        <xsd:list itemType="xsd:integer"/>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="TwoInts">
+                        <xsd:restriction base="IntList">
+                            <xsd:length value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="MinTwo">
+                        <xsd:restriction base="IntList">
+                            <xsd:minLength value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="exact" type="TwoInts"/>
+                    <xsd:element name="min" type="MinTwo"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<exact>1 2</exact>`, schema).valid).toBe(true);
+            expect(check(`<exact>1 2 3</exact>`, schema).valid).toBe(false);
+            expect(check(`<exact>1</exact>`, schema).valid).toBe(false);
+            expect(check(`<min>1 2 3</min>`, schema).valid).toBe(true);
+            expect(check(`<min>1</min>`, schema).valid).toBe(false);
+            const { errors } = check(`<exact>1 2 3</exact>`, schema);
+            expect(errors.some((e) => e.code === "FACET_VIOLATION" && e.message.includes("length"))).toBe(true);
+        });
+
+        it("applies pattern and enumeration to the whole list lexical form", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="DigitList">
+                        <xsd:list itemType="xsd:token"/>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="Patterned">
+                        <xsd:restriction base="DigitList">
+                            <xsd:pattern value="\\d+ \\d+"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="Enumerated">
+                        <xsd:restriction base="DigitList">
+                            <xsd:enumeration value="red green blue"/>
+                            <xsd:enumeration value="1 2 3"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="p" type="Patterned"/>
+                    <xsd:element name="q" type="Enumerated"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<p>12 34</p>`, schema).valid).toBe(true);
+            expect(check(`<p>ab cd</p>`, schema).valid).toBe(false);
+            expect(check(`<q>1 2 3</q>`, schema).valid).toBe(true);
+            expect(check(`<q>red green blue</q>`, schema).valid).toBe(true);
+            expect(check(`<q>2 3 4</q>`, schema).valid).toBe(false);
+        });
+
+        it("applies item-type facets to each item (inline item type)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="TwoCharTokens">
+                        <xsd:list>
+                            <xsd:simpleType>
+                                <xsd:restriction base="xsd:token">
+                                    <xsd:length value="2"/>
+                                </xsd:restriction>
+                            </xsd:simpleType>
+                        </xsd:list>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="TwoCharTokens"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>ab cd</e>`, schema).valid).toBe(true);
+            expect(check(`<e>abc d</e>`, schema).valid).toBe(false); // "abc" has length 3
+            const { errors } = check(`<e>abc d</e>`, schema);
+            expect(errors.some((e) => e.code === "FACET_VIOLATION" && e.message.includes("List item"))).toBe(true);
+        });
+
+        it("accepts a union value when at least one member type accepts it", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntOrDate">
+                        <xsd:union memberTypes="xsd:integer xsd:date"/>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="IntOrDate"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>2020</e>`, schema).valid).toBe(true); // integer member
+            expect(check(`<e>2000-01-01</e>`, schema).valid).toBe(true); // date member
+            const r = check(`<e>hello</e>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "UNION_VIOLATION")).toBe(true);
+        });
+
+        it("applies each union member's own whitespace normalization", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="BoolOrToken">
+                        <xsd:union memberTypes="xsd:boolean xsd:token"/>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="BoolOrToken"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // The union's own whiteSpace is preserve, but the boolean member
+            // collapses whitespace, so the padded value is accepted.
+            expect(check(`<e> true </e>`, schema).valid).toBe(true);
+            expect(check(`<e>false</e>`, schema).valid).toBe(true);
+            expect(check(`<e>1</e>`, schema).valid).toBe(true);
+        });
+
+        it("supports anonymous inline union member types", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="StrOrTwo">
+                        <xsd:union>
+                            <xsd:simpleType>
+                                <xsd:restriction base="xsd:string">
+                                    <xsd:length value="2"/>
+                                </xsd:restriction>
+                            </xsd:simpleType>
+                            <xsd:simpleType>
+                                <xsd:restriction base="xsd:integer">
+                                    <xsd:minInclusive value="0"/>
+                                </xsd:restriction>
+                            </xsd:simpleType>
+                        </xsd:union>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="StrOrTwo"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>ab</e>`, schema).valid).toBe(true); // 2-char string
+            expect(check(`<e>5</e>`, schema).valid).toBe(true); // non-negative integer
+            expect(check(`<e>-5</e>`, schema).valid).toBe(true); // 2 chars, via the string member
+            expect(check(`<e>abc</e>`, schema).valid).toBe(false); // neither
+            expect(check(`<e>-55</e>`, schema).valid).toBe(false); // negative integer, 3 chars
+        });
+
+        it("applies enumeration/pattern facets on a restriction of a union", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntOrDate">
+                        <xsd:union memberTypes="xsd:integer xsd:date"/>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="YearOnly">
+                        <xsd:restriction base="IntOrDate">
+                            <xsd:enumeration value="2020"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="YearOnly"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>2020</e>`, schema).valid).toBe(true);
+            expect(check(`<e>2021</e>`, schema).valid).toBe(false);
+            const { errors } = check(`<e>2021</e>`, schema);
+            expect(errors.some((e) => e.code === "FACET_VIOLATION" && e.message.includes("enumeration"))).toBe(true);
+        });
+
+        it("validates list types on attributes", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntList">
+                        <xsd:list itemType="xsd:integer"/>
+                    </xsd:simpleType>
+                    <xsd:element name="e">
+                        <xsd:complexType>
+                            <xsd:attribute name="vals" type="IntList" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e vals="1 2 3"/>`, schema).valid).toBe(true);
+            expect(check(`<e vals="1 x"/>`, schema).valid).toBe(false);
+        });
+
+        it("the empty string is the empty list and is valid without length facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="IntList">
+                        <xsd:list itemType="xsd:integer"/>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="IntList"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e></e>`, schema).valid).toBe(true);
+        });
+
+    });
+
 });
