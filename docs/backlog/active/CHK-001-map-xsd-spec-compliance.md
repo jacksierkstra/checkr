@@ -68,10 +68,13 @@ Pass the W3C XML Schema Test Suite (XSTS) for XSD 1.0, Parts 1 and 2 — both sc
 
 - [Research reference XSD validator architectures](docs/backlog/archive/CHK-003-reference-architectures.md) — Xerces-J uses a grammar-per-namespace component model; libxml2 uses a flat struct model. Both share a two-phase architecture (schema compilation → instance validation) with eager multi-pass reference resolution. The full analysis covers all seven research questions and includes a summary of design recommendations.
 - [Decide checkr's XSD component model architecture](docs/backlog/archive/CHK-004-architecture-decision.md) — ADR at `docs/adr/architecture-component-model.md`: checkr adopts a typed component graph (discriminated union mirroring XSD Part 1 components) with a two-phase API (`compileSchema` → immutable `CompiledSchema` → `validate`). QName `{ns}localName` identity; grammar-per-namespace; eager multi-pass resolution (unresolved refs = compile errors); `SchemaError` taxonomy via listener; schema-for-schemas validation at compile time; no formal PSVI but internal hooks kept. This also settles the schema-validation-infrastructure fog entry: schema-for-schemas, at compile time.
+- [Gap analysis: checkr capabilities vs XSTS](docs/backlog/archive/CHK-005-gap-analysis.md) — Full analysis at `docs/research/gap-analysis.md`: no feature area is `full`; the flat pipeline model blocks everything until the CHK-004 rearchitecture. Partial: schema element/forms, element & attribute declarations, sequence/choice, particles (with known bugs: root `unbounded` → 1, document-wide occurrence counts), 4 facets (string-only), 5 lexical type regexes (so `xs:float` and ~39 other built-ins are unvalidated). Missing: `all`, named groups, attribute groups, wildcards, identity constraints, notations, list/union, complex/simple-content derivation, substitution groups, `nillable`/`xsi:*`, refs, include/import/redefine, schema-for-schemas, XSD regex. ~60% of the suite's ~14,383 groups are datatypes + regex; implementation-defined policy recorded (CTR-with-`all` → `CTR-all-compile` recommended, XML 1.0, JS-runtime Unicode with code-point counting).
 
 ## Not yet specified
 
-- **Feature implementation order** — Once we have the architecture and gap analysis, in what order should features be implemented to maximize early progress on the XSTS? This is a scheduling decision, blocked on the gap analysis (CHK-005).
+<!-- see "Fog of war": in-scope fog you can't ticket yet; graduates as the frontier advances -->
+
+*(none — the scheduling question is now ticketed as CHK-007 — Decide feature implementation order)*
 
 ## Out of scope
 

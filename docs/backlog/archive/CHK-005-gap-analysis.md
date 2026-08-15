@@ -6,11 +6,11 @@ wayfinder_type: "research"
 parent: "CHK-001"
 area: "meta"
 priority: "high"
-status: "draft"
+status: "done"
+assignee: "jacks"
 depends_on: ["CHK-002", "CHK-003"]
 required_context: ["docs/research/xsts-structure-acquisition.md", "src/lib/"]
 optional_context: ["docs/adr/architecture-component-model.md"]
-assignee: null
 estimate: null
 ---
 
@@ -71,4 +71,13 @@ Which XSD 1.0 features does checkr currently support, partially support, or not 
 
 ## Answer
 
-*(to be filled on resolution)*
+Full findings are documented in [docs/research/gap-analysis.md](../../research/gap-analysis.md), against the checkr source tree (`src/lib/`, all parser/resolver/validator steps and tests) and the CHK-002 XSTS structure research.
+
+### Summary
+
+- **No feature area is rated `full`.** checkr sits on the flat `XSDElement` pipeline model that CHK-004 found incapable of expressing the XSD 1.0 component model — the component-graph rearchitecture is the prerequisite for XSTS passage.
+- **Partial**: schema element + `targetNamespace`; element declarations; attribute declarations/use/[fixed]; complex types with `sequence`; `choice` (exactly-one, document-wide count); particles/occurrence (with bugs: root `unbounded` → 1, root `minOccurs` defaults 0); `enumeration`/`pattern`/`minLength`/`maxLength` on element text (`xs:string` only); five lexical regexes for `xs:string`, `xs:integer`, `xs:decimal`, `xs:boolean`, `xs:date` (format-only). Everything else is unvalidated pass-through.
+- **Missing**: `xs:all`, named model groups, `xs:attributeGroup`, wildcards (`any`/`anyAttribute`), identity constraints `unique`/`key`/`keyref`, notations, `xs:list`/`xs:union`, complex-content derivation (`complexContent`/`extension`/`restriction`), `simpleContent`, mixed content, substitution groups, `nillable`/`xsi:*`, element `default`/`fixed`, `ref=` (element/attribute/group), `include`/`import`/`redefine` — plus the entire schema-for-schemas conformance layer and the XSD regex dialect (JS `RegExp` is used today).
+- **Biggest XSTS weight is datatypes + regex**: NIST 3,953 + Regex 2,591 + DataTypes 2,247 ≈ 8,791 of ~14,383 groups (~60%). Structures are dominated by Particles (856) and IdentityConstraint (840).
+- **Implementation-defined / declared behaviors recorded for the future runner**: CTR-with-`all` → recommend `CTR-all-compile` (aligns with CHK-004 eager compile-time validation); target XML 1.0; target = JS runtime Unicode version, with `length`-family facets counting code points; honor `current/@status` and skip `indeterminate`/`notKnown`/disputed outcomes.
+- **Complexity**: `small` — annotations (inert), notations, errata, default/fixed, boolean; `medium` — forms, declarations/refs, attribute groups, `all`, named groups, particles, wildcards, simpleContent, mixed, `xsi:*`, datatype lexical checks, list/union, most facets; `large` — the rearchitecture itself, substitution groups, complex-content derivation + CTR, identity constraints (XPath subset), include/import/redefine, schema-for-schemas, XSD regex engine, full value-space datatypes.

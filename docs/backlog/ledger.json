@@ -42,8 +42,8 @@
     {
       "id": "CHK-005",
       "title": "Gap analysis: checkr capabilities vs XSTS",
-      "file": "docs/backlog/active/CHK-005-gap-analysis.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-005-gap-analysis.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
@@ -55,6 +55,204 @@
       "status": "draft",
       "area": "meta",
       "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-007",
+      "title": "Decide feature implementation order for XSTS progress",
+      "file": "docs/backlog/active/CHK-007-feature-implementation-order.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-008",
+      "title": "Two-phase API and component-graph core",
+      "file": "docs/backlog/active/CHK-008-two-phase-api-component-graph-core.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-009",
+      "title": "Contract the flat model",
+      "file": "docs/backlog/active/CHK-009-contract-the-flat-model.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-010",
+      "title": "Simple-type definitions and facet framework",
+      "file": "docs/backlog/active/CHK-010-simple-type-definitions-facet-framework.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-011",
+      "title": "String family built-in types",
+      "file": "docs/backlog/active/CHK-011-string-family-built-ins.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-012",
+      "title": "Numeric family and bound facets",
+      "file": "docs/backlog/active/CHK-012-numeric-family-and-bound-facets.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-013",
+      "title": "Date/time family built-in types",
+      "file": "docs/backlog/active/CHK-013-date-time-family-built-ins.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-014",
+      "title": "Remaining built-in types",
+      "file": "docs/backlog/active/CHK-014-remaining-built-in-types.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-015",
+      "title": "XSD regex engine",
+      "file": "docs/backlog/active/CHK-015-xsd-regex-engine.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-016",
+      "title": "List and union types",
+      "file": "docs/backlog/active/CHK-016-list-and-union-types.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-017",
+      "title": "QName resolution and namespace-correct declarations",
+      "file": "docs/backlog/active/CHK-017-qname-resolution-namespace-declarations.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-018",
+      "title": "Content models: sequence, choice, all",
+      "file": "docs/backlog/active/CHK-018-content-models-sequence-choice-all.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-019",
+      "title": "Named model groups and attribute groups",
+      "file": "docs/backlog/active/CHK-019-named-model-groups-attribute-groups.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-020",
+      "title": "Complex-content derivation",
+      "file": "docs/backlog/active/CHK-020-complex-content-derivation.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-021",
+      "title": "Wildcards",
+      "file": "docs/backlog/active/CHK-021-wildcards.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-022",
+      "title": "Identity constraints",
+      "file": "docs/backlog/active/CHK-022-identity-constraints.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-023",
+      "title": "Substitution groups and declaration attributes",
+      "file": "docs/backlog/active/CHK-023-substitution-groups-declaration-attributes.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-024",
+      "title": "Multi-document schemas",
+      "file": "docs/backlog/active/CHK-024-multi-document-schemas.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-025",
+      "title": "Schema-for-schemas conformance",
+      "file": "docs/backlog/active/CHK-025-schema-for-schemas-conformance.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-026",
+      "title": "Notations and annotations",
+      "file": "docs/backlog/active/CHK-026-notations-and-annotations.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "medium",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-027",
+      "title": "Errata 1.0 sweep",
+      "file": "docs/backlog/active/CHK-027-errata-1-0-sweep.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "medium",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-028",
+      "title": "XSTS-derived regression corpus",
+      "file": "docs/backlog/active/CHK-028-xsts-derived-regression-corpus.md",
+      "status": "draft",
+      "area": "meta",
+      "priority": "medium",
       "type": "ticket"
     }
   ]
