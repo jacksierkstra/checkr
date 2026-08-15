@@ -1,11 +1,6 @@
-export { Checkr } from "@lib/core/main";
-export { ValidationResult } from "@lib/types/validation";
-export { Validator, ValidatorImpl } from "@lib/validator/validator";
-export { XMLParser, XMLParserImpl } from "@lib/xml/parser";
-export { XSDParser } from "@lib/xsd/parser";
-export { XSDPipelineParserImpl } from "@lib/xsd/pipeline/parser";
-
-// Two-phase API (CHK-008) — lives beside the legacy single-shot pipeline.
+// Public two-phase API (docs/adr/architecture-component-model.md §3):
+//   compileSchema(xsd) -> CompiledSchema      (phase 1, immutable)
+//   validate(xml, schema) -> SchemaValidationResult   (phase 2)
 export { compileSchema, validate } from "@lib/core/compiled";
 export type { CompileOptions } from "@lib/xsd/compiler/schemaCompiler";
 export type { ValidateOptions } from "@lib/validator/compiled/instanceValidator";

@@ -68,7 +68,7 @@ ls docs/adr/architecture-component-model.md
 
 What component model architecture should checkr adopt for its XSD 1.0 processor, and how should the two-phase (schema compilation → instance validation) architecture be structured?
 
-## Answer
+## Decision / Outcome
 
 The ADR is at [docs/adr/architecture-component-model.md](../../adr/architecture-component-model.md).
 

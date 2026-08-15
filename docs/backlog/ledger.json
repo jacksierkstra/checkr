@@ -5,7 +5,7 @@
   "briefs": [
     {
       "id": "CHK-001",
-      "title": "XSD 1.0 Spec Compliance — Wayfinder Map",
+      "title": "XSD 1.0 Spec Compliance \u00e2\u20ac\u201d Wayfinder Map",
       "file": "docs/backlog/active/CHK-001-map-xsd-spec-compliance.md",
       "status": "in-progress",
       "area": "meta",
@@ -78,8 +78,8 @@
     {
       "id": "CHK-009",
       "title": "Contract the flat model",
-      "file": "docs/backlog/active/CHK-009-contract-the-flat-model.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-009-contract-the-flat-model.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

@@ -72,7 +72,7 @@ ls docs/backlog/active/CHK-002-xsts-research.md
 
 What is the exact structure, format, and acquisition path for the W3C XML Schema Test Suite (XSTS) for XSD 1.0?
 
-## Answer
+## Decision / Outcome
 
 Full research findings are documented in [docs/research/xsts-structure-acquisition.md](../../research/xsts-structure-acquisition.md).
 

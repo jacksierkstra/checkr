@@ -40,7 +40,10 @@ const REQUIRED_SECTIONS = [
 // --------------------------------------------------------------------------
 
 function parseBrief(filePath) {
-  const text = readFileSync(filePath, "utf-8");
+  // Normalize line endings: the repo's briefs are committed as LF, but a
+  // Windows checkout (core.autocrlf=true) materializes CRLF everywhere, which
+  // would break every `\n`-anchored regex below. Treat both alike.
+  const text = readFileSync(filePath, "utf-8").replace(/\r\n/g, "\n");
   const errors = [];
   const warnings = [];
 
@@ -57,7 +60,13 @@ function parseBrief(filePath) {
     const colonIdx = line.indexOf(":");
     if (colonIdx === -1) continue;
     const key = line.slice(0, colonIdx).trim();
-    const value = line.slice(colonIdx + 1).trim();
+    let value = line.slice(colonIdx + 1).trim();
+    // Briefs quote their scalar values (`area: "meta"`); strip the quotes so
+    // membership checks (area/priority/status) and the done-gate see the raw
+    // value. Arrays (`depends_on: [...]`) are left untouched.
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
+      value = value.slice(1, -1);
+    }
     fm[key] = value;
   }
 

@@ -68,7 +68,7 @@
     },
     {
       "id": "benchmark-import-convention",
-      "reason": "Benchmark files import from src/lib via `@lib/core/main` and from `@benchmark/utils` — both use aliases. No violation to enforce. If a relative import appears, source-relative-imports catches it."
+      "reason": "Benchmark files import from src/lib via `@lib/core/compiled` and from `@benchmark/utils` — both use aliases. No violation to enforce. If a relative import appears, source-relative-imports catches it."
     }
   ]
 }

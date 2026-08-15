@@ -70,7 +70,7 @@ ls docs/backlog/active/CHK-003-reference-architectures.md
 
 What are the component-model architectures used by reference XSD validators (Xerces-J, libxml2) for XSD 1.0 processing, and what key design patterns should inform checkr's rearchitecture?
 
-## Answer
+## Decision / Outcome
 
 Full research findings are documented in [docs/research/reference-xsd-validator-architectures.md](../../research/reference-xsd-validator-architectures.md).
 

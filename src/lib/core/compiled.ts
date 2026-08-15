@@ -8,8 +8,10 @@ import { InstanceValidator, InstanceValidatorImpl } from "@lib/validator/compile
  *   compileSchema(xsd) -> CompiledSchema      (phase 1, immutable)
  *   validate(xml, schema) -> SchemaValidationResult   (phase 2)
  *
- * This surface lives beside the legacy single-shot pipeline (Checkr.validate)
- * and does not change it.
+ * Compile once, validate many: the compiled schema is a deeply frozen,
+ * immutable component graph that is safe to reuse across validate calls.
+ * A malformed schema throws SchemaCompilationError at compile time; instance
+ * problems are reported as SchemaError objects on the result and listener.
  */
 
 const xmlParser = new XMLParserImpl();

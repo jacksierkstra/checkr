@@ -73,3 +73,95 @@ describe("public two-phase surface — compileSchema / validate (CHK-008)", () =
     });
 
 });
+
+// Migrated from the legacy single-shot surface (CHK-009 contracts the flat
+// model): the books scenario exercised `new Checkr().validate()` end-to-end.
+// The new surface covers the same behavior through compileSchema/validate.
+describe("public two-phase surface — migrated from the legacy single-shot API (CHK-009)", () => {
+
+    const BOOKS_XSD = `
+        <xsd:schema xmlns:xsd="${NAMESPACE_XSD}"
+        targetNamespace="urn:books"
+        xmlns:bks="urn:books">
+            <xsd:element name="books" type="bks:BooksForm"/>
+            <xsd:complexType name="BooksForm">
+                <xsd:sequence>
+                    <xsd:element name="book"
+                                type="bks:BookForm"
+                                minOccurs="0"
+                                maxOccurs="unbounded"/>
+                </xsd:sequence>
+            </xsd:complexType>
+            <xsd:complexType name="BookForm">
+                <xsd:sequence>
+                    <xsd:element name="author"   type="xsd:string"/>
+                    <xsd:element name="title"    type="xsd:string"/>
+                    <xsd:element name="genre"    type="xsd:string"/>
+                    <xsd:element name="price"    type="xsd:float" />
+                    <xsd:element name="pub_date" type="xsd:date" />
+                    <xsd:element name="review"   type="xsd:string"/>
+                </xsd:sequence>
+                <xsd:attribute name="id"   type="xsd:string"/>
+            </xsd:complexType>
+        </xsd:schema>
+    `;
+
+    const BOOKS_XML_VALID = `
+        <?xml version="1.0"?>
+        <x:books xmlns:x="urn:books">
+            <book id="bk001">
+                <author>Writer</author>
+                <title>The First Book</title>
+                <genre>Fiction</genre>
+                <price>44.95</price>
+                <pub_date>2000-10-01</pub_date>
+                <review>An amazing story of nothing.</review>
+            </book>
+            <book id="bk002">
+                <author>Poet</author>
+                <title>The Poet's First Poem</title>
+                <genre>Poem</genre>
+                <price>24.95</price>
+                <pub_date>2000-10-01</pub_date>
+                <review>Least poetic poems.</review>
+            </book>
+        </x:books>
+    `;
+
+    const BOOKS_XML_INVALID = `
+        <?xml version="1.0"?>
+        <x:books xmlns:x="urn:books">
+            <book id="bk001">
+                <author>Writer</author>
+                <title>The First Book</title>
+                <genre>Fiction</genre>
+                <price>44.95</price>
+                <pub_date>2000-10-01</pub_date>
+                <review>An amazing story of nothing.</review>
+            </book>
+            <book id="bk002">
+                <author>Poet</author>
+                <title>The Poet's First Poem</title>
+                <genre>Poem</genre>
+                <price>24.95</price>
+                <review>Least poetic poems.</review>
+            </book>
+        </x:books>
+    `;
+
+    it("validates a conforming books instance end-to-end", () => {
+        const schema = compileSchema(BOOKS_XSD);
+        const { valid, errors } = validate(BOOKS_XML_VALID, schema);
+        expect(valid).toBe(true);
+        expect(errors).toHaveLength(0);
+    });
+
+    it("rejects a books instance with a missing required element", () => {
+        const schema = compileSchema(BOOKS_XSD);
+        const { valid, errors } = validate(BOOKS_XML_INVALID, schema);
+        expect(valid).toBe(false);
+        const missing = errors.filter((e) => e.code === "MISSING_REQUIRED_ELEMENT");
+        expect(missing.some((e) => e.message.includes("pub_date"))).toBe(true);
+    });
+
+});

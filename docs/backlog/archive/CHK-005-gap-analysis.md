@@ -69,7 +69,7 @@ ls docs/research/gap-analysis.md
 
 Which XSD 1.0 features does checkr currently support, partially support, or not support at all, compared to what the XSTS requires?
 
-## Answer
+## Decision / Outcome
 
 Full findings are documented in [docs/research/gap-analysis.md](../../research/gap-analysis.md), against the checkr source tree (`src/lib/`, all parser/resolver/validator steps and tests) and the CHK-002 XSTS structure research.
 

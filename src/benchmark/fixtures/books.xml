@@ -13,6 +13,7 @@
       <title>The Poet's First Poem</title>
       <genre>Poem</genre>
       <price>24.95</price>
+      <pub_date>2000-10-01</pub_date>
       <review>Least poetic poems.</review>
    </book>
 </x:books>
