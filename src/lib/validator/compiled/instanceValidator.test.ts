@@ -1447,4 +1447,180 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("named model groups and attribute groups (CHK-019)", () => {
+
+        describe("model groups", () => {
+
+            it("validates an instance using a group ref, identical to the inlined equivalent", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:group name="Item">
+                            <xsd:sequence>
+                                <xsd:element name="name" type="xsd:string"/>
+                                <xsd:element name="price" type="xsd:decimal"/>
+                            </xsd:sequence>
+                        </xsd:group>
+                        <xsd:complexType name="Order">
+                            <xsd:sequence>
+                                <xsd:group ref="Item" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                        <xsd:element name="order" type="Order"/>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                // Valid: two items
+                expect(check(`<order><name>foo</name><price>10.0</price><name>bar</name><price>20.0</price></order>`, schema).valid).toBe(true);
+                // Invalid: missing price in second item
+                const r = check(`<order><name>foo</name><price>10.0</price><name>bar</name></order>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT")).toBe(true);
+            });
+
+            it("validates a group ref with minOccurs=0 (optional group)", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:group name="OptGroup">
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:group>
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:sequence>
+                                    <xsd:group ref="OptGroup" minOccurs="0"/>
+                                    <xsd:element name="b" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                // Valid: group absent
+                expect(check(`<root><b>ok</b></root>`, schema).valid).toBe(true);
+                // Valid: group present
+                expect(check(`<root><a>ok</a><b>ok</b></root>`, schema).valid).toBe(true);
+                // Invalid: group present but incomplete
+                const r = check(`<root><a>ok</a></root>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT" && e.message.includes("b"))).toBe(true);
+            });
+
+            it("validates a repeating group ref (maxOccurs=unbounded)", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:group name="G">
+                            <xsd:choice>
+                                <xsd:element name="a" type="xsd:string"/>
+                                <xsd:element name="b" type="xsd:string"/>
+                            </xsd:choice>
+                        </xsd:group>
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:choice maxOccurs="unbounded">
+                                    <xsd:group ref="G"/>
+                                </xsd:choice>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root></root>`, schema).valid).toBe(true);
+                expect(check(`<root><a>1</a><b>2</b><a>3</a></root>`, schema).valid).toBe(true);
+                // Only a and b allowed
+                const r = check(`<root><a>1</a><c>3</c></root>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "UNEXPECTED_ELEMENT" && e.message.includes("c"))).toBe(true);
+            });
+
+            it("a choice containing group refs matches correctly", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:group name="G1">
+                            <xsd:sequence>
+                                <xsd:element name="a" type="xsd:string"/>
+                                <xsd:element name="b" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:group>
+                        <xsd:group name="G2">
+                            <xsd:sequence>
+                                <xsd:element name="c" type="xsd:string"/>
+                            </xsd:sequence>
+                        </xsd:group>
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:choice>
+                                    <xsd:group ref="G1"/>
+                                    <xsd:group ref="G2"/>
+                                </xsd:choice>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root><a>1</a><b>2</b></root>`, schema).valid).toBe(true);
+                expect(check(`<root><c>3</c></root>`, schema).valid).toBe(true);
+                // G1 partial — not valid (a without b)
+                const r = check(`<root><a>1</a></root>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT")).toBe(true);
+            });
+
+        });
+
+        describe("attribute groups", () => {
+
+            it("validates attributes defined via an attribute group ref", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:attributeGroup name="CommonAttrs">
+                            <xsd:attribute name="id" type="xsd:string" use="required"/>
+                            <xsd:attribute name="lang" type="xsd:string"/>
+                        </xsd:attributeGroup>
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:attributeGroup ref="CommonAttrs"/>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root id="x" lang="en"/>`, schema).valid).toBe(true);
+                expect(check(`<root id="x"/>`, schema).valid).toBe(true);
+                // Missing required id
+                const r = check(`<root lang="en"/>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "MISSING_REQUIRED_ATTRIBUTE" && e.message.includes("id"))).toBe(true);
+            });
+
+            it("validates an attribute group ref with type resolution", () => {
+                const xsd = `
+                    <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                        <xsd:simpleType name="NonEmpty">
+                            <xsd:restriction base="xsd:string">
+                                <xsd:minLength value="1"/>
+                            </xsd:restriction>
+                        </xsd:simpleType>
+                        <xsd:attributeGroup name="IdAttr">
+                            <xsd:attribute name="id" type="NonEmpty" use="required"/>
+                        </xsd:attributeGroup>
+                        <xsd:element name="root">
+                            <xsd:complexType>
+                                <xsd:attributeGroup ref="IdAttr"/>
+                            </xsd:complexType>
+                        </xsd:element>
+                    </xsd:schema>
+                `;
+                const schema = compile(xsd);
+                expect(check(`<root id="ok"/>`, schema).valid).toBe(true);
+                // minLength=1 violated
+                const r = check(`<root id=""/>`, schema);
+                expect(r.valid).toBe(false);
+                expect(r.errors.some((e) => e.code === "FACET_VIOLATION")).toBe(true);
+            });
+
+        });
+
+    });
+
 });

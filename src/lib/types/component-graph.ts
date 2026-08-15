@@ -137,6 +137,13 @@ export interface AttributeUse {
     readonly required: boolean;
     readonly fixed: string | null;
     readonly defaultValue: string | null;
+    /**
+     * For a use produced by `<xs:attributeGroup ref="…">`, the QName of the
+     * referenced attribute group definition. Resolved at compile time (pass 2)
+     * by splicing the referenced group's uses into this position. Null for
+     * non-ref uses (CHK-019).
+     */
+    readonly attributeGroupRef: QName | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -154,6 +161,13 @@ export type ModelGroupKind = "sequence" | "choice" | "all";
 export interface ModelGroup {
     readonly kind: ModelGroupKind;
     readonly particles: ReadonlyArray<Particle>;
+    /**
+     * For a group produced by `<xs:group ref="…">`, the QName of the
+     * referenced model group definition. Resolved at compile time (pass 2)
+     * by replacing this group's particles (and kind) with the referenced
+     * definition's content. Null for non-ref groups (CHK-019).
+     */
+    readonly ref: QName | null;
 }
 
 export interface Wildcard {
@@ -167,11 +181,31 @@ export type ParticleTerm = ElementDeclaration | ModelGroup | Wildcard;
 // Compiled schema — grammar-per-namespace
 // ---------------------------------------------------------------------------
 
+export interface ModelGroupDefinition {
+    readonly kind: "model-group-definition";
+    readonly name: QName;
+    /**
+     * The particle whose term is the definition's model group. Carries the
+     * top compositor's minOccurs/maxOccurs. When the definition is referenced
+     * via `<xs:group ref="…">`, the ref particle copies this particle's
+     * content (CHK-019).
+     */
+    readonly particle: Particle;
+}
+
+export interface AttributeGroupDefinition {
+    readonly kind: "attribute-group-definition";
+    readonly name: QName;
+    readonly attributeUses: ReadonlyArray<AttributeUse>;
+}
+
 export interface CompiledGrammar {
     readonly namespaceURI: string | null;
     readonly elements: ReadonlyMap<string, ElementDeclaration>;
     readonly attributes: ReadonlyMap<string, AttributeDeclaration>;
     readonly types: ReadonlyMap<string, TypeDefinition>;
+    readonly modelGroups: ReadonlyMap<string, ModelGroupDefinition>;
+    readonly attributeGroups: ReadonlyMap<string, AttributeGroupDefinition>;
 }
 
 export interface CompiledSchema {

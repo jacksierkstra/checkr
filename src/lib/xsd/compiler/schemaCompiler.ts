@@ -1,6 +1,7 @@
 import { Document, Element } from "@xmldom/xmldom";
 import {
     AttributeDeclaration,
+    AttributeGroupDefinition,
     AttributeUse,
     ComplexTypeDefinition,
     CompiledGrammar,
@@ -8,6 +9,7 @@ import {
     ElementDeclaration,
     Facet,
     ModelGroup,
+    ModelGroupDefinition,
     Particle,
     ParticleTerm,
     QName,
@@ -16,6 +18,7 @@ import {
     WhiteSpaceValue,
     Wildcard,
     displayQName,
+    qnameKey,
 } from "@lib/types/component-graph";
 import { deepFreeze } from "@lib/types/immutable";
 import { namespaceKey, NAMESPACE_XSD } from "@lib/types/namespaces";
@@ -58,6 +61,14 @@ interface BuildContext {
     locations: Map<ElementDeclaration, SchemaLocation>;
     /** Source element for each particle, for UPA/constraint error reporting. */
     particleNodes: Map<Particle, Element>;
+    /** Every complex type built during pass 1, for post-expansion validation. */
+    allComplexTypes: Array<{ type: ComplexTypeDefinition; node: Element }>;
+    /** Every model group definition, for post-expansion validation. */
+    allModelGroupDefs: Array<{ def: ModelGroupDefinition; node: Element }>;
+    /** Every attribute group definition, for post-expansion use-splicing. */
+    allAttributeGroupDefs: Array<{ def: AttributeGroupDefinition; node: Element }>;
+    /** Source element for each attribute-group-ref placeholder use, for error reporting. */
+    attributeGroupRefNodes: Map<AttributeUse, Element>;
     report: (error: SchemaError) => void;
 }
 
@@ -69,6 +80,8 @@ interface MutableGrammar {
     elements: Map<string, ElementDeclaration>;
     attributes: Map<string, AttributeDeclaration>;
     types: Map<string, TypeDefinition>;
+    modelGroups: Map<string, ModelGroupDefinition>;
+    attributeGroups: Map<string, AttributeGroupDefinition>;
 }
 
 /**
@@ -113,13 +126,19 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 elements: new Map(),
                 attributes: new Map(),
                 types: new Map(),
+                modelGroups: new Map(),
+                attributeGroups: new Map(),
             },
             allElements: [],
             allAttributes: [],
             refs: [],
             allSimpleTypes: [],
+            allComplexTypes: [],
+            allModelGroupDefs: [],
+            allAttributeGroupDefs: [],
             locations: new Map(),
             particleNodes: new Map(),
+            attributeGroupRefNodes: new Map(),
             report,
         };
 
@@ -138,8 +157,14 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             } else if (child.localName === "simpleType") {
                 const type = this.buildSimpleType(child, ctx, ctx.targetNamespace);
                 if (type.name) ctx.grammar.types.set(type.name.localName, type);
+            } else if (child.localName === "group") {
+                const def = this.buildModelGroupDefinition(child, ctx);
+                if (def) ctx.grammar.modelGroups.set(def.name.localName, def);
+            } else if (child.localName === "attributeGroup") {
+                const def = this.buildAttributeGroupDefinition(child, ctx);
+                if (def) ctx.grammar.attributeGroups.set(def.name.localName, def);
             }
-            // include/import/redefine/annotation/notation/group/attributeGroup: later tickets.
+            // include/import/redefine/annotation/notation: later tickets.
         }
 
         const grammars = new Map<string, CompiledGrammar>();
@@ -149,8 +174,17 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         // Pass 2 — eager multi-pass reference resolution (AD §5).
         this.resolveReferencePass(ctx, grammars);
 
+        // Pass 2c — expand named model group references into particles (CHK-019).
+        this.expandModelGroups(ctx, grammars);
+
+        // Pass 2d — expand attribute group references into attribute uses (CHK-019).
+        this.expandAttributeGroups(ctx, grammars);
+
         // Pass 3 — resolve simple-type bases and compute effective facets/whiteSpace.
         this.resolveSimpleTypes(ctx, grammars);
+
+        // Pass 4 — UPA determinism and all-group constraints on the expanded content.
+        this.checkContentModels(ctx);
 
         if (errors.some((e) => e.severity === "error" || e.severity === "fatal")) {
             throw new SchemaCompilationError(errors);
@@ -244,10 +278,6 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     if (contentChild.localName === "all") {
                         this.validateAllGroup(ctx, particle, contentChild);
                     }
-                    // Run UPA check on the content model
-                    if (particle) {
-                        this.checkContentModelUPA(ctx, particle, contentChild);
-                    }
                     break;
                 case "any":
                     particle = this.buildAnyParticle(contentChild, ctx);
@@ -285,18 +315,29 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     location: locationOf(child),
                     phase: "schema-compilation",
                 });
-            } else {
-                ctx.report({
-                    severity: "warning",
-                    code: "UNSUPPORTED_FEATURE",
-                    message: "xs:attributeGroup references are not supported yet.",
-                    location: locationOf(child),
-                    phase: "schema-compilation",
-                });
+            } else if (child.localName === "attributeGroup") {
+                const ref = this.readQName(child, "ref");
+                if (ref) {
+                    const placeholder = this.placeholderAttributeGroupUse(child, ref);
+                    ctx.attributeGroupRefNodes.set(placeholder, child);
+                    attributeUses.push(placeholder);
+                } else {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_SCHEMA_DOCUMENT",
+                        message: "An xs:attributeGroup reference must carry a ref attribute.",
+                        location: locationOf(child),
+                        phase: "schema-compilation",
+                    });
+                }
             }
         }
 
-        return { kind: "complex-type", name, contentType, particle, attributeUses, simpleType };
+        const result: ComplexTypeDefinition = {
+            kind: "complex-type", name, contentType, particle, attributeUses, simpleType,
+        };
+        ctx.allComplexTypes.push({ type: result, node: el });
+        return result;
     }
 
     private buildSimpleType(el: Element, ctx: BuildContext, declaredNs: string | null): SimpleTypeDefinition {
@@ -445,20 +486,136 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 case "any":
                     particles.push(this.buildAnyParticle(child, ctx));
                     break;
-                case "group":
-                    ctx.report({
-                        severity: "warning",
-                        code: "UNSUPPORTED_FEATURE",
-                        message: "Named model group references (xs:group) are not supported yet.",
-                        location: locationOf(child),
-                        phase: "schema-compilation",
-                    });
+                case "group": {
+                    const ref = this.readQName(child, "ref");
+                    if (ref) {
+                        // A placeholder group; pass 2 replaces its content with the
+                        // referenced definition's particles (CHK-019).
+                        particles.push(this.wrapParticle(ctx, child, { kind: "sequence", particles: [], ref }));
+                    } else {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "A nested xs:group must carry a ref attribute.",
+                            location: locationOf(child),
+                            phase: "schema-compilation",
+                        });
+                    }
                     break;
+                }
                 default:
                     break; // annotation
             }
         }
-        return { kind: el.localName as "sequence" | "choice" | "all", particles };
+        return { kind: el.localName as "sequence" | "choice" | "all", particles, ref: null };
+    }
+
+    private buildModelGroupDefinition(el: Element, ctx: BuildContext): ModelGroupDefinition | null {
+        const localName = el.getAttribute("name") ?? "";
+        if (!localName) {
+            ctx.report({
+                severity: "fatal",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: "A global xs:group must carry a name.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            return null;
+        }
+        const compositor = childElements(el).find(
+            (c) => c.namespaceURI === NAMESPACE_XSD &&
+                (c.localName === "sequence" || c.localName === "choice" || c.localName === "all")
+        );
+        if (!compositor) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `A global xs:group (${localName}) must contain a sequence, choice, or all compositor.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            return null;
+        }
+        const particle = this.wrapParticle(ctx, compositor, this.buildModelGroup(compositor, ctx));
+        if (compositor.localName === "all") {
+            this.validateAllGroup(ctx, particle, compositor);
+        }
+        const def: ModelGroupDefinition = {
+            kind: "model-group-definition",
+            name: { namespaceURI: ctx.targetNamespace, localName },
+            particle,
+        };
+        ctx.allModelGroupDefs.push({ def, node: el });
+        return def;
+    }
+
+    private buildAttributeGroupDefinition(el: Element, ctx: BuildContext): AttributeGroupDefinition | null {
+        const localName = el.getAttribute("name") ?? "";
+        if (!localName) {
+            ctx.report({
+                severity: "fatal",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: "A global xs:attributeGroup must carry a name.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            return null;
+        }
+        const attributeUses: AttributeUse[] = [];
+        for (const child of childElements(el)) {
+            if (child.namespaceURI !== NAMESPACE_XSD) continue;
+            if (child.localName === "attribute") {
+                const use = this.buildAttributeUse(child, ctx);
+                if (use) attributeUses.push(use);
+            } else if (child.localName === "attributeGroup") {
+                const ref = this.readQName(child, "ref");
+                if (ref) {
+                    const placeholder = this.placeholderAttributeGroupUse(child, ref);
+                    ctx.attributeGroupRefNodes.set(placeholder, child);
+                    attributeUses.push(placeholder);
+                } else {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_SCHEMA_DOCUMENT",
+                        message: "An xs:attributeGroup reference must carry a ref attribute.",
+                        location: locationOf(child),
+                        phase: "schema-compilation",
+                    });
+                }
+            } else if (child.localName === "anyAttribute") {
+                ctx.report({
+                    severity: "warning",
+                    code: "UNSUPPORTED_FEATURE",
+                    message: "xs:anyAttribute is not supported yet.",
+                    location: locationOf(child),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+        const def: AttributeGroupDefinition = {
+            kind: "attribute-group-definition",
+            name: { namespaceURI: ctx.targetNamespace, localName },
+            attributeUses,
+        };
+        ctx.allAttributeGroupDefs.push({ def, node: el });
+        return def;
+    }
+
+    /** A placeholder attribute use marking `<xs:attributeGroup ref="…">`; pass 2 splices the referenced uses. */
+    private placeholderAttributeGroupUse(el: Element, ref: QName): AttributeUse {
+        return {
+            declaration: {
+                kind: "attribute",
+                name: { namespaceURI: ref.namespaceURI, localName: ref.localName },
+                typeRef: null,
+                type: null,
+                ref: null,
+            },
+            required: false,
+            fixed: null,
+            defaultValue: null,
+            attributeGroupRef: ref,
+        };
     }
 
     private buildLocalElementParticle(el: Element, ctx: BuildContext): Particle {
@@ -505,6 +662,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             required: use === "required",
             fixed: el.getAttribute("fixed") ?? null,
             defaultValue: el.getAttribute("default") ?? null,
+            attributeGroupRef: null,
         };
     }
 
@@ -653,6 +811,207 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
     private lookupAttribute(grammars: Map<string, CompiledGrammar>, q: QName): AttributeDeclaration | null {
         return grammars.get(namespaceKey(q.namespaceURI))?.attributes.get(q.localName) ?? null;
+    }
+
+    private lookupModelGroup(grammars: Map<string, CompiledGrammar>, q: QName): ModelGroupDefinition | null {
+        return grammars.get(namespaceKey(q.namespaceURI))?.modelGroups.get(q.localName) ?? null;
+    }
+
+    private lookupAttributeGroup(grammars: Map<string, CompiledGrammar>, q: QName): AttributeGroupDefinition | null {
+        return grammars.get(namespaceKey(q.namespaceURI))?.attributeGroups.get(q.localName) ?? null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 2c/2d — named model group and attribute group expansion (CHK-019)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Expand `<xs:group ref="…">` placeholders into the referenced definition's
+     * particle tree (AD §5 pass 3: structural references). Runs depth-first with
+     * an expansion stack so circular references are compile-time errors.
+     *
+     * The ref particle keeps its own minOccurs/maxOccurs; the definition's top
+     * compositor particle is spliced as the term. When the definition's top
+     * compositor carries a non-default occurrence, the placeholder becomes a
+     * sequence wrapper holding that particle, so the two occurrence ranges
+     * compose exactly as in the inlined schema.
+     */
+    private expandModelGroups(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
+        const report = ctx.report;
+        const expanding = new Set<string>();
+
+        const locationOfParticle = (p: Particle): SchemaLocation => {
+            const node = ctx.particleNodes.get(p);
+            return node ? locationOf(node) : { line: 0, column: 0 };
+        };
+
+        const expandTree = (particle: Particle): void => {
+            const walk = (p: Particle): void => {
+                const term = p.term;
+                if (term.kind !== "sequence" && term.kind !== "choice" && term.kind !== "all") return;
+                if (!term.ref) {
+                    for (const child of term.particles) walk(child);
+                    return;
+                }
+
+                const def = this.lookupModelGroup(grammars, term.ref);
+                if (!def) {
+                    report({
+                        severity: "error",
+                        code: "UNRESOLVED_REFERENCE",
+                        message: `Model group reference ${displayQName(term.ref)} does not resolve to a global xs:group definition.`,
+                        location: locationOfParticle(p),
+                        phase: "schema-compilation",
+                    });
+                    (term as { ref: QName | null }).ref = null;
+                    return;
+                }
+
+                const key = qnameKey(def.name);
+                if (expanding.has(key)) {
+                    report({
+                        severity: "error",
+                        code: "CIRCULAR_REFERENCE",
+                        message: `Circular model group reference: ${displayQName(term.ref)} references itself (directly or transitively).`,
+                        location: locationOfParticle(p),
+                        phase: "schema-compilation",
+                    });
+                    (term as { ref: QName | null }).ref = null;
+                    return;
+                }
+
+                expanding.add(key);
+                expandTree(def.particle);
+                expanding.delete(key);
+
+                // Check if the inner expansion already cleared this ref
+                // (circular or unresolvable — just leave empty).
+                if (term.ref === null) return;
+
+                const defParticle = def.particle;
+                const defGroup = defParticle.term as ModelGroup;
+                if (defParticle.minOccurs === 1 && defParticle.maxOccurs === 1) {
+                    // Default definition occurrence: splice the group directly.
+                    (term as { kind: "sequence" | "choice" | "all"; particles: ReadonlyArray<Particle>; ref: QName | null }).kind = defGroup.kind;
+                    (term as { particles: ReadonlyArray<Particle> }).particles = defGroup.particles;
+                    (term as { ref: QName | null }).ref = null;
+                } else {
+                    // Non-default definition occurrence: wrap in a one-child
+                    // sequence so the ref particle's occurrence composes with it.
+                    (term as { kind: "sequence" | "choice" | "all" }).kind = "sequence";
+                    (term as { particles: ReadonlyArray<Particle> }).particles = [
+                        { minOccurs: defParticle.minOccurs, maxOccurs: defParticle.maxOccurs, term: defGroup },
+                    ];
+                    (term as { ref: QName | null }).ref = null;
+                }
+            };
+            walk(particle);
+        };
+
+        // Expand every definition's own tree, then every complex type's tree.
+        for (const { def } of ctx.allModelGroupDefs) {
+            expandTree(def.particle);
+        }
+        for (const { type } of ctx.allComplexTypes) {
+            if (type.particle) expandTree(type.particle);
+        }
+    }
+
+    /**
+     * Expand `<xs:attributeGroup ref="…">` placeholder uses into the referenced
+     * definition's uses (recursively, with cycle detection). After expansion,
+     * duplicate attribute uses within one complex type are compile errors
+     * (XSD 1.0 §3.4.3 ct-props-correct).
+     */
+    private expandAttributeGroups(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
+        const report = ctx.report;
+        const expanding = new Set<string>();
+
+        const expandUses = (uses: ReadonlyArray<AttributeUse>): AttributeUse[] => {
+            const out: AttributeUse[] = [];
+            for (const use of uses) {
+                const ref = use.attributeGroupRef;
+                if (!ref) {
+                    out.push(use);
+                    continue;
+                }
+                const node = ctx.attributeGroupRefNodes.get(use);
+                const def = this.lookupAttributeGroup(grammars, ref);
+                if (!def) {
+                    report({
+                        severity: "error",
+                        code: "UNRESOLVED_REFERENCE",
+                        message: `Attribute group reference ${displayQName(ref)} does not resolve to a global xs:attributeGroup definition.`,
+                        location: node ? locationOf(node) : { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                    continue;
+                }
+                const key = qnameKey(def.name);
+                if (expanding.has(key)) {
+                    report({
+                        severity: "error",
+                        code: "CIRCULAR_REFERENCE",
+                        message: `Circular attribute group reference: ${displayQName(ref)} references itself (directly or transitively).`,
+                        location: node ? locationOf(node) : { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                    continue;
+                }
+                expanding.add(key);
+                const expanded = expandUses(def.attributeUses);
+                expanding.delete(key);
+                out.push(...expanded);
+            }
+            return out;
+        };
+
+        const checkDuplicateUses = (owner: string, uses: ReadonlyArray<AttributeUse>): void => {
+            const seen = new Set<string>();
+            for (const use of uses) {
+                const key = qnameKey(use.declaration.name);
+                if (seen.has(key)) {
+                    report({
+                        severity: "error",
+                        code: "INVALID_SCHEMA_DOCUMENT",
+                        message: `Attribute ${displayQName(use.declaration.name)} is declared more than once in ${owner}.`,
+                        location: { line: 0, column: 0 },
+                        phase: "schema-compilation",
+                    });
+                }
+                seen.add(key);
+            }
+        };
+
+        // Expand each attribute group definition first (their uses may reference
+        // other attribute groups), then every complex type's uses.
+        for (const { def } of ctx.allAttributeGroupDefs) {
+            const expanded = expandUses(def.attributeUses);
+            (def as { attributeUses: ReadonlyArray<AttributeUse> }).attributeUses = expanded;
+            checkDuplicateUses(`xs:attributeGroup ${displayQName(def.name)}`, expanded);
+        }
+        for (const { type } of ctx.allComplexTypes) {
+            const expanded = expandUses(type.attributeUses);
+            (type as { attributeUses: ReadonlyArray<AttributeUse> }).attributeUses = expanded;
+            checkDuplicateUses(
+                type.name ? `complex type ${displayQName(type.name)}` : "an anonymous complex type",
+                expanded
+            );
+        }
+    }
+
+    /**
+     * Post-expansion content-model checks: UPA determinism (§3.8.6) on every
+     * complex type and model group definition. Runs after group expansion so
+     * referenced content is analyzed inline.
+     */
+    private checkContentModels(ctx: BuildContext): void {
+        for (const { type, node } of ctx.allComplexTypes) {
+            if (type.particle) this.checkContentModelUPA(ctx, type.particle, node);
+        }
+        for (const { def, node } of ctx.allModelGroupDefs) {
+            this.checkContentModelUPA(ctx, def.particle, node);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -825,6 +1184,16 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         const group = particle.term as ModelGroup;
         for (const child of group.particles) {
             const childEl = ctx.particleNodes.get(child);
+            // In XSD 1.0, xs:all can only contain element declarations, not group refs.
+            if (child.term.kind !== "element") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_SCHEMA_DOCUMENT",
+                    message: "An xs:all-group can only contain xs:element children (not group references).",
+                    location: childEl ? locationOf(childEl) : { line: 0, column: 0 },
+                    phase: "schema-compilation",
+                });
+            }
             if (child.minOccurs < 0 || child.minOccurs > 1) {
                 ctx.report({
                     severity: "error",

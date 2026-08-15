@@ -53,7 +53,9 @@ export type SchemaErrorCode =
     /** A compiled construct exists but the processor does not validate it yet. */
     | "UNSUPPORTED_FEATURE"
     /** The content model has a Unique Particle Attribution (UPA) violation (XSD 1.0 §3.8.6). */
-    | "AMBIGUOUS_CONTENT_MODEL";
+    | "AMBIGUOUS_CONTENT_MODEL"
+    /** A model group or attribute group references itself (directly or transitively). */
+    | "CIRCULAR_REFERENCE";
 
 export interface SchemaError {
     severity: SchemaSeverity;

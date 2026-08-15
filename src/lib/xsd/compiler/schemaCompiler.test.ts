@@ -1,6 +1,6 @@
 import { XMLParserImpl } from "@lib/xml/parser";
 import { SchemaCompilerImpl } from "@lib/xsd/compiler/schemaCompiler";
-import { ComplexTypeDefinition, CompiledSchema, ElementDeclaration, SimpleTypeDefinition } from "@lib/types/component-graph";
+import { ComplexTypeDefinition, CompiledSchema, ElementDeclaration, ModelGroup, SimpleTypeDefinition } from "@lib/types/component-graph";
 import { NAMESPACE_XSD } from "@lib/types/namespaces";
 import { SchemaCompilationError, SchemaError } from "@lib/types/schema-error";
 
@@ -1043,6 +1043,410 @@ describe("SchemaCompiler — two-phase core (CHK-008)", () => {
                 compiler.compile(xsd, { listener: (e) => errors.push(e) });
             } catch {}
             expect(errors.some((e) => e.code === "AMBIGUOUS_CONTENT_MODEL")).toBe(true);
+        });
+
+    });
+
+});
+
+describe("named model groups and attribute groups (CHK-019)", () => {
+
+    describe("model group definitions", () => {
+
+        it("compiles a global model group definition and registers it in the grammar", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                            <xsd:element name="b" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const grammar = schema.grammars.get("")!;
+            const def = grammar.modelGroups.get("G");
+            expect(def).toBeDefined();
+            expect(def!.kind).toBe("model-group-definition");
+            expect(def!.name).toEqual({ namespaceURI: null, localName: "G" });
+            expect(def!.particle.term.kind).toBe("sequence");
+        });
+
+        it("expands a group ref inside a complex type into the referenced particles", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                            <xsd:element name="b" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:group ref="G"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            // The outer sequence is the complex type's particle term.
+            const outerSeq = complex.particle!.term! as ModelGroup;
+            expect(outerSeq.kind).toBe("sequence");
+            // The ref particle wraps the group: one child carrying the expanded content.
+            const refParticle = outerSeq.particles[0]!;
+            const expandedGroup = refParticle.term! as ModelGroup;
+            expect(expandedGroup.kind).toBe("sequence");
+            expect(expandedGroup.particles).toHaveLength(2);
+            expect((expandedGroup.particles[0]!.term as ElementDeclaration).name.localName).toBe("a");
+            expect((expandedGroup.particles[1]!.term as ElementDeclaration).name.localName).toBe("b");
+        });
+
+        it("resolves forward references to model groups", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:group ref="Later"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:group name="Later">
+                        <xsd:choice>
+                            <xsd:element name="x" type="xsd:string"/>
+                        </xsd:choice>
+                    </xsd:group>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            const outerSeq = complex.particle!.term! as ModelGroup;
+            const refParticle = outerSeq.particles[0]!;
+            const expandedGroup = refParticle.term! as ModelGroup;
+            expect(expandedGroup.kind).toBe("choice");
+            expect(expandedGroup.particles).toHaveLength(1);
+        });
+
+        it("honors the ref particle's minOccurs/maxOccurs", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:group ref="G" minOccurs="0" maxOccurs="unbounded"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            const outerSeq = complex.particle!.term! as ModelGroup;
+            // The group ref particle with min=0/max=unbounded
+            const refParticle = outerSeq.particles[0]!;
+            expect(refParticle.minOccurs).toBe(0);
+            expect(refParticle.maxOccurs).toBe("unbounded");
+            // The expanded content is the term of that ref particle
+            const expandedGroup = refParticle.term! as ModelGroup;
+            expect(expandedGroup.kind).toBe("sequence");
+            expect(expandedGroup.particles).toHaveLength(1);
+        });
+
+        it("reports UNRESOLVED_REFERENCE for a missing group ref", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:group ref="Missing"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "UNRESOLVED_REFERENCE" && e.message.includes("Missing"))).toBe(true);
+        });
+
+        it("reports CIRCULAR_REFERENCE for directly circular model groups", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G">
+                        <xsd:sequence>
+                            <xsd:group ref="G"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "CIRCULAR_REFERENCE")).toBe(true);
+        });
+
+        it("reports CIRCULAR_REFERENCE for transitively circular model groups", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G1">
+                        <xsd:sequence>
+                            <xsd:group ref="G2"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                    <xsd:group name="G2">
+                        <xsd:sequence>
+                            <xsd:group ref="G1"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "CIRCULAR_REFERENCE")).toBe(true);
+        });
+
+        it("nested group refs inside model groups resolve correctly", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="A">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                    <xsd:group name="B">
+                        <xsd:sequence>
+                            <xsd:group ref="A"/>
+                            <xsd:element name="b" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:sequence>
+                                <xsd:group ref="B"/>
+                            </xsd:sequence>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            const outerSeq = complex.particle!.term! as ModelGroup;
+            const refB = outerSeq.particles[0]!;
+            const expandedB = refB.term! as ModelGroup;
+            expect(expandedB.kind).toBe("sequence");
+            // B's particles: [ref A (wrapper), element b]
+            expect(expandedB.particles).toHaveLength(2);
+            // Particle 0 is the wrapped ref to A
+            const innerRefA = expandedB.particles[0]!;
+            const expandedA = innerRefA.term! as ModelGroup;
+            expect(expandedA.kind).toBe("sequence");
+            expect(expandedA.particles).toHaveLength(1);
+            expect((expandedA.particles[0]!.term as ElementDeclaration).name.localName).toBe("a");
+            // Particle 1 is the direct element b
+            expect((expandedB.particles[1]!.term as ElementDeclaration).name.localName).toBe("b");
+        });
+
+    });
+
+    describe("attribute group definitions", () => {
+
+        it("compiles a global attribute group definition and registers it in the grammar", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attributeGroup name="AG">
+                        <xsd:attribute name="id" type="xsd:string"/>
+                        <xsd:attribute name="lang" type="xsd:string"/>
+                    </xsd:attributeGroup>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const grammar = schema.grammars.get("")!;
+            const def = grammar.attributeGroups.get("AG");
+            expect(def).toBeDefined();
+            expect(def!.kind).toBe("attribute-group-definition");
+            expect(def!.name).toEqual({ namespaceURI: null, localName: "AG" });
+            expect(def!.attributeUses).toHaveLength(2);
+        });
+
+        it("expands an attribute group ref inside a complex type", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attributeGroup name="AG">
+                        <xsd:attribute name="id" type="xsd:string" use="required"/>
+                        <xsd:attribute name="lang" type="xsd:string"/>
+                    </xsd:attributeGroup>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attributeGroup ref="AG"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            expect(complex.attributeUses).toHaveLength(2);
+            // The id attribute should be required (from the group)
+            const idUse = complex.attributeUses.find((u) => u.declaration.name.localName === "id")!;
+            expect(idUse.required).toBe(true);
+            expect(idUse.declaration.type?.kind).toBe("simple-type");
+        });
+
+        it("resolves forward references to attribute groups", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attributeGroup ref="Later"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                    <xsd:attributeGroup name="Later">
+                        <xsd:attribute name="code" type="xsd:string" use="required"/>
+                    </xsd:attributeGroup>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            expect(complex.attributeUses).toHaveLength(1);
+            expect(complex.attributeUses[0]!.declaration.name.localName).toBe("code");
+            expect(complex.attributeUses[0]!.required).toBe(true);
+        });
+
+        it("expands nested attribute group refs", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attributeGroup name="BaseAG">
+                        <xsd:attribute name="baseAttr" type="xsd:string"/>
+                    </xsd:attributeGroup>
+                    <xsd:attributeGroup name="ExtendedAG">
+                        <xsd:attributeGroup ref="BaseAG"/>
+                        <xsd:attribute name="extAttr" type="xsd:int"/>
+                    </xsd:attributeGroup>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attributeGroup ref="ExtendedAG"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const root = schema.grammars.get("")!.elements.get("root")!;
+            const complex = root.type! as ComplexTypeDefinition;
+            expect(complex.attributeUses).toHaveLength(2);
+            const names = complex.attributeUses.map((u) => u.declaration.name.localName).sort();
+            expect(names).toEqual(["baseAttr", "extAttr"]);
+        });
+
+        it("reports UNRESOLVED_REFERENCE for a missing attribute group ref", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attributeGroup ref="MissingAG"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "UNRESOLVED_REFERENCE" && e.message.includes("MissingAG"))).toBe(true);
+        });
+
+        it("reports CIRCULAR_REFERENCE for circular attribute groups", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attributeGroup name="AG1">
+                        <xsd:attributeGroup ref="AG2"/>
+                    </xsd:attributeGroup>
+                    <xsd:attributeGroup name="AG2">
+                        <xsd:attributeGroup ref="AG1"/>
+                    </xsd:attributeGroup>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "CIRCULAR_REFERENCE")).toBe(true);
+        });
+
+        it("reports a duplicate attribute after expansion", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:attributeGroup name="AG">
+                        <xsd:attribute name="x" type="xsd:string"/>
+                    </xsd:attributeGroup>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attributeGroup ref="AG"/>
+                            <xsd:attribute name="x" type="xsd:string"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_SCHEMA_DOCUMENT" && e.message.includes("x"))).toBe(true);
+        });
+
+    });
+
+    describe("model group definitions with UPA (CHK-018 integration)", () => {
+
+        it("reports UPA violation in a model group definition", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G">
+                        <xsd:choice>
+                            <xsd:element name="a" type="xsd:string"/>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:choice>
+                    </xsd:group>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "AMBIGUOUS_CONTENT_MODEL")).toBe(true);
+        });
+
+        it("rejects an all-group with a group ref inside (XSD 1.0 restriction)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:group name="G">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:group>
+                    <xsd:complexType name="Bad">
+                        <xsd:all>
+                            <xsd:group ref="G"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_SCHEMA_DOCUMENT" &&
+                e.message.includes("all"))).toBe(true);
         });
 
     });

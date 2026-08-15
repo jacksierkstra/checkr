@@ -225,14 +225,21 @@ export class InstanceValidatorImpl implements InstanceValidator {
     /**
      * Handle a particle wrapping a group: apply the particle's minOccurs/maxOccurs
      * to the group match, repeating as needed (greedy).
+     *
+     * When `reportLeftovers` is true (default, from `validateParticle`), reports
+     * remaining unmatched children. When false (from `consumeMatchingChildren`
+     * inside a parent sequence), the caller handles leftovers.
+     *
+     * Returns the number of children consumed (for callers that need it).
      */
     private validateRepeatingGroup(
         node: Element,
         children: Element[],
         particle: Particle,
         schema: CompiledSchema,
-        report: (error: SchemaError) => void
-    ): void {
+        report: (error: SchemaError) => void,
+        reportLeftovers = true
+    ): number {
         const group = particle.term as { kind: string; particles: ReadonlyArray<Particle> };
         let idx = 0;
         let count = 0;
@@ -254,11 +261,12 @@ export class InstanceValidatorImpl implements InstanceValidator {
         }
 
         // Report remaining unmatched children
-        while (idx < children.length) {
+        while (reportLeftovers && idx < children.length) {
             report(this.error(children[idx]!, "UNEXPECTED_ELEMENT",
                 `Element <${children[idx]!.localName}> is not allowed inside <${node.localName}> at this position.`));
             idx++;
         }
+        return idx;
     }
 
     /**
@@ -357,15 +365,22 @@ export class InstanceValidatorImpl implements InstanceValidator {
             return idx - startIdx;
         }
 
-        // Group term: dispatch to the group handler
-        if (term.kind === "sequence") {
-            return this.validateSequenceOnce(node, children.slice(startIdx), term.particles, schema, report);
-        }
-        if (term.kind === "choice") {
-            return this.validateChoiceOnce(node, children.slice(startIdx), term.particles, schema, report);
-        }
-        if (term.kind === "all") {
-            return this.validateAllOnce(node, children.slice(startIdx), term.particles, schema, report);
+        // Group term: dispatch with occurrence applied (CHK-019).
+        // Capture errors in a temp array so that if the group doesn't match
+        // (consumed=0) AND is nullable (minOccurs=0), we suppress inner
+        // particle errors (e.g. missing required element 'a' inside a group
+        // that was never entered). Flush errors only when the group made a
+        // match or was required.
+        if (term.kind === "sequence" || term.kind === "choice" || term.kind === "all") {
+            const tempErrors: SchemaError[] = [];
+            const capturingReport = (e: SchemaError) => { tempErrors.push(e); };
+            const consumed = this.validateRepeatingGroup(
+                node, children.slice(startIdx), particle, schema, capturingReport, false
+            );
+            if (consumed > 0 || particle.minOccurs > 0) {
+                for (const e of tempErrors) report(e);
+            }
+            return consumed;
         }
 
         // Wildcard — skip

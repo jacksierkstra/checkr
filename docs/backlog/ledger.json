@@ -168,8 +168,8 @@
     {
       "id": "CHK-019",
       "title": "Named model groups and attribute groups",
-      "file": "docs/backlog/active/CHK-019-named-model-groups-attribute-groups.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-019-named-model-groups-attribute-groups.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

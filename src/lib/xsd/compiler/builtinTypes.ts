@@ -171,6 +171,8 @@ export const BUILTIN_GRAMMAR: CompiledGrammar = deepFreeze({
     namespaceURI: NAMESPACE_XSD,
     elements: new Map(),
     attributes: new Map(),
+    modelGroups: new Map(),
+    attributeGroups: new Map(),
     types,
 });
 
