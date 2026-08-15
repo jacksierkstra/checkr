@@ -69,8 +69,8 @@
     {
       "id": "CHK-008",
       "title": "Two-phase API and component-graph core",
-      "file": "docs/backlog/active/CHK-008-two-phase-api-component-graph-core.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-008-two-phase-api-component-graph-core.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"
