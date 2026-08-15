@@ -1452,3 +1452,427 @@ describe("named model groups and attribute groups (CHK-019)", () => {
     });
 
 });
+
+describe("complex content derivation (CHK-020)", () => {
+
+    describe("complexContent extension", () => {
+
+        it("splices base particle and new particle into a sequence", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="Base">
+                                <xsd:sequence>
+                                    <xsd:element name="b" type="xsd:int"/>
+                                </xsd:sequence>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="Derived"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(derived.derivationMethod).toBe("extension");
+            expect(derived.baseType!.name!).toEqual({ namespaceURI: null, localName: "Base" });
+            expect(derived.contentType).toBe("element-only");
+            // Effective particle is a sequence with base particle then new particle
+            const particle = derived.particle!;
+            expect(particle.term.kind).toBe("sequence");
+            const group = particle.term as ModelGroup;
+            expect(group.particles).toHaveLength(2);
+            const baseGroup = group.particles[0]!.term as ModelGroup;
+            const childA = baseGroup.particles[0]!.term as ElementDeclaration;
+            expect(childA.name.localName).toBe("a");
+            const newGroup = group.particles[1]!.term as ModelGroup;
+            const childB = newGroup.particles[0]!.term as ElementDeclaration;
+            expect(childB.name.localName).toBe("b");
+        });
+
+        it("inherits base attributes and adds new ones", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                        <xsd:attribute name="lang" type="xsd:string"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="Base">
+                                <xsd:sequence>
+                                    <xsd:element name="b" type="xsd:int"/>
+                                </xsd:sequence>
+                                <xsd:attribute name="newAttr" type="xsd:int"/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("")!.types.get("Derived") as ComplexTypeDefinition;
+            const attrNames = derived.attributeUses.map((u) => u.declaration.name.localName);
+            expect(attrNames).toContain("lang");
+            expect(attrNames).toContain("newAttr");
+            expect(attrNames.indexOf("lang")).toBeLessThan(attrNames.indexOf("newAttr"));
+        });
+
+        it("reports INVALID_EXTENSION when an attribute name clashes with the base", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:attribute name="dup" type="xsd:string"/>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:extension base="Base">
+                                <xsd:attribute name="dup" type="xsd:int"/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_EXTENSION" && e.message.includes("dup"))).toBe(true);
+        });
+
+        it("reports INVALID_EXTENSION when extending a simple-content type with complexContent", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="S">
+                        <xsd:simpleContent>
+                            <xsd:extension base="xsd:string"/>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:complexType name="D">
+                        <xsd:complexContent>
+                            <xsd:extension base="S">
+                                <xsd:sequence>
+                                    <xsd:element name="x" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_EXTENSION")).toBe(true);
+        });
+
+        it("sets contentType to element-only when extending an empty base with a particle", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Empty"/>
+                    <xsd:complexType name="D">
+                        <xsd:complexContent>
+                            <xsd:extension base="Empty">
+                                <xsd:sequence>
+                                    <xsd:element name="a" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const d = schema.grammars.get("")!.types.get("D") as ComplexTypeDefinition;
+            expect(d.contentType).toBe("element-only");
+        });
+
+        it("throws on circular derivation", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="A">
+                        <xsd:complexContent>
+                            <xsd:extension base="B">
+                                <xsd:sequence/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                    <xsd:complexType name="B">
+                        <xsd:complexContent>
+                            <xsd:extension base="A">
+                                <xsd:sequence/>
+                            </xsd:extension>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "CIRCULAR_DERIVATION")).toBe(true);
+        });
+
+    });
+
+    describe("complexContent restriction", () => {
+
+        it("validates a valid sequence-to-sequence restriction", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                            <xsd:element name="b" type="xsd:string" maxOccurs="5"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="Base">
+                                <xsd:sequence>
+                                    <xsd:element name="b" type="xsd:string" maxOccurs="2"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const derived = schema.grammars.get("")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(derived.derivationMethod).toBe("restriction");
+            expect(derived.baseType!.name!.localName).toBe("Base");
+            expect(derived.contentType).toBe("element-only");
+            // The effective particle is the restriction's own particle (b, maxOccurs=2)
+            const group = derived.particle!.term as ModelGroup;
+            expect(group.particles).toHaveLength(1);
+            expect((group.particles[0]!.term as ElementDeclaration).name.localName).toBe("b");
+        });
+
+        it("reports INVALID_RESTRICTION when a derived element has a different name", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="Base">
+                                <xsd:sequence>
+                                    <xsd:element name="zzz" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_RESTRICTION")).toBe(true);
+        });
+
+        it("reports ALL_GROUP_RESTRICTION for restriction with an all-group (CTR-all-compile)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:all>
+                            <xsd:element name="a" type="xsd:string"/>
+                        </xsd:all>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="Base">
+                                <xsd:all>
+                                    <xsd:element name="a" type="xsd:string"/>
+                                </xsd:all>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "ALL_GROUP_RESTRICTION")).toBe(true);
+        });
+
+        it("reports INVALID_RESTRICTION when a restriction introduces a content model over an empty base", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base"/>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="Base">
+                                <xsd:sequence>
+                                    <xsd:element name="a" type="xsd:string"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_RESTRICTION" &&
+                e.message.includes("cannot introduce"))).toBe(true);
+        });
+
+    });
+
+    describe("simpleContent extension", () => {
+
+        it("inherits the base simple type and adds attributes (directly from a simple type)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Count">
+                        <xsd:simpleContent>
+                            <xsd:extension base="xsd:int">
+                                <xsd:attribute name="unit" type="xsd:string"/>
+                            </xsd:extension>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const ct = schema.grammars.get("")!.types.get("Count") as ComplexTypeDefinition;
+            expect(ct.contentType).toBe("simple");
+            expect(ct.simpleType!.name!.localName).toBe("int");
+            expect(ct.derivationMethod).toBe("extension");
+            expect(ct.attributeUses).toHaveLength(1);
+            expect(ct.attributeUses[0]!.declaration.name.localName).toBe("unit");
+        });
+
+        it("chains through a complex-with-simple-content base", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:simpleContent>
+                            <xsd:extension base="xsd:int">
+                                <xsd:attribute name="orig" type="xsd:string"/>
+                            </xsd:extension>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:simpleContent>
+                            <xsd:extension base="Base">
+                                <xsd:attribute name="extra" type="xsd:string"/>
+                            </xsd:extension>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const d = schema.grammars.get("")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(d.simpleType!.name!.localName).toBe("int");
+            expect(d.attributeUses.map((u) => u.declaration.name.localName)).toEqual(["orig", "extra"]);
+        });
+
+    });
+
+    describe("simpleContent restriction", () => {
+
+        it("accepts a simpleContent restriction against a pure simple type with facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Label">
+                        <xsd:simpleContent>
+                            <xsd:restriction base="xsd:string">
+                                <xsd:maxLength value="10"/>
+                            </xsd:restriction>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const ct = schema.grammars.get("")!.types.get("Label") as ComplexTypeDefinition;
+            expect(ct.contentType).toBe("simple");
+            expect(ct.simpleType).not.toBeNull();
+            expect(ct.simpleType!.effectiveFacets.some((f) => f.kind === "maxLength" && f.value === "10")).toBe(true);
+            expect(ct.derivationMethod).toBe("restriction");
+        });
+
+        it("reports INVALID_RESTRICTION when attributes are added to a pure-simple-base restriction", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="X">
+                        <xsd:simpleContent>
+                            <xsd:restriction base="xsd:string">
+                                <xsd:attribute name="a" type="xsd:string"/>
+                            </xsd:restriction>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const seen: SchemaError[] = [];
+            expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
+                .toThrow(SchemaCompilationError);
+            expect(seen.some((e) => e.code === "INVALID_RESTRICTION" &&
+                e.message.includes("cannot declare attributes"))).toBe(true);
+        });
+
+        it("accepts a simpleContent restriction against a complex base with simple content and facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:simpleContent>
+                            <xsd:extension base="xsd:string">
+                                <xsd:attribute name="lang" type="xsd:string"/>
+                            </xsd:extension>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:simpleContent>
+                            <xsd:restriction base="Base">
+                                <xsd:maxLength value="5"/>
+                                <xsd:attribute name="lang" type="xsd:string"/>
+                            </xsd:restriction>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const d = schema.grammars.get("")!.types.get("Derived") as ComplexTypeDefinition;
+            expect(d.simpleType?.effectiveFacets.some((f) => f.kind === "maxLength" && f.value === "5")).toBe(true);
+            expect(d.attributeUses).toHaveLength(1);
+            expect(d.attributeUses[0]!.declaration.name.localName).toBe("lang");
+        });
+
+    });
+
+    describe("mixed content", () => {
+
+        it("produces contentType 'mixed' when mixed='true' on xs:complexType", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="M" mixed="true">
+                        <xsd:sequence>
+                            <xsd:element name="em" type="xsd:string" minOccurs="0"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const ct = schema.grammars.get("")!.types.get("M") as ComplexTypeDefinition;
+            expect(ct.contentType).toBe("mixed");
+        });
+
+        it("produces contentType 'mixed' when mixed='true' with no compositor", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="M" mixed="true"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const ct = schema.grammars.get("")!.types.get("M") as ComplexTypeDefinition;
+            expect(ct.contentType).toBe("mixed");
+            expect(ct.particle).toBeNull();
+        });
+
+    });
+
+});

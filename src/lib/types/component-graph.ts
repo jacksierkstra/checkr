@@ -85,6 +85,9 @@ export interface SimpleTypeDefinition {
 
 export type ContentType = "element-only" | "simple" | "mixed" | "empty";
 
+/** How a complex type derives from its base (XSD 1.0 §3.4.2/§3.4.4/§3.4.6, CHK-020). */
+export type DerivationMethod = "extension" | "restriction";
+
 export interface ComplexTypeDefinition {
     readonly kind: "complex-type";
     readonly name: QName | null;
@@ -93,6 +96,19 @@ export interface ComplexTypeDefinition {
     readonly attributeUses: ReadonlyArray<AttributeUse>;
     /** When `contentType` is `"simple"`, the underlying simple type. */
     readonly simpleType: SimpleTypeDefinition | null;
+    /**
+     * The resolved base complex type definition for types derived via
+     * `<xs:complexContent>` or `<xs:simpleContent>` extension/restriction.
+     * Null for types that are not derived from a complex base (CHK-020).
+     * For simpleContent restriction against a pure simple-type base, the
+     * base lives on the anonymous `simpleType`'s `baseType` chain instead.
+     */
+    readonly baseType: ComplexTypeDefinition | null;
+    /**
+     * How this complex type derives from its `baseType` (`"extension"`
+     * or `"restriction"`), or null when the type is not derived (CHK-020).
+     */
+    readonly derivationMethod: DerivationMethod | null;
 }
 
 export type TypeDefinition = SimpleTypeDefinition | ComplexTypeDefinition;

@@ -156,6 +156,8 @@ function builtinAnyType(): ComplexTypeDefinition {
         particle: null,
         attributeUses: [],
         simpleType: null,
+        baseType: null,
+        derivationMethod: null,
     };
 }
 

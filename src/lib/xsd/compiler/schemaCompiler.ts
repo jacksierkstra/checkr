@@ -6,6 +6,8 @@ import {
     ComplexTypeDefinition,
     CompiledGrammar,
     CompiledSchema,
+    ContentType,
+    DerivationMethod,
     ElementDeclaration,
     Facet,
     ModelGroup,
@@ -18,6 +20,7 @@ import {
     WhiteSpaceValue,
     Wildcard,
     displayQName,
+    qnameEqual,
     qnameKey,
 } from "@lib/types/component-graph";
 import { deepFreeze } from "@lib/types/immutable";
@@ -69,6 +72,21 @@ interface BuildContext {
     allAttributeGroupDefs: Array<{ def: AttributeGroupDefinition; node: Element }>;
     /** Source element for each attribute-group-ref placeholder use, for error reporting. */
     attributeGroupRefNodes: Map<AttributeUse, Element>;
+    /** Derivations recorded for pass 2e/2f/3b (CHK-020). */
+    derivations: Array<{
+        type: ComplexTypeDefinition;
+        ref: QName;
+        node: Element;
+        method: DerivationMethod;
+        form: "simple" | "complex";
+        newAttributeUses: ReadonlyArray<AttributeUse>;
+        baseResolved: boolean;
+        baseKind: "simple" | "complex" | null;
+        /** For simpleContent extension/restriction with a pure simple-type base, the resolved simple type. */
+        resolvedSimpleType: TypeDefinition | null;
+    }>;
+    /** Anonymous simple types from simpleContent restrictions (base may be a complex type with simple content, CHK-020). */
+    simpleContentRestrictions: Set<SimpleTypeDefinition>;
     report: (error: SchemaError) => void;
 }
 
@@ -136,6 +154,8 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             allComplexTypes: [],
             allModelGroupDefs: [],
             allAttributeGroupDefs: [],
+            derivations: [],
+            simpleContentRestrictions: new Set(),
             locations: new Map(),
             particleNodes: new Map(),
             attributeGroupRefNodes: new Map(),
@@ -180,8 +200,22 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         // Pass 2d — expand attribute group references into attribute uses (CHK-019).
         this.expandAttributeGroups(ctx, grammars);
 
+        // Pass 2e — resolve the base type definitions of complex/simple content
+        // derivations (complexContent/simpleContent extension & restriction, CHK-020).
+        this.resolveDerivationBases(ctx, grammars);
+
+        // Pass 2f — compute the effective content of derived complex types
+        // (extension splices the base particle + new particle; simpleContent
+        // extension inherits the base's simple type), base-first (CHK-020).
+        this.computeDerivedContent(ctx);
+
         // Pass 3 — resolve simple-type bases and compute effective facets/whiteSpace.
         this.resolveSimpleTypes(ctx, grammars);
+
+        // Pass 3b — validate derivations against the spec's extension/restriction
+        // rules (including the CTR-all-compile policy), after simple-type bases
+        // and all type references are resolved (CHK-020).
+        this.validateDerivations(ctx);
 
         // Pass 4 — UPA determinism and all-group constraints on the expanded content.
         this.checkContentModels(ctx);
@@ -250,93 +284,139 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     private buildComplexType(el: Element, ctx: BuildContext, declaredNs: string | null): ComplexTypeDefinition {
         const nameAttr = el.getAttribute("name");
         const name: QName | null = nameAttr ? { namespaceURI: declaredNs, localName: nameAttr } : null;
-
-        const contentChildren: Element[] = [];
-        const attrChildren: Element[] = [];
-        for (const child of childElements(el)) {
-            if (child.namespaceURI !== NAMESPACE_XSD) continue;
-            if (child.localName === "attribute" || child.localName === "attributeGroup" || child.localName === "anyAttribute") {
-                attrChildren.push(child);
-            } else {
-                contentChildren.push(child);
-            }
-        }
+        const mixed = el.getAttribute("mixed") === "true";
 
         let particle: Particle | null = null;
-        let contentType: "element-only" | "simple" | "mixed" | "empty" = "empty";
+        let contentType: ContentType = "empty";
         let simpleType: SimpleTypeDefinition | null = null;
+        let derivationMethod: DerivationMethod | null = null;
+        let baseRef: QName | null = null;
+        let derivationNode: Element | null = null;
+        // The element whose children carry the type's attribute uses:
+        // the xs:complexType itself for plain content, or the extension/
+        // restriction element for simpleContent/complexContent (CHK-020).
+        let attributeParent: Element = el;
 
-        const contentChild = contentChildren[0];
+        const contentChild = childElements(el).find(
+            (c) => c.namespaceURI === NAMESPACE_XSD &&
+                ["sequence", "choice", "all", "any", "simpleContent", "complexContent"].includes(c.localName ?? "")
+        );
         if (contentChild) {
             switch (contentChild.localName) {
                 case "sequence":
                 case "choice":
                 case "all":
                     particle = this.wrapParticle(ctx, contentChild, this.buildModelGroup(contentChild, ctx));
-                    contentType = "element-only";
-                    // Validate all-group occurrence limits (XSD 1.0 §3.8.4)
+                    contentType = mixed ? "mixed" : "element-only";
                     if (contentChild.localName === "all") {
                         this.validateAllGroup(ctx, particle, contentChild);
                     }
                     break;
                 case "any":
                     particle = this.buildAnyParticle(contentChild, ctx);
-                    contentType = "element-only";
+                    contentType = mixed ? "mixed" : "element-only";
                     break;
-                case "simpleContent":
-                    simpleType = this.buildSimpleContent(contentChild, ctx);
+                case "simpleContent": {
+                    const derivation = childElements(contentChild).find(
+                        (c) => c.namespaceURI === NAMESPACE_XSD &&
+                            (c.localName === "extension" || c.localName === "restriction")
+                    );
+                    if (!derivation) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:simpleContent element must contain exactly one xs:extension or xs:restriction element.",
+                            location: locationOf(contentChild),
+                            phase: "schema-compilation",
+                        });
+                        break;
+                    }
+                    attributeParent = derivation;
+                    derivationNode = derivation;
+                    baseRef = this.readQName(derivation, "base");
+                    if (baseRef) this.trackRef(ctx, derivation, baseRef);
+                    derivationMethod = derivation.localName === "extension" ? "extension" : "restriction";
                     contentType = "simple";
+                    if (derivationMethod === "restriction") {
+                        simpleType = this.buildSimpleContentRestriction(derivation, ctx);
+                    }
                     break;
-                case "complexContent":
-                    ctx.report({
-                        severity: "warning",
-                        code: "UNSUPPORTED_FEATURE",
-                        message: "xs:complexContent derivation is not supported yet; the type compiles as empty content.",
-                        location: locationOf(contentChild),
-                        phase: "schema-compilation",
-                    });
-                    contentType = "empty";
+                }
+                case "complexContent": {
+                    const derivation = childElements(contentChild).find(
+                        (c) => c.namespaceURI === NAMESPACE_XSD &&
+                            (c.localName === "extension" || c.localName === "restriction")
+                    );
+                    if (!derivation) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:complexContent element must contain exactly one xs:extension or xs:restriction element.",
+                            location: locationOf(contentChild),
+                            phase: "schema-compilation",
+                        });
+                        break;
+                    }
+                    attributeParent = derivation;
+                    derivationNode = derivation;
+                    baseRef = this.readQName(derivation, "base");
+                    if (baseRef) this.trackRef(ctx, derivation, baseRef);
+                    derivationMethod = derivation.localName === "extension" ? "extension" : "restriction";
+                    // The derivation's own content particle (extension splices
+                    // onto the base in pass 2f; restriction keeps its own).
+                    const compositor = childElements(derivation).find(
+                        (c) => c.namespaceURI === NAMESPACE_XSD &&
+                            (c.localName === "sequence" || c.localName === "choice" || c.localName === "all")
+                    );
+                    if (compositor) {
+                        particle = this.wrapParticle(ctx, compositor, this.buildModelGroup(compositor, ctx));
+                        if (compositor.localName === "all") {
+                            this.validateAllGroup(ctx, particle, compositor);
+                        }
+                    }
+                    // The mixed flag comes from xs:complexContent when present,
+                    // else from the xs:complexType element. Final content type
+                    // is adjusted from the base's content in pass 2f.
+                    const ccMixed = contentChild.getAttribute("mixed");
+                    const effectiveMixed = ccMixed !== null ? ccMixed === "true" : mixed;
+                    contentType = effectiveMixed ? "mixed" : "element-only";
                     break;
+                }
                 default:
                     break;
             }
+        } else if (mixed) {
+            // mixed="true" with no compositor: mixed content over an empty
+            // particle (character data allowed, no element children).
+            contentType = "mixed";
         }
 
-        const attributeUses: AttributeUse[] = [];
-        for (const child of attrChildren) {
-            if (child.localName === "attribute") {
-                const use = this.buildAttributeUse(child, ctx);
-                if (use) attributeUses.push(use);
-            } else if (child.localName === "anyAttribute") {
-                ctx.report({
-                    severity: "warning",
-                    code: "UNSUPPORTED_FEATURE",
-                    message: "xs:anyAttribute is not supported yet.",
-                    location: locationOf(child),
-                    phase: "schema-compilation",
-                });
-            } else if (child.localName === "attributeGroup") {
-                const ref = this.readQName(child, "ref");
-                if (ref) {
-                    const placeholder = this.placeholderAttributeGroupUse(child, ref);
-                    ctx.attributeGroupRefNodes.set(placeholder, child);
-                    attributeUses.push(placeholder);
-                } else {
-                    ctx.report({
-                        severity: "error",
-                        code: "INVALID_SCHEMA_DOCUMENT",
-                        message: "An xs:attributeGroup reference must carry a ref attribute.",
-                        location: locationOf(child),
-                        phase: "schema-compilation",
-                    });
-                }
-            }
-        }
+        const attributeUses = this.readComplexTypeUses(attributeParent, ctx);
 
         const result: ComplexTypeDefinition = {
-            kind: "complex-type", name, contentType, particle, attributeUses, simpleType,
+            kind: "complex-type",
+            name,
+            contentType,
+            particle,
+            attributeUses,
+            simpleType,
+            baseType: null,
+            derivationMethod,
         };
         ctx.allComplexTypes.push({ type: result, node: el });
+        if (baseRef && derivationMethod && derivationNode) {
+            ctx.derivations.push({
+                type: result,
+                ref: baseRef,
+                node: derivationNode,
+                method: derivationMethod,
+                form: contentChild?.localName === "simpleContent" ? "simple" : "complex",
+                newAttributeUses: attributeUses,
+                baseResolved: false,
+                baseKind: null,
+                resolvedSimpleType: null,
+            });
+        }
         return result;
     }
 
@@ -447,14 +527,15 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         return null;
     }
 
-    private buildSimpleContent(el: Element, ctx: BuildContext): SimpleTypeDefinition {
-        const derivation = childElements(el).find(
-            (c) =>
-                c.namespaceURI === NAMESPACE_XSD &&
-                (c.localName === "restriction" || c.localName === "extension")
-        );
-        const base = derivation ? this.readQName(derivation, "base") : null;
-        if (base) this.trackRef(ctx, derivation ?? el, base);
+    /**
+     * The anonymous simple type of a `<xs:simpleContent><xs:restriction …>`
+     * derivation. Its base (itemType) may be a plain simple type or a complex
+     * type with simple content (resolved in pass 3 / pass 2e+2f, CHK-020).
+     */
+    private buildSimpleContentRestriction(el: Element, ctx: BuildContext): SimpleTypeDefinition {
+        const base = this.readQName(el, "base");
+        const facets = this.readFacets(el);
+        this.checkPatternFacets(facets, ctx);
         const st: SimpleTypeDefinition = {
             kind: "simple-type",
             name: null,
@@ -463,11 +544,54 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             memberTypes: [],
             itemTypeDef: null,
             memberTypeDefs: [],
-            facets: derivation?.localName === "restriction" ? this.readFacets(derivation) : [], baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+            facets,
+            baseType: null,
+            whiteSpace: "preserve",
+            effectiveFacets: [],
         };
-        if (derivation?.localName === "restriction") this.checkPatternFacets(this.readFacets(derivation), ctx);
+        if (base) ctx.simpleContentRestrictions.add(st);
         ctx.allSimpleTypes.push(st);
         return st;
+    }
+
+    /**
+     * Parse attribute use children from an element (the xs:complexType element
+     * itself for plain content, or the extension/restriction element for
+     * simpleContent/complexContent derivations, CHK-020).
+     */
+    private readComplexTypeUses(el: Element, ctx: BuildContext): AttributeUse[] {
+        const uses: AttributeUse[] = [];
+        for (const child of childElements(el)) {
+            if (child.namespaceURI !== NAMESPACE_XSD) continue;
+            if (child.localName === "attribute") {
+                const use = this.buildAttributeUse(child, ctx);
+                if (use) uses.push(use);
+            } else if (child.localName === "attributeGroup") {
+                const ref = this.readQName(child, "ref");
+                if (ref) {
+                    const placeholder = this.placeholderAttributeGroupUse(child, ref);
+                    ctx.attributeGroupRefNodes.set(placeholder, child);
+                    uses.push(placeholder);
+                } else {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_SCHEMA_DOCUMENT",
+                        message: "An xs:attributeGroup reference must carry a ref attribute.",
+                        location: locationOf(child),
+                        phase: "schema-compilation",
+                    });
+                }
+            } else if (child.localName === "anyAttribute") {
+                ctx.report({
+                    severity: "warning",
+                    code: "UNSUPPORTED_FEATURE",
+                    message: "xs:anyAttribute is not supported yet.",
+                    location: locationOf(child),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+        return uses;
     }
 
     private buildModelGroup(el: Element, ctx: BuildContext): ModelGroup {
@@ -561,37 +685,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             });
             return null;
         }
-        const attributeUses: AttributeUse[] = [];
-        for (const child of childElements(el)) {
-            if (child.namespaceURI !== NAMESPACE_XSD) continue;
-            if (child.localName === "attribute") {
-                const use = this.buildAttributeUse(child, ctx);
-                if (use) attributeUses.push(use);
-            } else if (child.localName === "attributeGroup") {
-                const ref = this.readQName(child, "ref");
-                if (ref) {
-                    const placeholder = this.placeholderAttributeGroupUse(child, ref);
-                    ctx.attributeGroupRefNodes.set(placeholder, child);
-                    attributeUses.push(placeholder);
-                } else {
-                    ctx.report({
-                        severity: "error",
-                        code: "INVALID_SCHEMA_DOCUMENT",
-                        message: "An xs:attributeGroup reference must carry a ref attribute.",
-                        location: locationOf(child),
-                        phase: "schema-compilation",
-                    });
-                }
-            } else if (child.localName === "anyAttribute") {
-                ctx.report({
-                    severity: "warning",
-                    code: "UNSUPPORTED_FEATURE",
-                    message: "xs:anyAttribute is not supported yet.",
-                    location: locationOf(child),
-                    phase: "schema-compilation",
-                });
-            }
-        }
+        const attributeUses = this.readComplexTypeUses(el, ctx);
         const def: AttributeGroupDefinition = {
             kind: "attribute-group-definition",
             name: { namespaceURI: ctx.targetNamespace, localName },
@@ -1000,6 +1094,624 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Pass 2e — resolve derivation bases (CHK-020)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Resolve the `base` QName reference of every complex/simple content
+     * derivation to its complex type definition (or record the base as a
+     * pure simple type for simpleContent restriction).
+     */
+    private resolveDerivationBases(
+        ctx: BuildContext,
+        grammars: Map<string, CompiledGrammar>,
+    ): void {
+        for (const d of ctx.derivations) {
+            const resolved = this.lookupType(grammars, d.ref);
+            if (!resolved) continue; // UNRESOLVED_TYPE already reported in pass 2
+            if (resolved.kind !== "complex-type") {
+                if (d.form === "simple" && d.method === "restriction") {
+                    // Pure simple-type base is legal for simpleContent restriction.
+                    d.baseResolved = true;
+                    d.baseKind = "simple";
+                    continue;
+                }
+                if (d.form === "simple" && d.method === "extension") {
+                    // Simple-content extension with a simple-type base is
+                    // accepted in XSD 1.0 (the processor creates a complex type
+                    // with simple content from the simple type).
+                    d.baseResolved = true;
+                    d.baseKind = "simple";
+                    d.resolvedSimpleType = resolved;
+                    continue;
+                }
+                ctx.report({
+                    severity: "error",
+                    code: d.method === "extension" ? "INVALID_EXTENSION" : "INVALID_RESTRICTION",
+                    message: `The base type ${displayQName(d.ref)} of a ${d.form === "simple" ? "simpleContent" : "complexContent"} ${d.method} must be a complex type, but it is a simple type.`,
+                    location: locationOf(d.node),
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            d.baseResolved = true;
+            d.baseKind = "complex";
+            (d.type as { baseType: ComplexTypeDefinition | null }).baseType = resolved;
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 2f — compute effective derived content (CHK-020)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Compute the effective content of every derived complex type.
+     * For extension: splice the base particle and new particle into a sequence.
+     * For simpleContent extension: inherit the base's simple type.
+     * For restriction: the declared particle is the effective particle.
+     *
+     * Processes derivations base-first so that spliced base content is already
+     * final when a derived type needs it.
+     */
+    private computeDerivedContent(ctx: BuildContext): void {
+        const processed = new Set<ComplexTypeDefinition>();
+        const processing = new Set<ComplexTypeDefinition>();
+
+        const process = (type: ComplexTypeDefinition): void => {
+            if (processed.has(type)) return;
+            if (processing.has(type)) return; // cycle → reported in validateDerivations
+            processing.add(type);
+            const base = type.baseType;
+            // Ensure the base's own content is computed first.
+            if (base && base.baseType) process(base);
+            const d = ctx.derivations.find((r) => r.type === type);
+            if (d && d.baseResolved) {
+                if (d.baseKind === "complex" && base) {
+                    this.spliceDerivation(d, base);
+                } else if (d.baseKind === "simple") {
+                    this.spliceSimpleBaseDerivation(d);
+                }
+            }
+            processing.delete(type);
+            processed.add(type);
+        };
+
+        for (const d of ctx.derivations) process(d.type);
+    }
+
+    /**
+     * Splice a derivation whose base is a pure simple type (simpleContent
+     * extension: the derived complex type's simple content is the base simple
+     * type; simpleContent restriction: handled by the facet framework).
+     */
+    private spliceSimpleBaseDerivation(
+        d: BuildContext["derivations"][number],
+    ): void {
+        const type = d.type;
+        if (d.method === "extension" && d.resolvedSimpleType?.kind === "simple-type") {
+            (type as { simpleType: SimpleTypeDefinition | null }).simpleType = d.resolvedSimpleType;
+        }
+    }
+
+    /**
+     * Splice a single derivation's effective content onto its type.
+     * `base` is the resolved base complex type (already fully processed).
+     */
+    private spliceDerivation(
+        d: BuildContext["derivations"][number],
+        base: ComplexTypeDefinition,
+    ): void {
+        const type = d.type;
+
+        if (d.method === "extension") {
+            if (d.form === "complex") {
+                // Extension of complex content: splice base particle + new particle.
+                if (base.contentType !== "simple") {
+                    const baseParticle = base.particle;
+                    const newParticle = type.particle;
+                    let effective: Particle | null;
+                    if (baseParticle && newParticle) {
+                        effective = {
+                            minOccurs: 1,
+                            maxOccurs: 1,
+                            term: {
+                                kind: "sequence",
+                                particles: [baseParticle, newParticle],
+                                ref: null,
+                            },
+                        };
+                    } else {
+                        effective = baseParticle ?? newParticle;
+                    }
+                    (type as { particle: Particle | null }).particle = effective;
+
+                    // Final content type per cos-ct-extends.
+                    const derivedMixed = type.contentType === "mixed";
+                    if (base.contentType === "empty") {
+                        (type as { contentType: ContentType }).contentType =
+                            effective ? (derivedMixed ? "mixed" : "element-only") : "empty";
+                    } else {
+                        (type as { contentType: ContentType }).contentType =
+                            derivedMixed ? "mixed" : base.contentType;
+                    }
+                }
+            } else {
+                // simpleContent extension: inherit the base's simple type.
+                if (base.contentType === "simple" && base.simpleType) {
+                    (type as { simpleType: SimpleTypeDefinition | null }).simpleType = base.simpleType;
+                }
+            }
+
+            // Attribute uses: base's followed by the extension's own (validated
+            // for name clashes in pass 3b).
+            (type as { attributeUses: ReadonlyArray<AttributeUse> }).attributeUses = [
+                ...base.attributeUses,
+                ...d.newAttributeUses,
+            ];
+        } else {
+            // Restriction
+            if (d.form === "complex" && base.contentType === "simple") {
+                // Complex-content restriction of a simple-content base: the
+                // derived type inherits simple content from the base.
+                (type as { contentType: ContentType }).contentType = "simple";
+                (type as { simpleType: SimpleTypeDefinition | null }).simpleType = base.simpleType;
+            } else if (d.form === "complex" && base.contentType === "empty") {
+                // Empty restriction: derived content type must be empty.
+                (type as { contentType: ContentType }).contentType = "empty";
+            }
+            // For complex restriction (element-only/mixed), the declared
+            // particle is the effective particle (validated in pass 3b).
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 3b — validate derivations (CHK-020)
+    // -----------------------------------------------------------------------
+
+    /**
+     * Validate every complex/simple content derivation against the spec's
+     * extension and restriction rules. Runs after all type references and
+     * simple-type chains are resolved (pass 3) so element/attribute type
+     * restriction checks can walk base-type chains.
+     */
+    private validateDerivations(ctx: BuildContext): void {
+        // 1. Circular derivation detection.
+        this.checkDerivationCycles(ctx);
+
+        // 2. Per-derivation rules.
+        for (const d of ctx.derivations) {
+            if (!d.baseResolved) continue;
+
+            if (d.baseKind === "simple") {
+                if (d.method === "restriction") {
+                    // Pure simple-type base for a simpleContent restriction:
+                    // a simple type has no attribute uses, so the derived type
+                    // must not declare any attributes.
+                    if (d.type.attributeUses.length > 0) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_RESTRICTION",
+                            message: "A simpleContent restriction against a simple type cannot declare attributes; use a simpleContent extension to add attributes.",
+                            location: locationOf(d.node),
+                            phase: "schema-compilation",
+                        });
+                    }
+                }
+                continue;
+            }
+
+            const base = d.type.baseType!;
+            if (d.method === "extension") {
+                this.validateExtension(ctx, d, base);
+            } else {
+                this.validateRestriction(ctx, d, base);
+            }
+        }
+    }
+
+    /**
+     * Detect circular derivation chains and report CIRCULAR_DERIVATION.
+     */
+    private checkDerivationCycles(ctx: BuildContext): void {
+        const fullyChecked = new Set<ComplexTypeDefinition>();
+        for (const d of ctx.derivations) {
+            if (fullyChecked.has(d.type)) continue;
+            const onStack = new Set<ComplexTypeDefinition>();
+            const stack: ComplexTypeDefinition[] = [];
+            let cur: ComplexTypeDefinition | null = d.type;
+            let cycle = false;
+            while (cur) {
+                if (onStack.has(cur)) {
+                    cycle = true;
+                    break;
+                }
+                if (fullyChecked.has(cur)) break;
+                onStack.add(cur);
+                stack.push(cur);
+                cur = cur.baseType;
+            }
+            if (cycle) {
+                ctx.report({
+                    severity: "error",
+                    code: "CIRCULAR_DERIVATION",
+                    message: `Circular derivation: type ${displayQName(d.type.name ?? { namespaceURI: null, localName: "(anonymous)" })} derives from itself (directly or transitively).`,
+                    location: locationOf(d.node),
+                    phase: "schema-compilation",
+                });
+            }
+            for (const t of stack) fullyChecked.add(t);
+        }
+    }
+
+    /**
+     * Validate a single extension derivation (complexContent or simpleContent).
+     */
+    private validateExtension(
+        ctx: BuildContext,
+        d: BuildContext["derivations"][number],
+        base: ComplexTypeDefinition,
+    ): void {
+        const loc = locationOf(d.node);
+
+        if (d.form === "complex") {
+            // Complex-content extension cannot extend a simple-content type.
+            if (base.contentType === "simple") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_EXTENSION",
+                    message: `Complex content cannot extend type ${displayQName(base.name ?? { namespaceURI: null, localName: "(anonymous)" })} which has simple content; use a simpleContent extension.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        } else {
+            // SimpleContent extension requires the base to be a complex type
+            // with simple content.
+            if (base.contentType !== "simple" || !base.simpleType) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_EXTENSION",
+                    message: `The base of a simpleContent extension must be a complex type with simple content, but ${displayQName(d.ref)} has ${base.contentType} content.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // Attribute name clash: extension attribute uses must not duplicate
+        // any attribute name already present on the base type.
+        const baseNames = new Set(base.attributeUses.map((u) => qnameKey(u.declaration.name)));
+        for (const u of d.newAttributeUses) {
+            if (baseNames.has(qnameKey(u.declaration.name))) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_EXTENSION",
+                    message: `Attribute ${displayQName(u.declaration.name)} is already declared on the base type and cannot be redeclared by an extension.`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate a single restriction derivation (complexContent or simpleContent).
+     */
+    private validateRestriction(
+        ctx: BuildContext,
+        d: BuildContext["derivations"][number],
+        base: ComplexTypeDefinition,
+    ): void {
+        const type = d.type;
+        const loc = locationOf(d.node);
+
+        // 0. simpleContent restriction against a complex base: the base must
+        // have simple content (a pure simple-type base is handled separately
+        // in validateDerivations).
+        if (d.form === "simple" && base.contentType !== "simple") {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_RESTRICTION",
+                message: `The base of a simpleContent restriction must be a complex type with simple content, but ${displayQName(base.name ?? { namespaceURI: null, localName: "(anonymous)" })} has ${base.contentType} content.`,
+                location: loc,
+                phase: "schema-compilation",
+            });
+        }
+
+        // 1. Content-type consistency (derivation-ok-restriction).
+        if (base.contentType === "simple") {
+            if (type.contentType !== "simple") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "The restriction must have simple content when the base type has simple content.",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        } else if (base.contentType === "empty") {
+            if (type.contentType !== "empty") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "The restriction must have empty content when the base type has empty content.",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        } else {
+            // base: element-only or mixed
+            if (type.contentType === "empty") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "The restriction must have element-only or mixed content when the base type has element-only or mixed content.",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            } else if (type.contentType === "mixed" && base.contentType === "element-only") {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "Element-only content cannot be restricted to mixed content.",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // 2. CTR-all-compile: reject any complex restriction involving an
+        // all-group in either the base or the derived content model.
+        if (this.containsAllGroup(type.particle) || this.containsAllGroup(base.particle)) {
+            ctx.report({
+                severity: "error",
+                code: "ALL_GROUP_RESTRICTION",
+                message: "Complex type restriction with an xs:all group is rejected at compile time (CTR-all-compile policy, CHK-020).",
+                location: loc,
+                phase: "schema-compilation",
+            });
+        }
+
+        // 3. Particle restriction (XSD 1.0 §3.9.6).
+        if (base.particle === null) {
+            if (type.particle !== null) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "A restriction cannot introduce a content model when the base type has no content model (empty content).",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        } else if (type.particle === null) {
+            // Restricting to no particle: valid only if the base particle is
+            // nullable (minOccurs = 0).
+            if (base.particle.minOccurs !== 0) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: "Restricting to empty content requires the base content model to be nullable (minOccurs=0).",
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        } else {
+            const msg = this.particleRestrictionMessage(type.particle, base.particle);
+            if (msg) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: `Invalid particle restriction: ${msg}`,
+                    location: loc,
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // 4. Attribute use restriction (subset by name, type restriction,
+        // requiredness compatibility).
+        this.validateAttributeRestriction(ctx, d, base);
+    }
+
+    /**
+     * Check whether a particle tree contains an xs:all group.
+     */
+    private containsAllGroup(particle: Particle | null): boolean {
+        if (!particle) return false;
+        const term = particle.term;
+        if (term.kind === "all") return true;
+        if (term.kind === "sequence" || term.kind === "choice") {
+            return term.particles.some((p) => this.containsAllGroup(p));
+        }
+        return false;
+    }
+
+    /**
+     * XSD 1.0 §3.9.6 — is `derived` a valid particle restriction of `base`?
+     * Returns null when valid, or a human-readable message when invalid.
+     */
+    private particleRestrictionMessage(derived: Particle, base: Particle): string | null {
+        // Occurrence-range subset [base.min, base.max]
+        if (derived.minOccurs < base.minOccurs) {
+            return `minOccurs (${derived.minOccurs}) is less than base minOccurs (${base.minOccurs}).`;
+        }
+        if (!this.occursWithin(derived.maxOccurs, base.maxOccurs)) {
+            return `maxOccurs (${derived.maxOccurs === "unbounded" ? "unbounded" : String(derived.maxOccurs)}) exceeds base maxOccurs (${base.maxOccurs === "unbounded" ? "unbounded" : String(base.maxOccurs)}).`;
+        }
+
+        const dt = derived.term;
+        const bt = base.term;
+
+        // Both elements: names must match; derived type must restrict base type.
+        if (dt.kind === "element" && bt.kind === "element") {
+            if (!qnameEqual(dt.name, bt.name)) {
+                return `Element ${displayQName(dt.name)} does not match the base element ${displayQName(bt.name)}.`;
+            }
+            if (!this.isElementTypeRestriction(dt.type, bt.type)) {
+                return `Element ${displayQName(dt.name)} has a type that is not a valid restriction of the base element's type.`;
+            }
+            return null;
+        }
+
+        // Both sequences: ordered-subset injection.
+        if (dt.kind === "sequence" && bt.kind === "sequence") {
+            let j = 0;
+            for (const dp of dt.particles) {
+                let found = false;
+                while (j < bt.particles.length) {
+                    if (this.particleRestrictionMessage(dp, bt.particles[j]!) === null) {
+                        found = true;
+                        j++;
+                        break;
+                    }
+                    j++;
+                }
+                if (!found) {
+                    return `A derived particle is not a valid restriction of any remaining base particle.`;
+                }
+            }
+            return null;
+        }
+
+        // Both choices: each derived alternative must restrict some base alternative.
+        if (dt.kind === "choice" && bt.kind === "choice") {
+            for (const dp of dt.particles) {
+                if (!bt.particles.some((bp) => this.particleRestrictionMessage(dp, bp) === null)) {
+                    return `A derived choice alternative is not a valid restriction of any base alternative.`;
+                }
+            }
+            return null;
+        }
+
+        // Both all: CTR-all-compile already reported above; skip deep check.
+        if (dt.kind === "all" && bt.kind === "all") return null;
+
+        // Wildcards: CHK-021 scope — lenient.
+        if (dt.kind === "wildcard" || bt.kind === "wildcard") return null;
+
+        // Otherwise, the term kinds are incompatible.
+        return `Term kind "${dt.kind}" is incompatible with base term kind "${bt.kind}".`;
+    }
+
+    /**
+     * Whether `derived` maxOccurs is within `base` maxOccurs.
+     */
+    private occursWithin(
+        derived: number | "unbounded",
+        base: number | "unbounded",
+    ): boolean {
+        if (base === "unbounded") return true;
+        if (derived === "unbounded") return false;
+        return derived <= base;
+    }
+
+    /**
+     * Whether `sub` is a valid restriction of `base` per the type-derivation
+     * chain (XSD 1.0 §2.4.1, §3.4.6).
+     *
+     * For complex types, every hop in the chain must be a restriction
+     * (extension-derived types are not valid restrictions).
+     * For simple types, all hops along the baseType chain are restrictions
+     * by construction. A null type is treated as untyped (anyType or
+     * anySimpleType), which accepts any derived type.
+     */
+    private isTypeRestriction(
+        sub: TypeDefinition | null | undefined,
+        base: TypeDefinition | null | undefined,
+    ): boolean {
+        if (!sub || !base) return false;
+        if (sub === base) return true;
+        const seen = new Set<TypeDefinition>();
+        let cur: TypeDefinition | null = sub;
+        while (cur !== base) {
+            if (!cur || seen.has(cur)) return false;
+            seen.add(cur);
+            if (cur.kind === "complex-type") {
+                if (cur.derivationMethod !== "restriction") return false;
+                cur = cur.baseType;
+            } else {
+                cur = cur.baseType;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Convenience: is the derived element's type a valid restriction of the
+     * base element's type? A null base type (untyped element) accepts any
+     * derived type; a null derived type does not restrict a typed base.
+     */
+    private isElementTypeRestriction(
+        derivedType: TypeDefinition | null | undefined,
+        baseType: TypeDefinition | null | undefined,
+    ): boolean {
+        if (!baseType) return true;
+        if (!derivedType) return false;
+        return this.isTypeRestriction(derivedType, baseType);
+    }
+
+    /**
+     * Validate that the derived type's attribute uses form a valid restriction
+     * of the base type's attribute uses (XSD 1.0 §3.4.6).
+     */
+    private validateAttributeRestriction(
+        ctx: BuildContext,
+        d: BuildContext["derivations"][number],
+        base: ComplexTypeDefinition,
+    ): void {
+        const baseUses = new Map(base.attributeUses.map((u) => [qnameKey(u.declaration.name), u]));
+        for (const use of d.type.attributeUses) {
+            const key = qnameKey(use.declaration.name);
+            const baseUse = baseUses.get(key);
+            if (!baseUse) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: `Attribute ${displayQName(use.declaration.name)} is not declared on the base type and cannot be added by a restriction.`,
+                    location: locationOf(d.node),
+                    phase: "schema-compilation",
+                });
+                continue;
+            }
+            // Requiredness (derivation-ok-restriction.4): the derived use must
+            // be required whenever the base use is required (restriction may
+            // tighten optional→required but not relax required→optional).
+            if (baseUse.required && !use.required) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_RESTRICTION",
+                    message: `Attribute ${displayQName(use.declaration.name)} is required on the base type but optional on the restricted type.`,
+                    location: locationOf(d.node),
+                    phase: "schema-compilation",
+                });
+            }
+            // Type restriction: derived attribute's type must restrict the
+            // base attribute's type.
+            const bt = baseUse.declaration.type;
+            const dt = use.declaration.type;
+            if (bt !== null) {
+                if (dt === null) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_RESTRICTION",
+                        message: `Attribute ${displayQName(use.declaration.name)} must have a type that restricts the base attribute's type.`,
+                        location: locationOf(d.node),
+                        phase: "schema-compilation",
+                    });
+                } else if (!this.isTypeRestriction(dt, bt)) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_RESTRICTION",
+                        message: `Attribute ${displayQName(use.declaration.name)} type is not a valid restriction of the base attribute's type.`,
+                        location: locationOf(d.node),
+                        phase: "schema-compilation",
+                    });
+                }
+            }
+        }
+    }
+
     /**
      * Post-expansion content-model checks: UPA determinism (§3.8.6) on every
      * complex type and model group definition. Runs after group expansion so
@@ -1062,6 +1774,13 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             const resolved = this.lookupType(grammars, ref);
             if (!resolved) continue; // pass 2 already reported it
             if (resolved.kind !== "simple-type") {
+                // A simpleContent restriction may restrict a complex type with
+                // simple content (CHK-020). Its effective simple-type base is
+                // the base complex type's {simple type}.
+                if (ctx.simpleContentRestrictions.has(st) && resolved.kind === "complex-type" && resolved.simpleType) {
+                    (st as { baseType: SimpleTypeDefinition | null }).baseType = resolved.simpleType;
+                    continue;
+                }
                 ctx.report({
                     severity: "error",
                     code: "UNRESOLVED_TYPE",

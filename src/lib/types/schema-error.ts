@@ -55,7 +55,15 @@ export type SchemaErrorCode =
     /** The content model has a Unique Particle Attribution (UPA) violation (XSD 1.0 §3.8.6). */
     | "AMBIGUOUS_CONTENT_MODEL"
     /** A model group or attribute group references itself (directly or transitively). */
-    | "CIRCULAR_REFERENCE";
+    | "CIRCULAR_REFERENCE"
+    /** A complex/simple content extension violates the spec's extension rules (CHK-020). */
+    | "INVALID_EXTENSION"
+    /** A complex/simple content restriction violates the spec's restriction rules (CHK-020). */
+    | "INVALID_RESTRICTION"
+    /** Complex type restriction with an xs:all group is rejected (CTR-all-compile, CHK-020). */
+    | "ALL_GROUP_RESTRICTION"
+    /** A complex type derives from itself (directly or transitively, CHK-020). */
+    | "CIRCULAR_DERIVATION";
 
 export interface SchemaError {
     severity: SchemaSeverity;

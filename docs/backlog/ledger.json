@@ -177,8 +177,8 @@
     {
       "id": "CHK-020",
       "title": "Complex-content derivation",
-      "file": "docs/backlog/active/CHK-020-complex-content-derivation.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-020-complex-content-derivation.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

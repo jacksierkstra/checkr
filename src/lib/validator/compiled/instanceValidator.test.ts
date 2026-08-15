@@ -1624,3 +1624,243 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
     });
 
 });
+
+describe("complex content derivation — end to end (CHK-020)", () => {
+
+    describe("complexContent extension", () => {
+
+        const EXT_XSD = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:complexType name="Base">
+                    <xsd:sequence>
+                        <xsd:element name="a" type="xsd:string"/>
+                    </xsd:sequence>
+                    <xsd:attribute name="lang" type="xsd:string"/>
+                </xsd:complexType>
+                <xsd:complexType name="Derived">
+                    <xsd:complexContent>
+                        <xsd:extension base="Base">
+                            <xsd:sequence>
+                                <xsd:element name="b" type="xsd:int"/>
+                            </xsd:sequence>
+                            <xsd:attribute name="count" type="xsd:int"/>
+                        </xsd:extension>
+                    </xsd:complexContent>
+                </xsd:complexType>
+                <xsd:element name="root" type="Derived"/>
+            </xsd:schema>
+        `;
+
+        it("accepts base + derived children in order with both base and derived attributes", () => {
+            const schema = compile(EXT_XSD);
+            const r = check(`<root lang="en" count="2"><a>x</a><b>42</b></root>`, schema);
+            expect(r.valid).toBe(true);
+            expect(r.errors).toHaveLength(0);
+        });
+
+        it("rejects out-of-order children (greedy match)", () => {
+            const schema = compile(EXT_XSD);
+            const r = check(`<root><b>1</b><a>x</a></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+        });
+
+        it("rejects an instance missing the base's required element", () => {
+            const schema = compile(EXT_XSD);
+            const r = check(`<root><b>1</b></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "MISSING_REQUIRED_ELEMENT")).toBe(true);
+        });
+
+        it("validates values against the inherited and added attribute types", () => {
+            const schema = compile(EXT_XSD);
+            expect(check(`<root lang="en"><a>x</a><b>1</b></root>`, schema).valid).toBe(true);
+            // count is xs:int — a non-numeric value must fail
+            const r = check(`<root lang="en" count="NaN"><a>x</a><b>1</b></root>`, schema);
+            expect(r.valid).toBe(false);
+        });
+
+        it("rejects character data inside an element-only extension type", () => {
+            const schema = compile(EXT_XSD);
+            const r = check(`<root lang="en">text<a>x</a><b>1</b></root>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "UNEXPECTED_TEXT_CONTENT")).toBe(true);
+        });
+
+    });
+
+    describe("simpleContent extension", () => {
+
+        const SC_XSD = `
+            <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                <xsd:complexType name="Count">
+                    <xsd:simpleContent>
+                        <xsd:extension base="xsd:int">
+                            <xsd:attribute name="unit" type="xsd:string"/>
+                        </xsd:extension>
+                    </xsd:simpleContent>
+                </xsd:complexType>
+                <xsd:element name="count" type="Count"/>
+            </xsd:schema>
+        `;
+
+        it("validates text against the inherited simple type and allows attributes", () => {
+            const schema = compile(SC_XSD);
+            expect(check(`<count unit="kg">42</count>`, schema).valid).toBe(true);
+        });
+
+        it("rejects text that violates the base simple type lexicography", () => {
+            const schema = compile(SC_XSD);
+            const r = check(`<count>not-a-number</count>`, schema);
+            expect(r.valid).toBe(false);
+            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+        });
+
+        it("rejects element children inside simple content", () => {
+            const schema = compile(SC_XSD);
+            const r = check(`<count><child/></count>`, schema);
+            expect(r.valid).toBe(false);
+        });
+
+        it("validates the attribute value against its declared type", () => {
+            const schema = compile(SC_XSD);
+            const r = check(`<count unit="42">7</count>`, schema);
+            // unit is xs:string so "42" is fine; the issue would be an int-typed attr
+            expect(r.valid).toBe(true);
+        });
+
+    });
+
+    describe("simpleContent restriction", () => {
+
+        it("enforces facets and keeps redeclared attributes", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:simpleContent>
+                            <xsd:extension base="xsd:string">
+                                <xsd:attribute name="lang" type="xsd:string"/>
+                            </xsd:extension>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:simpleContent>
+                            <xsd:restriction base="Base">
+                                <xsd:maxLength value="5"/>
+                                <xsd:attribute name="lang" type="xsd:string"/>
+                            </xsd:restriction>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="Derived"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root lang="en">hello</root>`, schema).valid).toBe(true);
+            const tooLong = check(`<root lang="en">way too long</root>`, schema);
+            expect(tooLong.valid).toBe(false);
+            expect(tooLong.errors.some((e) => e.code === "FACET_VIOLATION")).toBe(true);
+        });
+
+        it("drops attributes not redeclared in the restriction", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:simpleContent>
+                            <xsd:extension base="xsd:string">
+                                <xsd:attribute name="lang" type="xsd:string"/>
+                            </xsd:extension>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:simpleContent>
+                            <xsd:restriction base="Base">
+                                <xsd:maxLength value="5"/>
+                            </xsd:restriction>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="Derived"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root>hello</root>`, schema).valid).toBe(true);
+            const withLang = check(`<root lang="en">hello</root>`, schema);
+            expect(withLang.valid).toBe(false);
+            expect(withLang.errors.some((e) => e.code === "UNDECLARED_ATTRIBUTE")).toBe(true);
+        });
+
+    });
+
+    describe("complexContent restriction", () => {
+
+        it("enforces the restricted content model on instances", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Base">
+                        <xsd:sequence>
+                            <xsd:element name="a" type="xsd:string"/>
+                            <xsd:element name="b" type="xsd:string" maxOccurs="5"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:complexType name="Derived">
+                        <xsd:complexContent>
+                            <xsd:restriction base="Base">
+                                <xsd:sequence>
+                                    <xsd:element name="b" type="xsd:string" maxOccurs="2"/>
+                                </xsd:sequence>
+                            </xsd:restriction>
+                        </xsd:complexContent>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="Derived"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root><b>x</b><b>y</b></root>`, schema).valid).toBe(true);
+            const three = check(`<root><b>x</b><b>y</b><b>z</b></root>`, schema);
+            expect(three.valid).toBe(false);
+            expect(three.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+            // a is dropped entirely — an instance using it is invalid
+            const withA = check(`<root><a>x</a></root>`, schema);
+            expect(withA.valid).toBe(false);
+        });
+
+    });
+
+    describe("mixed content", () => {
+
+        it("allows character data interleaved with validated elements", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Mixed" mixed="true">
+                        <xsd:sequence>
+                            <xsd:element name="em" type="xsd:string" minOccurs="0"/>
+                        </xsd:sequence>
+                    </xsd:complexType>
+                    <xsd:element name="root" type="Mixed"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root>text<em>x</em>more</root>`, schema).valid).toBe(true);
+            expect(check(`<root>just text</root>`, schema).valid).toBe(true);
+            expect(check(`<root/>`, schema).valid).toBe(true);
+            const bad = check(`<root><em>x</em><other>y</other></root>`, schema);
+            expect(bad.valid).toBe(false);
+            expect(bad.errors.some((e) => e.code === "UNEXPECTED_ELEMENT")).toBe(true);
+        });
+
+        it("mixed without a compositor allows character data but no element children", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="MixedEmpty" mixed="true"/>
+                    <xsd:element name="root" type="MixedEmpty"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root>text</root>`, schema).valid).toBe(true);
+            const child = check(`<root><em>x</em></root>`, schema);
+            expect(child.valid).toBe(false);
+            expect(child.errors.some((e) => e.code === "INVALID_ELEMENT_CONTENT")).toBe(true);
+        });
+
+    });
+
+});

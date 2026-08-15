@@ -176,10 +176,22 @@ export class InstanceValidatorImpl implements InstanceValidator {
                     report(this.error(node, "UNEXPECTED_TEXT_CONTENT",
                         `Element <${node.localName}> has character data but its type is element-only.`));
                 }
-                if (type.particle) this.validateParticle(node, elementChildren, type.particle, schema, report);
+                if (type.particle) {
+                    this.validateParticle(node, elementChildren, type.particle, schema, report);
+                } else if (elementChildren.length > 0) {
+                    report(this.error(node, "INVALID_ELEMENT_CONTENT",
+                        `Element <${node.localName}> has child elements but its content model is empty.`));
+                }
                 break;
             case "mixed":
-                if (type.particle) this.validateParticle(node, elementChildren, type.particle, schema, report);
+                if (type.particle) {
+                    this.validateParticle(node, elementChildren, type.particle, schema, report);
+                } else if (elementChildren.length > 0) {
+                    // mixed="true" with no compositor: empty particle — character
+                    // data only, no element children (CHK-020).
+                    report(this.error(node, "INVALID_ELEMENT_CONTENT",
+                        `Element <${node.localName}> has child elements but its mixed content model is empty.`));
+                }
                 break;
         }
 
