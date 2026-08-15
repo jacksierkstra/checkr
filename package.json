@@ -14,6 +14,7 @@
     "benchmark": "tsx ./src/benchmark/run.ts",
     "clean": "rimraf dist",
     "build": "tspc -p tsconfig.build.json",
+    "guardrails": "node scripts/guardrails.mjs",
     "publish:local": "yarn clean && yalc publish",
     "prepublishOnly": "yarn build"
   },

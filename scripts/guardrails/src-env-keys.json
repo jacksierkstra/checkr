@@ -1,0 +1,5 @@
+{
+  "$comment": "process.env keys read by src. A library reading process.env at runtime ties behavior to deployment inputs. src/ reads none today. Warn-only: it should be noticed in review, not block a build.",
+  "generatedBy": "node scripts/guardrails.mjs --update",
+  "entries": []
+}

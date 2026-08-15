@@ -7,16 +7,20 @@
  *   node scripts/agent-check.mjs [target]
  *
  * Targets:
- *   full       — test, build, benchmark (fail-fast order)
+ *   full       — test, build, benchmark, validate-brief, guardrails (fail-fast order)
  *   test       — yarn test
  *   build      — yarn build
  *   benchmark  — yarn benchmark
+ *   validate-brief — node scripts/validate-brief.mjs
+ *   guardrails — node --test scripts/guardrails.test.mjs && node scripts/guardrails.mjs
  *
  * Every check prints exactly one line:
  *   NAME_PASS (Ns)   or   NAME_FAIL (Ns)
  *
  * No other output on success. On failure, the full command output is shown.
- * The first failing check causes an immediate non-zero exit.
+ * The first failing check causes an immediate non-zero exit. `full` prints an
+ * AGENT_CHECK_FULL_PASS marker after the last check so a workflow script can
+ * gate on the whole run.
  */
 
 import { execSync } from "node:child_process";
@@ -81,13 +85,15 @@ function runOne(label, cmd, opts = {}) {
 // Check definitions
 // --------------------------------------------------------------------------
 
-const CHECK_ORDER = ["test", "build", "benchmark", "validate-brief"];
+const CHECK_ORDER = ["test", "build", "benchmark", "validate-brief", "guardrails"];
 
 const CHECKS = {
   test:           () => runOne("TEST", "yarn test"),
   build:          () => runOne("BUILD", "yarn build"),
   benchmark:      () => runOne("BENCHMARK", "yarn benchmark", { timeout: 300_000 }),
   "validate-brief": () => runOne("VALIDATE", `node "${resolve(__dirname, "validate-brief.mjs")}"`),
+  guardrails:     () =>
+    runOne("GUARDRAILS", `node --test "${resolve(__dirname, "guardrails.test.mjs")}" && node "${resolve(__dirname, "guardrails.mjs")}"`),
 };
 
 // --------------------------------------------------------------------------
@@ -112,6 +118,7 @@ if (target === "full") {
   for (const name of CHECK_ORDER) {
     if (!CHECKS[name]()) process.exit(1);
   }
+  console.log("AGENT_CHECK_FULL_PASS");
   process.exit(0);
 }
 

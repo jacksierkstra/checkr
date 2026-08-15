@@ -70,7 +70,20 @@ Run `node scripts/agent-check.mjs [target]`. The script is at `scripts/agent-che
 | Build / config change | `node scripts/agent-check.mjs build` | Same |
 | Benchmark change | `node scripts/agent-check.mjs benchmark` | Same |
 | Backlog / brief change | `node scripts/agent-check.mjs validate-brief` | Same |
+| Guardrails / dependency / import change | `node scripts/agent-check.mjs guardrails` | Same |
 | Multiple areas / unsure | `node scripts/agent-check.mjs full` | Run full check → identify first failing target → re-run that target with output → fix → re-run targeted → re-run full |
+
+### Guardrails
+
+Reuse guardrails are enforced at `scripts/guardrails.mjs` and registered in `guardrails.config.json`:
+
+- **npm dependencies** — closed set (inventory baseline in `scripts/guardrails/npm-dependencies.json`).
+- **process.env keys** — closed set, warn-only (`scripts/guardrails/src-env-keys.json`).
+- **src/lib layering** — invariant (no upward imports across the DAG).
+- **relative imports** — invariant (non-test src uses `@lib/*` / `@benchmark/*` aliases only).
+
+Run `node scripts/agent-check.mjs guardrails` (or `yarn guardrails`) before finishing. It must exit 0.
+Do not edit the guardrails config or regenerate inventories to make it pass — report it.
 
 **Failure protocol**: When a check fails, re-run only the *smallest* failing command with output visible (the shim already does this for individual targets). Fix. Re-run the targeted check. Finish with the full check.
 
@@ -102,6 +115,17 @@ If a task exposes stale instructions, a broken command, or a missing guardrail, 
 See `docs/backlog/AGENTS.md` for how task briefs are read, written, and archived.
 
 ## Agent skills
+
+### Commands
+
+Repo commands live as **harness-agnostic procedures** in `docs/agents/commands/` (plain markdown, no harness-specific runtime or frontmatter). Any harness can run them by reading the file and following it; harnesses with a native command mechanism get thin adapters pointing at the canonical docs:
+
+| Command | What it does | Adapters |
+|---|---|---|
+| `/finish-backlog-workflow` | Implements open concrete leaf backlog tasks one-by-one with an independent verifier gating each commit | `.pi/prompts/finish-backlog-workflow.md`, `.claude/commands/finish-backlog-workflow.md` |
+| `/guardrails` | Builds (init) or reviews (review) the repo's reuse guardrails | `.pi/prompts/guardrails.md`, `.claude/commands/guardrails.md` |
+
+Invoke by name where the harness supports it (`/guardrails`, `/finish-backlog-workflow`), or read the canonical file in `docs/agents/commands/` and follow it.
 
 ### Issue tracker
 

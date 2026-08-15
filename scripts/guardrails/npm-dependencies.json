@@ -1,0 +1,19 @@
+{
+  "$comment": "npm dependencies. checkr is a published single-package library; a new dependency adds supply-chain and maintenance surface to every consumer and must be a deliberate, named decision.",
+  "generatedBy": "node scripts/guardrails.mjs --update",
+  "entries": [
+    "@jest/globals",
+    "@types/jest",
+    "@xmldom/xmldom",
+    "jest",
+    "jest-environment-jsdom",
+    "rimraf",
+    "ts-jest",
+    "ts-node",
+    "ts-patch",
+    "tsx",
+    "typescript",
+    "typescript-transform-paths",
+    "yalc"
+  ]
+}
