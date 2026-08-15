@@ -14,6 +14,7 @@ import {
 import { childElements, locationOf } from "@lib/xml/dom";
 import { XMLParser } from "@lib/xml/parser";
 import { namespaceKey, NAMESPACE_XML, NAMESPACE_XMLNS, NAMESPACE_XSI } from "@lib/types/namespaces";
+import { normalizeWhiteSpace, validateFacets } from "@lib/xsd/facets";
 import {
     SchemaError,
     SchemaErrorListener,
@@ -115,15 +116,19 @@ export class InstanceValidatorImpl implements InstanceValidator {
 
     private validateSimpleContent(
         node: Element,
-        _type: SimpleTypeDefinition,
+        type: SimpleTypeDefinition,
         report: (error: SchemaError) => void
     ): void {
-        // Lexical validation of simple values is the facet framework's work (CHK-010..CHK-014).
+        // Reject element children (simple types don't allow element content).
         const elementChildren = childElements(node);
         if (elementChildren.length > 0) {
             report(this.error(node, "INVALID_ELEMENT_CONTENT",
                 `Element <${node.localName}> has child elements but its simple type does not allow element content.`));
+            return;
         }
+
+        // Validate the text value against the type's facets.
+        this.validateTextValue(node, this.textContent(node), type, report);
     }
 
     private validateComplex(
@@ -140,6 +145,9 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 if (elementChildren.length > 0) {
                     report(this.error(node, "INVALID_ELEMENT_CONTENT",
                         `Element <${node.localName}> has child elements but its type has simple content.`));
+                }
+                if (type.simpleType) {
+                    this.validateTextValue(node, this.textContent(node), type.simpleType, report);
                 }
                 break;
             case "empty":
@@ -270,12 +278,17 @@ export class InstanceValidatorImpl implements InstanceValidator {
         const declared = new Set(type.attributeUses.map((use) => qnameKey(use.declaration.name)));
 
         for (const use of type.attributeUses) {
-            const found = instanceAttrs.some((a) =>
+            const attr = instanceAttrs.find((a) =>
                 qnameEqual({ namespaceURI: a.namespaceURI, localName: a.localName ?? "" }, use.declaration.name)
             );
-            if (!found && use.required) {
-                report(this.error(node, "MISSING_REQUIRED_ATTRIBUTE",
-                    `Attribute ${displayQName(use.declaration.name)} is required on <${node.localName}> but is missing.`));
+            if (!attr) {
+                if (use.required) {
+                    report(this.error(node, "MISSING_REQUIRED_ATTRIBUTE",
+                        `Attribute ${displayQName(use.declaration.name)} is required on <${node.localName}> but is missing.`));
+                }
+            } else if (use.declaration.type) {
+                // Validate attribute value against the declaration's simple type.
+                this.validateTextValue(node, attr.value ?? "", use.declaration.type, report);
             }
         }
 
@@ -291,6 +304,29 @@ export class InstanceValidatorImpl implements InstanceValidator {
     }
 
     // -----------------------------------------------------------------------
+    // Simple-type value validation
+    // -----------------------------------------------------------------------
+
+    /**
+     * Validate a text value (element text or attribute value) against a simple
+     * type's facets: apply whitespace normalization, then check length-family
+     * facets and enumeration. Reports FACET_VIOLATION for each violation.
+     */
+    private validateTextValue(
+        node: Element,
+        raw: string,
+        type: SimpleTypeDefinition,
+        report: (error: SchemaError) => void
+    ): void {
+        const normalized = normalizeWhiteSpace(raw, type.whiteSpace);
+        const violations = validateFacets(normalized, type.effectiveFacets);
+        for (const v of violations) {
+            report(this.error(node, "FACET_VIOLATION",
+                `Value '${normalized}' violates ${v.facet} facet of type ${displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" })}: ${v.message}`));
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // Helpers
     // -----------------------------------------------------------------------
 
@@ -301,6 +337,17 @@ export class InstanceValidatorImpl implements InstanceValidator {
             }
         }
         return false;
+    }
+
+    /** Concatenate all text and CDATA node values under `node`. */
+    private textContent(node: Element): string {
+        let out = "";
+        for (const child of Array.from(node.childNodes)) {
+            if (child.nodeType === 3 || child.nodeType === 4) {
+                out += child.nodeValue ?? "";
+            }
+        }
+        return out;
     }
 
     private error(

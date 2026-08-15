@@ -40,6 +40,8 @@ export type SchemaErrorCode =
     | "MISSING_REQUIRED_ATTRIBUTE"
     /** Element child nodes appear where the type does not allow element content. */
     | "INVALID_ELEMENT_CONTENT"
+    /** An instance value fails a facet of its simple type (length family, enumeration, ...). */
+    | "FACET_VIOLATION"
     /** A compiled construct exists but the processor does not validate it yet. */
     | "UNSUPPORTED_FEATURE";
 

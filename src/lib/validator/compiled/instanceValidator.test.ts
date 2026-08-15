@@ -288,4 +288,196 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
 
     });
 
+    describe("simple-type facet validation (CHK-010)", () => {
+
+        it("validates minLength on a simple type restriction", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MinLen2">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:minLength value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MinLen2"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>ab</e>`, schema).valid).toBe(true);
+            expect(check(`<e>a</e>`, schema).valid).toBe(false);
+            expect(check(`<e></e>`, schema).valid).toBe(false);
+        });
+
+        it("validates maxLength and length facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Exact3">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:length value="3"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="Exact3"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>abc</e>`, schema).valid).toBe(true);
+            expect(check(`<e>ab</e>`, schema).valid).toBe(false);
+            expect(check(`<e>abcd</e>`, schema).valid).toBe(false);
+        });
+
+        it("reports FACET_VIOLATION with the correct code and facet name", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MinLen2">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:minLength value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MinLen2"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            const { errors } = check(`<e>a</e>`, schema);
+            expect(errors[0]!.code).toBe("FACET_VIOLATION");
+            expect(errors[0]!.severity).toBe("error");
+            expect(errors[0]!.message).toContain("minLength");
+        });
+
+        it("validates enumeration facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Color">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:enumeration value="red"/>
+                            <xsd:enumeration value="green"/>
+                            <xsd:enumeration value="blue"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="Color"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>red</e>`, schema).valid).toBe(true);
+            expect(check(`<e>blue</e>`, schema).valid).toBe(true);
+            expect(check(`<e>yellow</e>`, schema).valid).toBe(false);
+        });
+
+        it("applies whitespace normalization before facet checks (collapse → collapse)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Collapsed">
+                        <xsd:restriction base="xsd:token">
+                            <xsd:length value="3"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="Collapsed"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // "abc" has length 3 before normalization
+            expect(check(`<e>abc</e>`, schema).valid).toBe(true);
+            // "  abc  " normalizes to "abc" (collapse), length 3 → valid
+            expect(check(`<e>  abc  </e>`, schema).valid).toBe(true);
+            // "a b" normalizes to "a b" (collapse), length 3 → valid
+            expect(check(`<e>a b</e>`, schema).valid).toBe(true);
+        });
+
+        it("applies whitespace normalization before facet checks (preserve → preserve)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Preserved">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:length value="5"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="Preserved"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // "a b c" has 5 code points (preserve doesn't change anything)
+            expect(check(`<e>a b c</e>`, schema).valid).toBe(true);
+            // "a b  " has 5 code points (preserve), but "ab" has 2
+            expect(check(`<e>ab</e>`, schema).valid).toBe(false);
+        });
+
+        it("validates inline simple type under an element", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e">
+                        <xsd:simpleType>
+                            <xsd:restriction base="xsd:string">
+                                <xsd:minLength value="1"/>
+                            </xsd:restriction>
+                        </xsd:simpleType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<e>a</e>`, schema).valid).toBe(true);
+            expect(check(`<e></e>`, schema).valid).toBe(false);
+        });
+
+        it("validates attribute values against their simple type facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Size">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:enumeration value="small"/>
+                            <xsd:enumeration value="large"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="root">
+                        <xsd:complexType>
+                            <xsd:attribute name="size" type="Size" use="required"/>
+                        </xsd:complexType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<root size="small"/>`, schema).valid).toBe(true);
+            expect(check(`<root size="large"/>`, schema).valid).toBe(true);
+            expect(check(`<root size="medium"/>`, schema).valid).toBe(false);
+        });
+
+        it("validates text content in simpleContent complex types", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:complexType name="Label">
+                        <xsd:simpleContent>
+                            <xsd:restriction base="xsd:string">
+                                <xsd:minLength value="1"/>
+                                <xsd:maxLength value="10"/>
+                            </xsd:restriction>
+                        </xsd:simpleContent>
+                    </xsd:complexType>
+                    <xsd:element name="label" type="Label"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            expect(check(`<label>hello</label>`, schema).valid).toBe(true);
+            expect(check(`<label></label>`, schema).valid).toBe(false);
+            expect(check(`<label>very long text here</label>`, schema).valid).toBe(false);
+        });
+
+        it("uses code-point counting for length facets (supplementary characters)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="EmojiLen">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:length value="2"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="EmojiLen"/>
+                </xsd:schema>
+            `;
+            const schema = compile(xsd);
+            // "😀a" is 2 code points but 3 UTF-16 code units — must be valid
+            expect(check(`<e>😀a</e>`, schema).valid).toBe(true);
+            // "😀😀" is 2 code points, 4 UTF-16 units — must be valid
+            expect(check(`<e>😀😀</e>`, schema).valid).toBe(true);
+            // "😀" is 1 code point — must be invalid
+            expect(check(`<e>😀</e>`, schema).valid).toBe(false);
+        });
+
+    });
+
 });

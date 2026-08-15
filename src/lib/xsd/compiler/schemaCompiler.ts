@@ -6,12 +6,14 @@ import {
     CompiledGrammar,
     CompiledSchema,
     ElementDeclaration,
+    Facet,
     ModelGroup,
     Particle,
     ParticleTerm,
     QName,
     SimpleTypeDefinition,
     TypeDefinition,
+    WhiteSpaceValue,
     Wildcard,
     displayQName,
 } from "@lib/types/component-graph";
@@ -26,6 +28,7 @@ import {
 import { childElements, locationOf } from "@lib/xml/dom";
 import { XMLParser } from "@lib/xml/parser";
 import { BUILTIN_GRAMMAR } from "@lib/xsd/compiler/builtinTypes";
+import { computeWhiteSpace, computeEffectiveFacets } from "@lib/xsd/facets";
 
 export interface CompileOptions {
     listener?: SchemaErrorListener;
@@ -47,6 +50,8 @@ interface BuildContext {
     allAttributes: AttributeDeclaration[];
     /** Every remaining QName reference (simple-type bases, union members, element refs). */
     refs: Array<{ ref: QName; node: Element }>;
+    /** Every simple type definition built during pass 1, for pass 2 facet resolution. */
+    allSimpleTypes: SimpleTypeDefinition[];
     /** Source location of each element declaration, for compile-error reporting. */
     locations: Map<ElementDeclaration, SchemaLocation>;
     report: (error: SchemaError) => void;
@@ -106,6 +111,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             allElements: [],
             allAttributes: [],
             refs: [],
+            allSimpleTypes: [],
             locations: new Map(),
             report,
         };
@@ -132,6 +138,9 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
         // Pass 2 — eager multi-pass reference resolution (AD §5).
         this.resolveReferencePass(ctx, grammars);
+
+        // Pass 3 — resolve simple-type bases and compute effective facets/whiteSpace.
+        this.resolveSimpleTypes(ctx, grammars);
 
         if (errors.some((e) => e.severity === "error" || e.severity === "fatal")) {
             throw new SchemaCompilationError(errors);
@@ -256,26 +265,42 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             (c) => c.namespaceURI === NAMESPACE_XSD && (c.localName === "restriction" || c.localName === "list" || c.localName === "union")
         );
         if (!derivation) {
-            return { kind: "simple-type", name, variety: "atomic", itemType: null, memberTypes: [], facets: [] };
+            const st: SimpleTypeDefinition = {
+                kind: "simple-type", name, variety: "atomic",
+                itemType: null, memberTypes: [], facets: [],
+                baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+            };
+            ctx.allSimpleTypes.push(st);
+            return st;
         }
 
+        let result: SimpleTypeDefinition;
         switch (derivation.localName) {
             case "restriction": {
                 const base = this.readQName(derivation, "base");
                 if (base) this.trackRef(ctx, derivation, base);
-                return {
+                result = {
                     kind: "simple-type",
                     name,
                     variety: "atomic",
                     itemType: base,
                     memberTypes: [],
                     facets: this.readFacets(derivation),
+                    baseType: null,
+                    whiteSpace: "preserve",
+                    effectiveFacets: [],
                 };
+                break;
             }
             case "list": {
                 const itemType = this.readQName(derivation, "itemType");
                 if (itemType) this.trackRef(ctx, derivation, itemType);
-                return { kind: "simple-type", name, variety: "list", itemType, memberTypes: [], facets: [] };
+                result = {
+                    kind: "simple-type", name, variety: "list",
+                    itemType, memberTypes: [], facets: [],
+                    baseType: null, whiteSpace: "collapse", effectiveFacets: [],
+                };
+                break;
             }
             case "union": {
                 const memberTypes: QName[] = [];
@@ -289,11 +314,23 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                         }
                     }
                 }
-                return { kind: "simple-type", name, variety: "union", itemType: null, memberTypes, facets: [] };
+                result = {
+                    kind: "simple-type", name, variety: "union",
+                    itemType: null, memberTypes, facets: [],
+                    baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+                };
+                break;
             }
             default:
-                return { kind: "simple-type", name, variety: "atomic", itemType: null, memberTypes: [], facets: [] };
+                result = {
+                    kind: "simple-type", name, variety: "atomic",
+                    itemType: null, memberTypes: [], facets: [],
+                    baseType: null, whiteSpace: "preserve", effectiveFacets: [],
+                };
+                break;
         }
+        ctx.allSimpleTypes.push(result);
+        return result;
     }
 
     private buildInlineType(el: Element, ctx: BuildContext): TypeDefinition | null {
@@ -313,14 +350,19 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         );
         const base = derivation ? this.readQName(derivation, "base") : null;
         if (base) this.trackRef(ctx, derivation ?? el, base);
-        return {
+        const st: SimpleTypeDefinition = {
             kind: "simple-type",
             name: null,
             variety: "atomic",
             itemType: base,
             memberTypes: [],
             facets: derivation?.localName === "restriction" ? this.readFacets(derivation) : [],
+            baseType: null,
+            whiteSpace: "preserve",
+            effectiveFacets: [],
         };
+        ctx.allSimpleTypes.push(st);
+        return st;
     }
 
     private buildModelGroup(el: Element, ctx: BuildContext): ModelGroup {
@@ -515,6 +557,53 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
     private lookupElement(grammars: Map<string, CompiledGrammar>, q: QName): ElementDeclaration | null {
         return grammars.get(namespaceKey(q.namespaceURI))?.elements.get(q.localName) ?? null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Pass 3 — simple type base resolution and facet computation
+    // -----------------------------------------------------------------------
+
+    /**
+     * Resolve simple-type base references (restriction bases, list item types)
+     * and compute effective facets + whiteSpace for each simple type.
+     *
+     * This must run after pass-2 reference resolution so that all type refs
+     * (including to built-in types) are already resolvable.
+     */
+    private resolveSimpleTypes(ctx: BuildContext, grammars: Map<string, CompiledGrammar>): void {
+        // Phase 1: resolve baseType references
+        for (const st of ctx.allSimpleTypes) {
+            if (st.variety === "union") continue;
+            const ref = st.itemType;
+            if (!ref) continue;
+            const resolved = this.lookupType(grammars, ref);
+            if (resolved && resolved.kind === "simple-type") {
+                (st as { baseType: SimpleTypeDefinition | null }).baseType = resolved;
+            }
+        }
+
+        // Phase 2: compute effective facets and whiteSpace bottom-up
+        // (bases are resolved; recursion terminates at baseType = null).
+        const computed = new Set<SimpleTypeDefinition>();
+        const compute = (st: SimpleTypeDefinition) => {
+            if (computed.has(st)) return;
+            const base = st.baseType;
+            if (base) compute(base);
+            // Built-in types are deep-frozen at module load with their facets
+            // precomputed (builtinTypes.ts); skip them.
+            if (Object.isFrozen(st)) {
+                computed.add(st);
+                return;
+            }
+            const eff = computeEffectiveFacets(st.facets, base);
+            const ws = computeWhiteSpace(st.facets, base);
+            (st as { effectiveFacets: ReadonlyArray<Facet> }).effectiveFacets = eff;
+            (st as { whiteSpace: WhiteSpaceValue }).whiteSpace = ws;
+            computed.add(st);
+        };
+        for (const st of ctx.allSimpleTypes) {
+            compute(st);
+        }
     }
 
     // -----------------------------------------------------------------------

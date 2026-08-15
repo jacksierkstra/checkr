@@ -87,8 +87,8 @@
     {
       "id": "CHK-010",
       "title": "Simple-type definitions and facet framework",
-      "file": "docs/backlog/active/CHK-010-simple-type-definitions-facet-framework.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-010-simple-type-definitions-facet-framework.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

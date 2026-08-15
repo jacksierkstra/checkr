@@ -1,6 +1,6 @@
 import { XMLParserImpl } from "@lib/xml/parser";
 import { SchemaCompilerImpl } from "@lib/xsd/compiler/schemaCompiler";
-import { ComplexTypeDefinition, CompiledSchema, ElementDeclaration } from "@lib/types/component-graph";
+import { ComplexTypeDefinition, CompiledSchema, ElementDeclaration, SimpleTypeDefinition } from "@lib/types/component-graph";
 import { NAMESPACE_XSD } from "@lib/types/namespaces";
 import { SchemaCompilationError, SchemaError } from "@lib/types/schema-error";
 
@@ -368,6 +368,140 @@ describe("SchemaCompiler — two-phase core (CHK-008)", () => {
             expect(() => compiler.compile(xsd, { listener: (e) => seen.push(e) }))
                 .toThrow(SchemaCompilationError);
             expect(seen.some((e) => e.code === "UNRESOLVED_TYPE" && e.message.includes("simple type"))).toBe(true);
+        });
+
+    });
+
+    describe("simple type facets (CHK-010)", () => {
+
+        it("compiles a global simpleType restriction with facets", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyString">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:minLength value="2"/>
+                            <xsd:maxLength value="10"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:element name="e" type="MyString"/>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const grammar = schema.grammars.get("")!;
+            const myString = grammar.types.get("MyString") as SimpleTypeDefinition;
+            expect(myString).toBeDefined();
+            expect(myString.variety).toBe("atomic");
+            expect(myString.facets).toHaveLength(2);
+            expect(myString.facets.map((f) => f.kind).sort()).toEqual(["maxLength", "minLength"]);
+        });
+
+        it("inherits whiteSpace from the base type (xsd:string → preserve)", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="MyString">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:minLength value="1"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("MyString") as SimpleTypeDefinition;
+            expect(st.whiteSpace).toBe("preserve");
+        });
+
+        it("inherits whiteSpace from xsd:normalizedString → replace", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Mine">
+                        <xsd:restriction base="xsd:normalizedString">
+                            <xsd:maxLength value="5"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("Mine") as SimpleTypeDefinition;
+            expect(st.whiteSpace).toBe("replace");
+        });
+
+        it("inherits whiteSpace from xsd:token → collapse", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Mine">
+                        <xsd:restriction base="xsd:token">
+                            <xsd:length value="3"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("Mine") as SimpleTypeDefinition;
+            expect(st.whiteSpace).toBe("collapse");
+        });
+
+        it("resolves the base type reference for a restriction", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="BaseType">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:length value="5"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                    <xsd:simpleType name="DerivedType">
+                        <xsd:restriction base="BaseType">
+                            <xsd:maxLength value="10"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const base = schema.grammars.get("")!.types.get("BaseType") as SimpleTypeDefinition;
+            const derived = schema.grammars.get("")!.types.get("DerivedType") as SimpleTypeDefinition;
+            expect(derived.baseType).toBe(base);
+            // Derived inherits length=5 from base, and has maxLength=10
+            const eff = derived.effectiveFacets;
+            expect(eff.find((f) => f.kind === "length")?.value).toBe("5");
+            expect(eff.find((f) => f.kind === "maxLength")?.value).toBe("10");
+        });
+
+        it("inline simpleType under an element gets facets resolved", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:element name="e">
+                        <xsd:simpleType>
+                            <xsd:restriction base="xsd:string">
+                                <xsd:minLength value="1"/>
+                            </xsd:restriction>
+                        </xsd:simpleType>
+                    </xsd:element>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const e = schema.grammars.get("")!.elements.get("e")!;
+            const st = e.type as SimpleTypeDefinition;
+            expect(st.kind).toBe("simple-type");
+            expect(st.effectiveFacets.find((f) => f.kind === "minLength")?.value).toBe("1");
+            // Inherits whiteSpace from string
+            expect(st.whiteSpace).toBe("preserve");
+        });
+
+        it("facets include enumeration when present", () => {
+            const xsd = `
+                <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:simpleType name="Color">
+                        <xsd:restriction base="xsd:string">
+                            <xsd:enumeration value="red"/>
+                            <xsd:enumeration value="green"/>
+                            <xsd:enumeration value="blue"/>
+                        </xsd:restriction>
+                    </xsd:simpleType>
+                </xsd:schema>
+            `;
+            const schema = compiler.compile(xsd);
+            const st = schema.grammars.get("")!.types.get("Color") as SimpleTypeDefinition;
+            const enums = st.effectiveFacets.filter((f) => f.kind === "enumeration");
+            expect(enums).toHaveLength(3);
         });
 
     });

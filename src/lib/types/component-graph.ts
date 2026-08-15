@@ -34,6 +34,9 @@ export function displayQName(q: QName): string {
 
 export type SimpleTypeVariety = "atomic" | "list" | "union";
 
+/** The three XSD whitespace-normalization modes (XSD 1.0 Part 2 §4.3.6). */
+export type WhiteSpaceValue = "preserve" | "replace" | "collapse";
+
 export interface Facet {
     readonly kind: string;
     readonly value: string;
@@ -45,7 +48,25 @@ export interface SimpleTypeDefinition {
     readonly variety: SimpleTypeVariety;
     readonly itemType: QName | null;
     readonly memberTypes: ReadonlyArray<QName>;
+    /** This type's own facets, as declared on its restriction (CHK-010). */
     readonly facets: ReadonlyArray<Facet>;
+    /**
+     * The resolved base type of a restriction, or the item type of a list
+     * (set at compile time by pass-2 resolution). Null for primitives and
+     * unions. Facet inheritance walks this chain (CHK-010).
+     */
+    readonly baseType: SimpleTypeDefinition | null;
+    /**
+     * The effective whitespace normalization after facet inheritance down the
+     * restriction chain (fixed for built-ins). Applied before facet checks.
+     */
+    readonly whiteSpace: WhiteSpaceValue;
+    /**
+     * The effective facets after inheritance down the restriction chain:
+     * own facets win over inherited ones; patterns accumulate; the effective
+     * enumeration is the own one when present, else the inherited one.
+     */
+    readonly effectiveFacets: ReadonlyArray<Facet>;
 }
 
 export type ContentType = "element-only" | "simple" | "mixed" | "empty";
