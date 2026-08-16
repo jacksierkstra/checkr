@@ -15,7 +15,7 @@ import {
 } from "@lib/types/component-graph";
 import { childElements, locationOf } from "@lib/xml/dom";
 import { XMLParser } from "@lib/xml/parser";
-import { namespaceKey, NAMESPACE_XML, NAMESPACE_XMLNS, NAMESPACE_XSI } from "@lib/types/namespaces";
+import { namespaceKey, NAMESPACE_XML, NAMESPACE_XMLNS, NAMESPACE_XSD, NAMESPACE_XSI } from "@lib/types/namespaces";
 import { normalizeWhiteSpace, splitListItems, validateFacets } from "@lib/xsd/facets";
 import { checkStringFamilyLexicalSpace } from "@lib/xsd/string-types";
 import { checkNumericFamilyLexicalSpace } from "@lib/xsd/numeric-types";
@@ -173,7 +173,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             }
         } else {
             if (type?.kind === "simple-type") {
-                this.validateSimpleContent(node, type, report);
+                this.validateSimpleContent(node, type, report, schema);
             } else if (type?.kind === "complex-type") {
                 this.validateComplex(node, type, schema, report, evaluator);
             }
@@ -191,7 +191,8 @@ export class InstanceValidatorImpl implements InstanceValidator {
     private validateSimpleContent(
         node: Element,
         type: SimpleTypeDefinition,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        schema: CompiledSchema
     ): void {
         // Reject element children (simple types don't allow element content).
         const elementChildren = childElements(node);
@@ -202,7 +203,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
         }
 
         // Validate the text value against the type's facets.
-        this.validateTextValue(node, this.textContent(node), type, report);
+        this.validateTextValue(node, this.textContent(node), type, report, schema);
     }
 
     private validateComplex(
@@ -222,7 +223,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                         `Element <${node.localName}> has child elements but its type has simple content.`));
                 }
                 if (type.simpleType) {
-                    this.validateTextValue(node, this.textContent(node), type.simpleType, report);
+                    this.validateTextValue(node, this.textContent(node), type.simpleType, report, schema);
                 }
                 break;
             case "empty":
@@ -671,7 +672,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 }
             } else if (use.declaration.type) {
                 // Validate attribute value against the declaration's simple type.
-                this.validateTextValue(node, attr.value ?? "", use.declaration.type, report);
+                this.validateTextValue(node, attr.value ?? "", use.declaration.type, report, schema);
                 // Record the attribute type for identity-constraint field evaluation (CHK-022).
                 evaluator.attrTypes.set(attr, use.declaration.type);
             }
@@ -714,7 +715,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
             return;
         }
         if (decl?.type) {
-            this.validateTextValue(node, attr.value ?? "", decl.type, report);
+            this.validateTextValue(node, attr.value ?? "", decl.type, report, schema);
         }
     }
 
@@ -728,15 +729,17 @@ export class InstanceValidatorImpl implements InstanceValidator {
      * atomic (lexical space + facets), list (each item against the item type,
      * then whole-form facets), or union (valid if any member type accepts).
      * Returns the violations; the caller reports them through the listener.
+     * `node` provides the in-scope namespace context for QName-family value
+     * space checks (NOTATION, CHK-026); `schema` carries the declared notations.
      */
-    private checkSimpleValue(raw: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
-        if (type.variety === "list") return this.checkListValue(raw, type);
-        if (type.variety === "union") return this.checkUnionValue(raw, type);
-        return this.checkAtomicValue(normalizeWhiteSpace(raw, type.whiteSpace), type);
+    private checkSimpleValue(raw: string, type: SimpleTypeDefinition, node: Element, schema: CompiledSchema): SimpleValueViolation[] {
+        if (type.variety === "list") return this.checkListValue(raw, type, node, schema);
+        if (type.variety === "union") return this.checkUnionValue(raw, type, node, schema);
+        return this.checkAtomicValue(normalizeWhiteSpace(raw, type.whiteSpace), type, node, schema);
     }
 
     /** Atomic variety: built-in lexical space + effective facets (CHK-011..015). */
-    private checkAtomicValue(normalized: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+    private checkAtomicValue(normalized: string, type: SimpleTypeDefinition, node: Element, schema: CompiledSchema): SimpleValueViolation[] {
         const out: SimpleValueViolation[] = [];
         const typeName = this.simpleTypeName(type);
 
@@ -760,6 +763,27 @@ export class InstanceValidatorImpl implements InstanceValidator {
             out.push({ code: "LEXICAL_SPACE_VIOLATION", message: `Value '${normalized}' is ${remainingLexicalError} (type ${typeName}).` });
         }
 
+        // NOTATION value space (XSD 1.0 Part 2 §3.2.19, CHK-026): the value
+        // of a NOTATION-derived type is the QName of a notation declared in
+        // the schema. The prefix (or default namespace for unprefixed values)
+        // resolves against the instance element's in-scope namespaces.
+        if (this.derivesFromNotation(type)) {
+            const q = this.resolveValueQName(node, normalized);
+            const declared = q !== null &&
+                schema.grammars.get(namespaceKey(q.namespaceURI))?.notations.has(q.localName);
+            if (q === null) {
+                out.push({
+                    code: "UNDECLARED_NOTATION",
+                    message: `Value '${normalized}' of NOTATION-derived type ${typeName} uses prefix '${normalized.slice(0, normalized.indexOf(":"))}', which is not bound to a namespace in the instance.`,
+                });
+            } else if (!declared) {
+                out.push({
+                    code: "UNDECLARED_NOTATION",
+                    message: `Value '${normalized}' of NOTATION-derived type ${typeName} does not name a notation declared in the schema (${displayQName(q)}).`,
+                });
+            }
+        }
+
         for (const v of validateFacets(normalized, type.effectiveFacets, type)) {
             out.push({ code: "FACET_VIOLATION", message: `Value '${normalized}' violates ${v.facet} facet of type ${typeName}: ${v.message}` });
         }
@@ -772,7 +796,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
      * valid in the item type; length-family facets count items, pattern and
      * enumeration apply to the whole form.
      */
-    private checkListValue(raw: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+    private checkListValue(raw: string, type: SimpleTypeDefinition, node: Element, schema: CompiledSchema): SimpleValueViolation[] {
         const out: SimpleValueViolation[] = [];
         const normalized = normalizeWhiteSpace(raw, type.whiteSpace);
         const items = splitListItems(normalized);
@@ -781,7 +805,7 @@ export class InstanceValidatorImpl implements InstanceValidator {
         if (itemType) {
             for (let i = 0; i < items.length; i++) {
                 const item = items[i]!;
-                for (const v of this.checkSimpleValue(item, itemType)) {
+                for (const v of this.checkSimpleValue(item, itemType, node, schema)) {
                     out.push({ code: v.code, message: `List item ${i} ('${item}') of type ${this.simpleTypeName(type)}: ${v.message}` });
                 }
             }
@@ -800,10 +824,10 @@ export class InstanceValidatorImpl implements InstanceValidator {
      * member applies its own normalization to the raw value. The union's own
      * facets (enumeration/pattern from a restriction) apply to the whole form.
      */
-    private checkUnionValue(raw: string, type: SimpleTypeDefinition): SimpleValueViolation[] {
+    private checkUnionValue(raw: string, type: SimpleTypeDefinition, node: Element, schema: CompiledSchema): SimpleValueViolation[] {
         const out: SimpleValueViolation[] = [];
         const members = type.memberTypeDefs;
-        const accepted = members.some((member) => this.checkSimpleValue(raw, member).length === 0);
+        const accepted = members.some((member) => this.checkSimpleValue(raw, member, node, schema).length === 0);
         if (!accepted) {
             const memberNames = members.length > 0
                 ? members.map((m) => this.simpleTypeName(m)).join(", ")
@@ -827,15 +851,50 @@ export class InstanceValidatorImpl implements InstanceValidator {
         node: Element,
         raw: string,
         type: SimpleTypeDefinition,
-        report: (error: SchemaError) => void
+        report: (error: SchemaError) => void,
+        schema: CompiledSchema
     ): void {
-        for (const v of this.checkSimpleValue(raw, type)) {
+        for (const v of this.checkSimpleValue(raw, type, node, schema)) {
             report(this.error(node, v.code, v.message));
         }
     }
 
     private simpleTypeName(type: SimpleTypeDefinition): string {
         return displayQName(type.name ?? { namespaceURI: null, localName: "(anonymous)" });
+    }
+
+    /**
+     * Whether the type, walking its base chain, is derived from xs:NOTATION
+     * (XSD 1.0 Part 2 §3.2.19). The value space of such a type is the set of
+     * QNames of notations declared in the schema (CHK-026).
+     */
+    private derivesFromNotation(type: SimpleTypeDefinition): boolean {
+        let cur: SimpleTypeDefinition | null = type;
+        while (cur) {
+            const n = cur.name;
+            if (n && n.namespaceURI === NAMESPACE_XSD && n.localName === "NOTATION") return true;
+            cur = cur.baseType;
+        }
+        return false;
+    }
+
+    /**
+     * Resolve a QName lexical value (a NOTATION-typed instance value) against
+     * the instance element's in-scope namespaces, mirroring the compiler's
+     * QName resolution: an unprefixed value takes the default namespace (null
+     * when none is declared), a prefixed value resolves its prefix. Returns
+     * null when the prefix is not bound in the instance.
+     */
+    private resolveValueQName(node: Element, lexical: string): QName | null {
+        const colon = lexical.indexOf(":");
+        if (colon === -1) {
+            const ns = node.lookupNamespaceURI(null) ?? node.lookupNamespaceURI("");
+            return { namespaceURI: ns ?? null, localName: lexical };
+        }
+        const prefix = lexical.slice(0, colon);
+        const ns = node.lookupNamespaceURI(prefix);
+        if (ns === null || ns === undefined || ns === "") return null;
+        return { namespaceURI: ns, localName: lexical.slice(colon + 1) };
     }
 
     // -----------------------------------------------------------------------

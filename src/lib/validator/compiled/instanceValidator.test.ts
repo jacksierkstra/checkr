@@ -1039,19 +1039,27 @@ describe("InstanceValidator — two-phase core (CHK-008)", () => {
             expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
         });
 
-        it("validates xs:NOTATION lexical form (same as QName)", () => {
+        it("validates xs:NOTATION values — lexical form and declared notations (CHK-014/CHK-026)", () => {
             const xsd = `
                 <xsd:schema xmlns:xsd="${NAMESPACE_XSD}">
+                    <xsd:notation name="foo" public="urn:foo"/>
+                    <xsd:notation name="bar" public="urn:bar"/>
                     <xsd:element name="e" type="xsd:NOTATION"/>
                 </xsd:schema>
             `;
             const schema = compile(xsd);
+            // Unprefixed values resolve against the (absent) default namespace;
+            // both name declared notations (CHK-026).
             expect(check(`<e>foo</e>`, schema).valid).toBe(true);
-            expect(check(`<e>ns:foo</e>`, schema).valid).toBe(true);
+            expect(check(`<e>bar</e>`, schema).valid).toBe(true);
+            // A value naming an undeclared notation is a value-space error.
+            const r1 = check(`<e>baz</e>`, schema);
+            expect(r1.valid).toBe(false);
+            expect(r1.errors.some((e) => e.code === "UNDECLARED_NOTATION")).toBe(true);
             // Empty string not allowed for QName/NOTATION
-            const r = check(`<e></e>`, schema);
-            expect(r.valid).toBe(false);
-            expect(r.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
+            const r2 = check(`<e></e>`, schema);
+            expect(r2.valid).toBe(false);
+            expect(r2.errors.some((e) => e.code === "LEXICAL_SPACE_VIOLATION")).toBe(true);
         });
 
     });

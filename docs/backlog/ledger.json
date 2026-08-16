@@ -231,8 +231,8 @@
     {
       "id": "CHK-026",
       "title": "Notations and annotations",
-      "file": "docs/backlog/active/CHK-026-notations-and-annotations.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-026-notations-and-annotations.md",
+      "status": "done",
       "area": "meta",
       "priority": "medium",
       "type": "ticket"

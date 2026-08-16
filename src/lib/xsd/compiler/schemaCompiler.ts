@@ -1,5 +1,7 @@
 import { Document, Element } from "@xmldom/xmldom";
 import {
+    Annotation,
+    AnnotationItem,
     AttributeDeclaration,
     AttributeGroupDefinition,
     AttributeUse,
@@ -15,6 +17,7 @@ import {
     ModelGroup,
     ModelGroupDefinition,
     NamespaceConstraint,
+    NotationDeclaration,
     Particle,
     ParticleTerm,
     QName,
@@ -207,6 +210,7 @@ interface MutableGrammar {
     attributeGroups: Map<string, AttributeGroupDefinition>;
     identityConstraints: Map<string, IdentityConstraintDefinition>;
     substitutionGroups: Map<string, ElementDeclaration[]>;
+    notations: Map<string, NotationDeclaration>;
 }
 
 /**
@@ -252,6 +256,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             attributeGroups: new Map(),
             identityConstraints: new Map(),
             substitutionGroups: new Map(),
+            notations: new Map(),
         };
         // Validate blockDefault and finalDefault tokens.
         const blockDefaultRaw = root.getAttribute("blockDefault");
@@ -338,7 +343,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         if (errors.some((e) => e.severity === "error" || e.severity === "fatal")) {
             throw new SchemaCompilationError(errors);
         }
-        return deepFreeze<CompiledSchema>({ grammars });
+        return deepFreeze<CompiledSchema>({ grammars, annotations: this.parseAnnotations(root) });
     }
 
     // -----------------------------------------------------------------------
@@ -359,6 +364,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 attributeGroups: new Map(),
                 identityConstraints: new Map(),
                 substitutionGroups: new Map(),
+                notations: new Map(),
             };
             ctx.grammarsByNamespace.set(key, grammar);
         }
@@ -703,8 +709,13 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     if (def) this.registerComponent(ctx, "attributeGroups", def.name.localName, def, "attributeGroup", child);
                     break;
                 }
+                case "notation": {
+                    const decl = this.buildNotation(child, ctx);
+                    if (decl) this.registerComponent(ctx, "notations", decl.name.localName, decl, "notation", child);
+                    break;
+                }
                 // include/import/redefine handled by registerSchemaSet;
-                // annotation/notation are later tickets.
+                // annotations are parsed by parseAnnotations at each component.
             }
         }
     }
@@ -712,7 +723,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     /** Register one global component, rejecting duplicate definitions. */
     private registerComponent(
         ctx: BuildContext,
-        mapName: "elements" | "attributes" | "types" | "modelGroups" | "attributeGroups",
+        mapName: "elements" | "attributes" | "types" | "modelGroups" | "attributeGroups" | "notations",
         localName: string,
         component: unknown,
         kind: string,
@@ -846,6 +857,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             default: el.getAttribute("default") ?? null,
             fixed: el.getAttribute("fixed") ?? null,
             block: this.normalizeTokens(el.getAttribute("block"), ctx.blockDefault, BLOCK_TOKENS),
+            annotations: this.parseAnnotations(el),
         };
         this.checkValueConstraint(decl, el, ctx);
         ctx.locations.set(decl, locationOf(el));
@@ -871,6 +883,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             typeRef: this.readQName(el, "type", ctx),
             type: null,
             ref: null,
+            annotations: this.parseAnnotations(el),
         };
         ctx.allAttributes.push(decl);
         return decl;
@@ -1037,6 +1050,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             attributeWildcard: usesResult.wildcard,
             isAbstract: el.getAttribute("abstract") === "true",
             final: this.finalForComplexType(el, ctx),
+            annotations: this.parseAnnotations(el),
         };
         if (usesResult.groupRefs.length > 0) {
             ctx.attributeGroupWildcardRefs.set(result, usesResult.groupRefs);
@@ -1070,7 +1084,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 kind: "simple-type", name, variety: "atomic",
                 itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets: [],
                 baseType: null, whiteSpace: "preserve", effectiveFacets: [],
-                final: "",
+                final: "", annotations: this.parseAnnotations(el),
             };
             ctx.allSimpleTypes.push(st);
             return st;
@@ -1097,6 +1111,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     whiteSpace: "preserve",
                     effectiveFacets: [],
                     final: this.finalForSimpleType(el, ctx),
+                    annotations: this.parseAnnotations(el),
                 };
                 break;
             }
@@ -1119,6 +1134,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     itemType, memberTypes: [], itemTypeDef, memberTypeDefs: [], facets: [],
                     baseType: null, whiteSpace: "collapse", effectiveFacets: [],
                     final: this.finalForSimpleType(el, ctx),
+                    annotations: this.parseAnnotations(el),
                 };
                 break;
             }
@@ -1147,6 +1163,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     itemType: null, memberTypes, itemTypeDef: null, memberTypeDefs, facets: [],
                     baseType: null, whiteSpace: "preserve", effectiveFacets: [],
                     final: this.finalForSimpleType(el, ctx),
+                    annotations: this.parseAnnotations(el),
                 };
                 break;
             }
@@ -1155,7 +1172,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     kind: "simple-type", name, variety: "atomic",
                     itemType: null, memberTypes: [], itemTypeDef: null, memberTypeDefs: [], facets: [],
                     baseType: null, whiteSpace: "preserve", effectiveFacets: [],
-                    final: "",
+                    final: "", annotations: this.parseAnnotations(el),
                 };
                 break;
         }
@@ -1208,6 +1225,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             whiteSpace: "preserve",
             effectiveFacets: [],
             final: "",
+            annotations: this.parseAnnotations(el),
         };
         if (base) ctx.simpleContentRestrictions.add(st);
         ctx.allSimpleTypes.push(st);
@@ -1331,6 +1349,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             kind: "model-group-definition",
             name: { namespaceURI: ctx.targetNamespace, localName },
             particle,
+            annotations: this.parseAnnotations(el),
         };
         ctx.allModelGroupDefs.push({ def, node: el });
         return def;
@@ -1354,12 +1373,89 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             name: { namespaceURI: ctx.targetNamespace, localName },
             attributeUses: usesResult.uses,
             attributeWildcard: usesResult.wildcard,
+            annotations: this.parseAnnotations(el),
         };
         if (usesResult.groupRefs.length > 0) {
             ctx.attributeGroupWildcardRefs.set(def, usesResult.groupRefs);
         }
         ctx.allAttributeGroupDefs.push({ def, node: el });
         return def;
+    }
+
+    /**
+     * Build a global notation declaration (XSD 1.0 §3.14.2, CHK-026).
+     *
+     * A notation carries a name plus a public and/or system identifier.
+     * Per the S4S, `name` is required and at least one of `public`/`system`
+     * must be present (notation-props-correct). Notations have no QName
+     * references, so no pass-2 resolution is needed — they are registered
+     * in their grammar for NOTATION-typed value resolution at validation.
+     */
+    private buildNotation(el: Element, ctx: BuildContext): NotationDeclaration | null {
+        const localName = el.getAttribute("name") ?? "";
+        if (!localName) {
+            ctx.report({
+                severity: "fatal",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: "A global xs:notation must carry a name.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            return null;
+        }
+        const pub = el.getAttribute("public");
+        const sys = el.getAttribute("system");
+        if (pub === null && sys === null) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `Notation '${localName}' must declare a public and/or a system identifier.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        return {
+            kind: "notation",
+            name: { namespaceURI: ctx.targetNamespace, localName },
+            public: pub,
+            system: sys,
+            annotations: this.parseAnnotations(el),
+        };
+    }
+
+    /**
+     * Parse the `<xs:annotation>` children of a schema element into inert
+     * `Annotation` components (XSD 1.0 §3.14, CHK-026). Annotations have no
+     * validity effect; this captures them for introspection only.
+     */
+    private parseAnnotations(el: Element): Annotation[] {
+        const out: Annotation[] = [];
+        for (const child of childElements(el)) {
+            if (child.namespaceURI !== NAMESPACE_XSD || child.localName !== "annotation") continue;
+            const items: AnnotationItem[] = [];
+            for (const item of childElements(child)) {
+                if (item.namespaceURI !== NAMESPACE_XSD) continue;
+                if (item.localName !== "documentation" && item.localName !== "appinfo") continue;
+                items.push({
+                    kind: item.localName,
+                    source: item.getAttribute("source"),
+                    content: this.annotationText(item),
+                });
+            }
+            out.push({ kind: "annotation", items });
+        }
+        return out;
+    }
+
+    /** The concatenated text (and CDATA) content of an element, markup flattened. */
+    private annotationText(el: Element): string {
+        let out = "";
+        for (const child of Array.from(el.childNodes)) {
+            if (child.nodeType === 3 || child.nodeType === 4) {
+                out += child.nodeValue ?? "";
+            }
+        }
+        return out;
     }
 
     /** A placeholder attribute use marking `<xs:attributeGroup ref="…">`; pass 2 splices the referenced uses. */
@@ -1371,6 +1467,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 typeRef: null,
                 type: null,
                 ref: null,
+                annotations: [],
             },
             required: false,
             fixed: null,
@@ -1521,6 +1618,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             default: el.getAttribute("default") ?? null,
             fixed: el.getAttribute("fixed") ?? null,
             block: this.normalizeTokens(el.getAttribute("block"), ctx.blockDefault, BLOCK_TOKENS),
+            annotations: this.parseAnnotations(el),
         };
         this.checkValueConstraint(decl, el, ctx);
         ctx.locations.set(decl, locationOf(el));
@@ -1646,6 +1744,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             typeRef,
             type: null,
             ref: refAttr,
+            annotations: this.parseAnnotations(el),
         };
         ctx.allAttributes.push(decl);
         const use = el.getAttribute("use") ?? "optional";
@@ -1780,6 +1879,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 referencedConstraint: null,
                 compiledSelector,
                 compiledFields,
+                annotations: this.parseAnnotations(child),
             };
 
             if (category === "keyref") {

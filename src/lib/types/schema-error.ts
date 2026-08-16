@@ -99,7 +99,12 @@ export type SchemaErrorCode =
     /** A declaration's properties violate the spec's declaration constraints (name+ref, ref+type, nillable+default, invalid use/form values, substitutionGroup on a local, etc.; CHK-025). */
     | "INVALID_DECLARATION"
     /** A particle's occurrence attributes violate the spec (minOccurs>maxOccurs, negative or non-integer values, minOccurs="unbounded"; CHK-025). */
-    | "INVALID_OCCURRENCE";
+    | "INVALID_OCCURRENCE"
+    /**
+     * An instance value of a NOTATION-derived type names a notation that is
+     * not declared in the schema (XSD 1.0 Part 2 §3.2.19, CHK-026).
+     */
+    | "UNDECLARED_NOTATION";
 
 export interface SchemaError {
     severity: SchemaSeverity;

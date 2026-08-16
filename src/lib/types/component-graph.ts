@@ -29,6 +29,41 @@ export function displayQName(q: QName): string {
 }
 
 // ---------------------------------------------------------------------------
+// Annotations  (XSD 1.0 §3.14, CHK-026)
+// ---------------------------------------------------------------------------
+
+/**
+ * One child of an `<xs:annotation>`: either `<xs:documentation>` or
+ * `<xs:appinfo>` (XSD 1.0 §3.14.1/§3.14.2). Annotations never affect
+ * validity — they are captured for introspection only.
+ */
+export type AnnotationItem =
+    | {
+        readonly kind: "documentation";
+        /** The `source` attribute (an anyURI), or null when absent. */
+        readonly source: string | null;
+        /** The element's text content (markup children are flattened). */
+        readonly content: string;
+    }
+    | {
+        readonly kind: "appinfo";
+        /** The `source` attribute (an anyURI), or null when absent. */
+        readonly source: string | null;
+        /** The element's text content (markup children are flattened). */
+        readonly content: string;
+    };
+
+/**
+ * A parsed `<xs:annotation>` (XSD 1.0 §3.14.3), attached to the component it
+ * annotates. Inert: annotations have no effect on schema or instance validity.
+ */
+export interface Annotation {
+    readonly kind: "annotation";
+    /** The `<xs:documentation>` and `<xs:appinfo>` children, in document order. */
+    readonly items: ReadonlyArray<AnnotationItem>;
+}
+
+// ---------------------------------------------------------------------------
 // Type definitions
 // ---------------------------------------------------------------------------
 
@@ -88,6 +123,11 @@ export interface SimpleTypeDefinition {
      * Controls which derivation kinds are disallowed with this type as base.
      */
     readonly final: string;
+    /**
+     * The `<xs:annotation>` children of this type definition, in document
+     * order (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export type ContentType = "element-only" | "simple" | "mixed" | "empty";
@@ -137,6 +177,11 @@ export interface ComplexTypeDefinition {
      * Controls which derivation methods are disallowed with this type as base.
      */
     readonly final: string;
+    /**
+     * The `<xs:annotation>` children of this type definition, in document
+     * order (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export type TypeDefinition = SimpleTypeDefinition | ComplexTypeDefinition;
@@ -207,6 +252,11 @@ export interface IdentityConstraintDefinition {
     readonly compiledSelector: ReadonlyArray<CompiledPath>;
     /** The fields parsed and prefix-resolved at compile time (CHK-022). */
     readonly compiledFields: ReadonlyArray<CompiledPath>;
+    /**
+     * The `<xs:annotation>` children of this identity constraint, in document
+     * order (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export interface ElementDeclaration {
@@ -260,6 +310,11 @@ export interface ElementDeclaration {
      * schema's blockDefault applies (set at compile time).
      */
     readonly block: string;
+    /**
+     * The `<xs:annotation>` children of this declaration, in document order
+     * (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export interface AttributeDeclaration {
@@ -273,6 +328,11 @@ export interface AttributeDeclaration {
      * compile time (pass 2). Null for non-ref declarations (CHK-017).
      */
     readonly ref: QName | null;
+    /**
+     * The `<xs:annotation>` children of this declaration, in document order
+     * (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export interface AttributeUse {
@@ -352,6 +412,11 @@ export interface ModelGroupDefinition {
      * content (CHK-019).
      */
     readonly particle: Particle;
+    /**
+     * The `<xs:annotation>` children of this model group definition, in
+     * document order (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export interface AttributeGroupDefinition {
@@ -360,6 +425,36 @@ export interface AttributeGroupDefinition {
     readonly attributeUses: ReadonlyArray<AttributeUse>;
     /** The attribute wildcard from `<xs:anyAttribute>` (CHK-021). */
     readonly attributeWildcard: Wildcard | null;
+    /**
+     * The `<xs:annotation>` children of this attribute group definition, in
+     * document order (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
+}
+
+/**
+ * A notation declaration (XSD 1.0 §3.14.2, CHK-026). Notations give a name
+ * to a public and/or system identifier; `NOTATION`-typed instance values must
+ * reference a declared notation.
+ */
+export interface NotationDeclaration {
+    readonly kind: "notation";
+    readonly name: QName;
+    /**
+     * The notation's public identifier (`@public`), or null when absent.
+     * Per XSD 1.0 §3.14.2, at least one of `public`/`system` is required.
+     */
+    readonly public: string | null;
+    /**
+     * The notation's system identifier (`@system`), or null when absent.
+     * Per XSD 1.0 §3.14.2, at least one of `public`/`system` is required.
+     */
+    readonly system: string | null;
+    /**
+     * The `<xs:annotation>` children of this notation declaration, in document
+     * order (CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }
 
 export interface CompiledGrammar {
@@ -382,8 +477,20 @@ export interface CompiledGrammar {
      * compile time (pass 3) from the global element declarations.
      */
     readonly substitutionGroups: ReadonlyMap<string, ReadonlyArray<ElementDeclaration>>;
+    /**
+     * Notation declarations (xs:notation, XSD 1.0 §3.14.2) keyed by local
+     * name (CHK-026). The value space of `NOTATION`-derived types is the set
+     * of QNames of these declarations; instance validation resolves a
+     * NOTATION-typed value against this map.
+     */
+    readonly notations: ReadonlyMap<string, NotationDeclaration>;
 }
 
 export interface CompiledSchema {
     readonly grammars: ReadonlyMap<string, CompiledGrammar>;
+    /**
+     * The `<xs:annotation>` children of the schema document root (XSD 1.0
+     * §3.14, CHK-026). Inert — annotations never affect validity.
+     */
+    readonly annotations: ReadonlyArray<Annotation>;
 }

@@ -28,6 +28,7 @@ function builtin(localName: string): SimpleTypeDefinition {
         baseType: null,
         whiteSpace: "preserve",
         effectiveFacets: [], final: "",
+        annotations: [],
     };
 }
 
@@ -44,6 +45,7 @@ function derivedSt(localName: string, baseType: SimpleTypeDefinition | null): Si
         baseType,
         whiteSpace: baseType?.whiteSpace ?? "preserve",
         effectiveFacets: [], final: "",
+        annotations: [],
     };
 }
 

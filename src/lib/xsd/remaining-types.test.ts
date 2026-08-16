@@ -34,6 +34,7 @@ function builtin(localName: string): SimpleTypeDefinition {
         baseType: null,
         whiteSpace: "collapse",
         effectiveFacets: [], final: "",
+        annotations: [],
     };
 }
 
@@ -53,6 +54,7 @@ function derivedSt(
         baseType,
         whiteSpace: baseType?.whiteSpace ?? "preserve",
         effectiveFacets: [], final: "",
+        annotations: [],
     };
 }
 
