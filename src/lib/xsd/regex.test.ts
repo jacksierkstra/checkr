@@ -314,19 +314,22 @@ describe("XSD regex engine (CHK-015)", () => {
             expect(m("\\I", "A")).toBe(false);
             expect(m("\\I", "_")).toBe(true);     // underscore is not in \i, so it IS in \I
         });
-        it("\\c matches NameChar minus NameStartChar", () => {
+        it("\\c matches NameChar minus ':' and '_'", () => {
+            expect(m("\\c", "A")).toBe(true);
+            expect(m("\\c", "z")).toBe(true);
             expect(m("\\c", "-")).toBe(true);
             expect(m("\\c", ".")).toBe(true);
             expect(m("\\c", "0")).toBe(true);
             expect(m("\\c", "9")).toBe(true);
             expect(m("\\c", "\u00B7")).toBe(true); // middle dot
             expect(m("\\c", "\u0300")).toBe(true); // combining grave
-            expect(m("\\c", "A")).toBe(false);
-            expect(m("\\c", "_")).toBe(false);    // _ is NameStart, not NameChar continuation
-            expect(m("\\c", ":")).toBe(false);
+            expect(m("\\c", "_")).toBe(false);    // underscore excluded
+            expect(m("\\c", ":")).toBe(false);    // colon excluded
         });
         it("\\C complement of \\c", () => {
-            expect(m("\\C", "A")).toBe(true);
+            expect(m("\\C", "A")).toBe(false);
+            expect(m("\\C", "_")).toBe(true);
+            expect(m("\\C", ":")).toBe(true);
             expect(m("\\C", "-")).toBe(false);
         });
     });

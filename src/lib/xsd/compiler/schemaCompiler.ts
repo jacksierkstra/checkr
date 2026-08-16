@@ -907,16 +907,16 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
         const contentChildren = childElements(el).filter(
             (c) => c.namespaceURI === NAMESPACE_XSD &&
-                ["sequence", "choice", "all", "any", "simpleContent", "complexContent"].includes(c.localName ?? "")
+                ["sequence", "choice", "all", "any", "group", "simpleContent", "complexContent"].includes(c.localName ?? "")
         );
         if (contentChildren.length > 1) {
             // XSD 1.0 §3.4.2: a complex type may have at most one of
-            // sequence/choice/all/any, or exactly one of simpleContent/
+            // sequence/choice/all/any/group, or exactly one of simpleContent/
             // complexContent, never both kinds (CHK-025).
             ctx.report({
                 severity: "error",
                 code: "INVALID_SCHEMA_DOCUMENT",
-                message: `An xs:complexType may contain at most one content-model child (sequence, choice, all, any, simpleContent, or complexContent), but found ${contentChildren.length}.`,
+                message: `An xs:complexType may contain at most one content-model child (sequence, choice, all, any, group, simpleContent, or complexContent), but found ${contentChildren.length}.`,
                 location: locationOf(contentChildren[1]),
                 phase: "schema-compilation",
             });
@@ -933,6 +933,25 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                         this.validateAllGroup(ctx, particle, contentChild);
                     }
                     break;
+                case "group": {
+                    // `<xs:group ref="…">` as the content model (XSD 1.0
+                    // §3.4.2): a placeholder group; pass 2 splices the
+                    // referenced definition's particles (CHK-019).
+                    const ref = this.readQName(contentChild, "ref", ctx);
+                    if (!ref) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:group content-model child must carry a ref attribute.",
+                            location: locationOf(contentChild),
+                            phase: "schema-compilation",
+                        });
+                        break;
+                    }
+                    particle = this.wrapParticle(ctx, contentChild, { kind: "sequence", particles: [], ref });
+                    contentType = mixed ? "mixed" : "element-only";
+                    break;
+                }
                 case "any":
                     particle = this.buildAnyParticle(contentChild, ctx);
                     contentType = mixed ? "mixed" : "element-only";

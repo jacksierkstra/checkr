@@ -249,8 +249,8 @@
     {
       "id": "CHK-028",
       "title": "XSTS-derived regression corpus",
-      "file": "docs/backlog/active/CHK-028-xsts-derived-regression-corpus.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-028-xsts-derived-regression-corpus.md",
+      "status": "done",
       "area": "meta",
       "priority": "medium",
       "type": "ticket"

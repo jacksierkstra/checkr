@@ -458,6 +458,13 @@ export class InstanceValidatorImpl implements InstanceValidator {
                 this.validateElement(c, cExact ? head : cMember!, schema, report, evaluator);
                 if (particle.maxOccurs !== "unbounded" && count >= particle.maxOccurs) break;
             }
+            // minOccurs on a single-element particle: the early branches above
+            // report the 0-occurrence case; a partial match (count < minOccurs)
+            // must also be reported (CHK-028, Particles area).
+            if (count < particle.minOccurs) {
+                report(this.error(node, "MISSING_REQUIRED_ELEMENT",
+                    `Element ${displayQName(head.name)} must occur at least ${particle.minOccurs} time(s) inside <${node.localName}>, but occurs ${count}.`));
+            }
             return idx - startIdx;
         }
 

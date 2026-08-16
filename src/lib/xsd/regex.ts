@@ -193,11 +193,14 @@ function nameStartMatcher(_excluded: false): CharMatcher {
   return { kind: "union", members: ranges };
 }
 
-/** \c = NameChar \ NameStartChar = '-', '.', '0'-'9', #xB7, #x300-#x36F, #x203F-#x2040 */
+/** \c = NameChar minus ':' (0x3A) and '_' (0x5F) = \i plus the
+ * continuation-only characters '-', '.', '0'-'9', #xB7, #x300-#x36F,
+ * #x203F-#x2040 (XSD 1.0 Part 2 Appendix E). */
 function nameContinuationMatcher(): CharMatcher {
   return {
     kind: "union",
     members: [
+      nameStartMatcher(false),
       { kind: "range", from: 0x2d, to: 0x2d }, // '-'
       { kind: "range", from: 0x2e, to: 0x2e }, // '.'
       { kind: "range", from: 0x30, to: 0x39 }, // '0'-'9'

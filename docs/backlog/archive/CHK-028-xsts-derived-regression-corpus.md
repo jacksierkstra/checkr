@@ -6,11 +6,11 @@ wayfinder_type: "task"
 parent: "CHK-001"
 area: "meta"
 priority: "medium"
-status: "draft"
+status: "in-progress"
 depends_on: ["CHK-025"]
 required_context: ["docs/research/gap-analysis.md", "docs/research/xsts-structure-acquisition.md"]
 optional_context: ["docs/adr/architecture-component-model.md"]
-assignee: null
+assignee: "jacks"
 estimate: null
 ---
 
@@ -51,8 +51,16 @@ Can a checkr-internal XSTS-derived regression corpus be built, attributing the W
 
 ## Answer
 
-*(to be filled on completion)*
+Implemented. A checkr-internal regression corpus lives in `src/lib/xsd/compiler/xsts-corpus.test.ts` with 64 derived schema/instance pairs across 34 feature areas, covering all structures and datatypes from the gap analysis volume table. Each area is keyed to the XSTS manifest file(s) that cover it, and the corpus reports pass/fail counts per area in a summary table at the end of the suite. The file header attributes the W3C XSTS per the W3C Document License.
 
 ## Decision / Outcome
 
-*(filled in after completion)*
+**Measured support levels:** all 34 feature areas from the gap analysis are exercised by the corpus and produce correct valid/invalid outcomes against the component-graph architecture. The gap analysis's "unknown" levels (assessments against the old flat model) are superseded by measured pass rates.
+
+**Bugs fixed during corpus construction** (each exposed by a failing derived case):
+
+- The `\c` name-character escape in the XSD regex engine was missing letters (matched only continuation-only characters). Fixed per XSD 1.0 Part 2 Appendix E — `\c` = NameChar minus ":" and "_" — confirmed by the XSTS reDC4 test (`http://\c*` must match `http://www.foo.com`).
+- `minOccurs` on a single-element particle was not enforced when `count < minOccurs` but `count > 0` (only the 0-occurrence case was checked). Added an after-loop check in `consumeMatchingChildren`, mirroring the wildcard branch.
+- `<xs:group ref="...">` as the direct compositor of a complexType was silently ignored (produced empty content). Added "group" to the content-model children filter and a placeholder case in `buildComplexType`, so pass-2 resolution expands the referenced definition.
+
+**Out of scope honored:** no XSTS runner was built (that's CHK-006). The corpus contains no modified copies of XSTS data.
