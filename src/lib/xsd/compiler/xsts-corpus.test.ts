@@ -1200,32 +1200,22 @@ const AREAS: FeatureArea[] = [
 
 const areaCounts = new Map<string, { pass: number; fail: number }>();
 
-const report: string[] = [];
-
 function runCase(area: string, c: CorpusCase): void {
-    // Compile
-    let schema: CompiledSchema;
+    // Compile once; the same schema serves both the schema and instance checks.
+    let schema: CompiledSchema | undefined;
     let schemaOk = true;
     try {
         schema = compile(c.xsd, c.resolve);
-    } catch (e) {
+    } catch {
         schemaOk = false;
     }
     expect(schemaOk).toBe(c.expectedSchema === "valid");
 
-    // Instance
-    if (c.instance && c.expectedInstance !== undefined) {
-        const validator = new InstanceValidatorImpl(new XMLParserImpl());
-        const errors: SchemaError[] = [];
-        try {
-            schema = compile(c.xsd, c.resolve);
-        } catch {
-            // Schema failed — skip instance validation
-            return;
-        }
-        const result = validator.validate(c.instance, schema, { listener: (e) => errors.push(e) });
-        expect(result.valid).toBe(c.expectedInstance === "valid");
-    }
+    if (!(c.instance && c.expectedInstance !== undefined)) return;
+    if (!schemaOk || !schema) return; // schema failed — instance outcome is undefined
+
+    const result = validator.validate(c.instance, schema);
+    expect(result.valid).toBe(c.expectedInstance === "valid");
 }
 
 // ---------------------------------------------------------------------------
