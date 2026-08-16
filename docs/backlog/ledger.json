@@ -222,8 +222,8 @@
     {
       "id": "CHK-025",
       "title": "Schema-for-schemas conformance",
-      "file": "docs/backlog/active/CHK-025-schema-for-schemas-conformance.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-025-schema-for-schemas-conformance.md",
+      "status": "done",
       "area": "meta",
       "priority": "high",
       "type": "ticket"

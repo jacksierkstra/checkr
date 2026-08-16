@@ -91,7 +91,15 @@ export type SchemaErrorCode =
      * xsi:schemaLocation/xsi:noNamespaceSchemaLocation at validation time)
      * cannot be resolved to a schema document / grammar (CHK-024).
      */
-    | "SCHEMA_LOCATION_UNRESOLVED";
+    | "SCHEMA_LOCATION_UNRESOLVED"
+    /** A facet's value is not in the facet's lexical space (e.g. length="-1", whiteSpace="bogus"; CHK-025). */
+    | "INVALID_FACET_VALUE"
+    /** Facets conflict with each other: duplicate kinds, length+minLength, minInclusive+minExclusive, inverted bounds, fractionDigits>totalDigits (CHK-025). */
+    | "INVALID_FACET_COMBINATION"
+    /** A declaration's properties violate the spec's declaration constraints (name+ref, ref+type, nillable+default, invalid use/form values, substitutionGroup on a local, etc.; CHK-025). */
+    | "INVALID_DECLARATION"
+    /** A particle's occurrence attributes violate the spec (minOccurs>maxOccurs, negative or non-integer values, minOccurs="unbounded"; CHK-025). */
+    | "INVALID_OCCURRENCE";
 
 export interface SchemaError {
     severity: SchemaSeverity;

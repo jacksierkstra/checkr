@@ -253,10 +253,15 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             identityConstraints: new Map(),
             substitutionGroups: new Map(),
         };
+        // Validate blockDefault and finalDefault tokens.
+        const blockDefaultRaw = root.getAttribute("blockDefault");
+        if (blockDefaultRaw !== null) this.checkBlockDefaultTokens(blockDefaultRaw, root, report);
+        const finalDefaultRaw = root.getAttribute("finalDefault");
+        if (finalDefaultRaw !== null) this.checkFinalDefaultTokens(finalDefaultRaw, root, report);
         const ctx: BuildContext = {
             targetNamespace: rootNamespace,
-            elementFormDefault: root.getAttribute("elementFormDefault") === "qualified",
-            attributeFormDefault: root.getAttribute("attributeFormDefault") === "qualified",
+            elementFormDefault: this.checkFormDefault(root, "elementFormDefault", report).qualified,
+            attributeFormDefault: this.checkFormDefault(root, "attributeFormDefault", report).qualified,
             blockDefault: this.normalizeTokens(root.getAttribute("blockDefault"), "", BLOCK_TOKENS),
             finalDefault: this.normalizeTokens(root.getAttribute("finalDefault"), "", [...COMPLEX_FINAL_TOKENS, ...SIMPLE_FINAL_TOKENS]),
             grammar: rootGrammar,
@@ -390,8 +395,12 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         const targetNamespace = docRoot.getAttribute("targetNamespace") || null;
         ctx.targetNamespace = targetNamespace;
         ctx.grammar = this.getOrCreateGrammar(ctx, targetNamespace);
-        ctx.elementFormDefault = docRoot.getAttribute("elementFormDefault") === "qualified";
-        ctx.attributeFormDefault = docRoot.getAttribute("attributeFormDefault") === "qualified";
+        ctx.elementFormDefault = this.checkFormDefault(docRoot, "elementFormDefault", (e) => ctx.report(e)).qualified;
+        ctx.attributeFormDefault = this.checkFormDefault(docRoot, "attributeFormDefault", (e) => ctx.report(e)).qualified;
+        const blockDefaultRaw = docRoot.getAttribute("blockDefault");
+        if (blockDefaultRaw !== null) this.checkBlockDefaultTokens(blockDefaultRaw, docRoot, (e) => ctx.report(e));
+        const finalDefaultRaw = docRoot.getAttribute("finalDefault");
+        if (finalDefaultRaw !== null) this.checkFinalDefaultTokens(finalDefaultRaw, docRoot, (e) => ctx.report(e));
         ctx.blockDefault = this.normalizeTokens(docRoot.getAttribute("blockDefault"), "", BLOCK_TOKENS);
         ctx.finalDefault = this.normalizeTokens(docRoot.getAttribute("finalDefault"), "", [...COMPLEX_FINAL_TOKENS, ...SIMPLE_FINAL_TOKENS]);
         return ctx.grammar;
@@ -768,6 +777,58 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                 phase: "schema-compilation",
             });
         }
+        // A global declaration has no form property (XSD 1.0 §3.3.2).
+        if (el.getAttribute("form") !== null) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "A global element declaration must not carry a form attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        // Occurrence attributes belong to element particles, not to global
+        // declarations (the S4S topLevelElement has no minOccurs/maxOccurs).
+        for (const attr of ["minOccurs", "maxOccurs"] as const) {
+            if (el.getAttribute(attr) !== null) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_DECLARATION",
+                    message: `A global element declaration must not carry a ${attr} attribute; occurrence is a particle property.`,
+                    location: locationOf(el),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+        // type and inline type are mutually exclusive.
+        const hasTypeRef = el.getAttribute("type") !== null;
+        const hasInline = childElements(el).some(
+            (c) => c.namespaceURI === NAMESPACE_XSD &&
+                (c.localName === "simpleType" || c.localName === "complexType")
+        );
+        if (hasTypeRef && hasInline) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An element declaration must not carry a type attribute and an inline simpleType or complexType at the same time.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        // nillable + default/fixed are mutually exclusive.
+        if (el.getAttribute("nillable") === "true" && (el.getAttribute("default") !== null || el.getAttribute("fixed") !== null)) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An element declaration with nillable must not carry a default or fixed value constraint.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        const blockRaw = el.getAttribute("block");
+        if (blockRaw !== null) {
+            this.checkBlockTokens(blockRaw, ctx, el);
+        }
         const name: QName = { namespaceURI: ctx.targetNamespace, localName };
         const typeRef = this.readQName(el, "type", ctx);
         const inlineType = typeRef ? null : this.buildInlineType(el, ctx);
@@ -831,10 +892,23 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         // restriction element for simpleContent/complexContent (CHK-020).
         let attributeParent: Element = el;
 
-        const contentChild = childElements(el).find(
+        const contentChildren = childElements(el).filter(
             (c) => c.namespaceURI === NAMESPACE_XSD &&
                 ["sequence", "choice", "all", "any", "simpleContent", "complexContent"].includes(c.localName ?? "")
         );
+        if (contentChildren.length > 1) {
+            // XSD 1.0 §3.4.2: a complex type may have at most one of
+            // sequence/choice/all/any, or exactly one of simpleContent/
+            // complexContent, never both kinds (CHK-025).
+            ctx.report({
+                severity: "error",
+                code: "INVALID_SCHEMA_DOCUMENT",
+                message: `An xs:complexType may contain at most one content-model child (sequence, choice, all, any, simpleContent, or complexContent), but found ${contentChildren.length}.`,
+                location: locationOf(contentChildren[1]),
+                phase: "schema-compilation",
+            });
+        }
+        const contentChild = contentChildren[0] ?? null;
         if (contentChild) {
             switch (contentChild.localName) {
                 case "sequence":
@@ -851,10 +925,20 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     contentType = mixed ? "mixed" : "element-only";
                     break;
                 case "simpleContent": {
-                    const derivation = childElements(contentChild).find(
+                    const derivations = childElements(contentChild).filter(
                         (c) => c.namespaceURI === NAMESPACE_XSD &&
                             (c.localName === "extension" || c.localName === "restriction")
                     );
+                    if (derivations.length > 1) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:simpleContent element must contain exactly one xs:extension or xs:restriction element.",
+                            location: locationOf(derivations[1]),
+                            phase: "schema-compilation",
+                        });
+                    }
+                    const derivation = derivations[0] ?? null;
                     if (!derivation) {
                         ctx.report({
                             severity: "error",
@@ -877,10 +961,20 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     break;
                 }
                 case "complexContent": {
-                    const derivation = childElements(contentChild).find(
+                    const derivations = childElements(contentChild).filter(
                         (c) => c.namespaceURI === NAMESPACE_XSD &&
                             (c.localName === "extension" || c.localName === "restriction")
                     );
+                    if (derivations.length > 1) {
+                        ctx.report({
+                            severity: "error",
+                            code: "INVALID_SCHEMA_DOCUMENT",
+                            message: "An xs:complexContent element must contain exactly one xs:extension or xs:restriction element.",
+                            location: locationOf(derivations[1]),
+                            phase: "schema-compilation",
+                        });
+                    }
+                    const derivation = derivations[0] ?? null;
                     if (!derivation) {
                         ctx.report({
                             severity: "error",
@@ -987,6 +1081,9 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             case "restriction": {
                 const base = this.readQName(derivation, "base", ctx);
                 if (base) this.trackRef(ctx, derivation, base);
+                const facets = this.readFacets(derivation);
+                this.checkPatternFacets(facets, ctx);
+                this.checkFacetConformance(facets, ctx);
                 result = {
                     kind: "simple-type",
                     name,
@@ -995,13 +1092,12 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     memberTypes: [],
                     itemTypeDef: null,
                     memberTypeDefs: [],
-                    facets: this.readFacets(derivation),
+                    facets,
                     baseType: null,
                     whiteSpace: "preserve",
                     effectiveFacets: [],
                     final: this.finalForSimpleType(el, ctx),
                 };
-                this.checkPatternFacets(this.readFacets(derivation), ctx);
                 break;
             }
             case "list": {
@@ -1068,11 +1164,24 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     private buildInlineType(el: Element, ctx: BuildContext): TypeDefinition | null {
-        for (const child of childElements(el)) {
-            if (child.namespaceURI !== NAMESPACE_XSD) continue;
-            if (child.localName === "complexType") return this.buildComplexType(child, ctx, null);
-            if (child.localName === "simpleType") return this.buildSimpleType(child, ctx, null);
+        const inline = childElements(el).filter(
+            (c) => c.namespaceURI === NAMESPACE_XSD &&
+                (c.localName === "complexType" || c.localName === "simpleType")
+        );
+        if (inline.length > 1) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An element declaration must contain at most one inline type definition (simpleType or complexType).",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            // Build the first one anyway so its references still get resolved.
         }
+        if (inline.length === 0) return null;
+        const child = inline[0];
+        if (child.localName === "complexType") return this.buildComplexType(child, ctx, null);
+        if (child.localName === "simpleType") return this.buildSimpleType(child, ctx, null);
         return null;
     }
 
@@ -1085,6 +1194,7 @@ export class SchemaCompilerImpl implements SchemaCompiler {
         const base = this.readQName(el, "base", ctx);
         const facets = this.readFacets(el);
         this.checkPatternFacets(facets, ctx);
+        this.checkFacetConformance(facets, ctx);
         const st: SimpleTypeDefinition = {
             kind: "simple-type",
             name: null,
@@ -1271,6 +1381,123 @@ export class SchemaCompilerImpl implements SchemaCompiler {
 
     private buildLocalElementParticle(el: Element, ctx: BuildContext): Particle {
         const refAttr = this.readQName(el, "ref", ctx);
+        const hasName = el.getAttribute("name") !== null;
+        const hasRef = el.getAttribute("ref") !== null;
+
+        // name/ref mutual exclusion and presence.
+        if (hasName && hasRef) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An element declaration must not carry both a name and a ref attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+            // Continue with ref as the referrer; the particle will be an
+            // unresolved reference, which is reported separately.
+        } else if (!hasName && !hasRef) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "A local element declaration must carry either a name or a ref attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // When ref is present, the following attributes must be absent.
+        if (refAttr) {
+            const refConflicts = [
+                ["type", el.getAttribute("type") !== null],
+                ["nillable", el.getAttribute("nillable") !== null],
+                ["default", el.getAttribute("default") !== null],
+                ["fixed", el.getAttribute("fixed") !== null],
+                ["substitutionGroup", el.getAttribute("substitutionGroup") !== null],
+                ["abstract", el.getAttribute("abstract") !== null],
+                ["block", el.getAttribute("block") !== null],
+                ["form", el.getAttribute("form") !== null],
+            ] as const;
+            for (const [attr, present] of refConflicts) {
+                if (present) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_DECLARATION",
+                        message: `An element declaration with a ref must not carry a ${attr} attribute.`,
+                        location: locationOf(el),
+                        phase: "schema-compilation",
+                    });
+                }
+            }
+            // Identity constraints are also forbidden on refs.
+            const hasIc = childElements(el).some(
+                (c) => c.namespaceURI === NAMESPACE_XSD &&
+                    (c.localName === "key" || c.localName === "unique" || c.localName === "keyref")
+            );
+            if (hasIc) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_DECLARATION",
+                    message: "An element declaration with a ref must not contain identity constraints (key, unique, or keyref).",
+                    location: locationOf(el),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // type and inline type are mutually exclusive.
+        const hasTypeRef = el.getAttribute("type") !== null;
+        const hasInlineST = childElements(el).some((c) => c.namespaceURI === NAMESPACE_XSD && c.localName === "simpleType");
+        const hasInlineCT = childElements(el).some((c) => c.namespaceURI === NAMESPACE_XSD && c.localName === "complexType");
+        if (hasTypeRef && (hasInlineST || hasInlineCT)) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An element declaration must not carry a type attribute and an inline simpleType or complexType at the same time.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // nillable + default/fixed are mutually exclusive.
+        if (el.getAttribute("nillable") === "true" && (el.getAttribute("default") !== null || el.getAttribute("fixed") !== null)) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An element declaration with nillable must not carry a default or fixed value constraint.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // substitutionGroup is only allowed on global elements.
+        if (el.getAttribute("substitutionGroup") !== null && !refAttr) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "A local element declaration must not carry a substitutionGroup attribute; only global element declarations may head a substitution group.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // form value validation.
+        const formAttr = el.getAttribute("form");
+        if (formAttr !== null && formAttr !== "qualified" && formAttr !== "unqualified") {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: `The form attribute must be 'qualified' or 'unqualified', got '${formAttr}'.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // block token validation.
+        const blockRaw = el.getAttribute("block");
+        if (blockRaw !== null) {
+            this.checkBlockTokens(blockRaw, ctx, el);
+        }
+
         const typeRef = refAttr ? null : this.readQName(el, "type", ctx);
         const inlineType = refAttr || typeRef ? null : this.buildInlineType(el, ctx);
         const decl: ElementDeclaration = {
@@ -1302,6 +1529,110 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     private buildAttributeUse(el: Element, ctx: BuildContext): AttributeUse | null {
+        // minOccurs and maxOccurs are not valid on attributes (XSD 1.0).
+        if (el.getAttribute("minOccurs") !== null) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An xs:attribute declaration or use must not carry a minOccurs attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        if (el.getAttribute("maxOccurs") !== null) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An xs:attribute declaration or use must not carry a maxOccurs attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        const hasName = el.getAttribute("name") !== null;
+        const hasRef = el.getAttribute("ref") !== null;
+        if (hasName && hasRef) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An attribute declaration must not carry both a name and a ref attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        } else if (!hasName && !hasRef) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An attribute declaration or use must carry either a name or a ref attribute.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // A ref attribute use must not carry name, type, or form (XSD 1.0
+        // §3.2.3); use/default/fixed qualify the use and are allowed.
+        if (hasRef) {
+            for (const attr of ["type", "form"] as const) {
+                if (el.getAttribute(attr) !== null) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_DECLARATION",
+                        message: `An attribute use with a ref must not carry a ${attr} attribute.`,
+                        location: locationOf(el),
+                        phase: "schema-compilation",
+                    });
+                }
+            }
+        }
+
+        // form value validation (local declarations only).
+        const formAttr = el.getAttribute("form");
+        if (formAttr !== null && formAttr !== "qualified" && formAttr !== "unqualified") {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: `The form attribute must be 'qualified' or 'unqualified', got '${formAttr}'.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // default and fixed are mutually exclusive on an attribute use.
+        const hasDefault = el.getAttribute("default") !== null;
+        const hasFixed = el.getAttribute("fixed") !== null;
+        if (hasDefault && hasFixed) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An attribute use must not carry both a default and a fixed value constraint.",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
+        // use value validation (XSD 1.0 §3.2.3: optional | prohibited | required).
+        const useRaw = el.getAttribute("use");
+        if (useRaw !== null && useRaw !== "optional" && useRaw !== "prohibited" && useRaw !== "required") {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: `The use attribute must be one of optional, prohibited, or required, got '${useRaw}'.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        // A required attribute use may only carry a fixed value constraint
+        // (XSD 1.0 §3.2.3, cos-attribute-use-props-correct).
+        if (useRaw === "required" && hasDefault && !hasFixed) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "An attribute use with use='required' must not carry a default value constraint (only fixed is allowed).",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+
         const refAttr = this.readQName(el, "ref", ctx);
         const typeRef = refAttr ? null : this.readQName(el, "type", ctx);
         // A ref attribute use's identity is the referenced QName; its type is
@@ -1488,12 +1819,57 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     }
 
     private wrapParticle(ctx: BuildContext, el: Element, term: ParticleTerm): Particle {
-        const minOccurs = this.readOccurs(el, "minOccurs", 1);
+        const minRaw = el.getAttribute("minOccurs");
         const maxRaw = el.getAttribute("maxOccurs");
-        const maxOccurs = maxRaw === UNBOUNDED ? UNBOUNDED : this.readOccurs(el, "maxOccurs", 1);
+        const minOccurs = minRaw === null ? 1 : this.readOccurs(el, "minOccurs", 1);
+        const maxOccurs = maxRaw === UNBOUNDED ? UNBOUNDED : maxRaw === null ? 1 : this.readOccurs(el, "maxOccurs", 1);
+        this.checkOccurrences(ctx, el, minRaw, maxRaw, minOccurs, maxOccurs);
         const particle: Particle = { minOccurs, maxOccurs, term };
         ctx.particleNodes.set(particle, el);
         return particle;
+    }
+
+    /**
+     * XSD 1.0 §3.9.2 (particle validity) — occurrence conformance (CHK-025):
+     * minOccurs and maxOccurs must be non-negative integers (maxOccurs may be
+     * "unbounded"), minOccurs must not exceed maxOccurs, and minOccurs cannot
+     * be "unbounded". Reported once per offending particle.
+     */
+    private checkOccurrences(
+        ctx: BuildContext,
+        el: Element,
+        minRaw: string | null,
+        maxRaw: string | null,
+        minOccurs: number,
+        maxOccurs: number | "unbounded",
+    ): void {
+        const reportOccurrence = (message: string) => {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_OCCURRENCE",
+                message,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        };
+        if (minRaw !== null) {
+            if (minRaw === UNBOUNDED) {
+                reportOccurrence("minOccurs cannot be 'unbounded'; only maxOccurs may be unbounded.");
+            } else if (!/^[0-9]+$/.test(minRaw)) {
+                reportOccurrence(`minOccurs must be a non-negative integer, got '${minRaw}'.`);
+            }
+        }
+        if (maxRaw !== null && maxRaw !== UNBOUNDED) {
+            if (!/^[0-9]+$/.test(maxRaw)) {
+                reportOccurrence(`maxOccurs must be a non-negative integer or 'unbounded', got '${maxRaw}'.`);
+            }
+        }
+        // minOccurs must not exceed maxOccurs (only when both are numeric).
+        if (minRaw !== null && maxRaw !== null && maxOccurs !== UNBOUNDED && /^[0-9]+$/.test(minRaw) && /^[0-9]+$/.test(maxRaw)) {
+            if (minOccurs > (maxOccurs as number)) {
+                reportOccurrence(`minOccurs (${minRaw}) must not exceed maxOccurs (${maxRaw}).`);
+            }
+        }
     }
 
     private localElementName(el: Element, ctx: BuildContext): QName {
@@ -1593,6 +1969,12 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             if (resolved) {
                 (decl as { type: TypeDefinition | null }).type = resolved.type;
                 (decl as { nillable: boolean }).nillable = resolved.nillable;
+                // Note (CHK-025): XSD 1.0 §3.3.6 arguably forbids referencing an
+                // abstract element declaration via ref=. checkr deliberately keeps
+                // this legal at compile time (the instance validator reports
+                // ABSTRACT_ELEMENT when an abstract element is instantiated),
+                // matching the CHK-023 behavior and the common "abstract head"
+                // schema pattern. Pending XSTS verification (CHK-028).
             } else {
                 ctx.report({
                     severity: "error",
@@ -3002,6 +3384,80 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     // -----------------------------------------------------------------------
 
     /**
+     * Validate that every token in a whitespace-separated list is among the
+     * allowed tokens (or is #all, which expands later). Reports unknown tokens
+     * as INVALID_DECLARATION (CHK-025).
+     */
+    private checkTokens(raw: string, allowed: readonly string[], ctx: BuildContext, el: Element, attrName: string): void {
+        this.checkTokensVia(raw, allowed, el, attrName, (e) => ctx.report(e));
+    }
+
+    private checkBlockTokens(raw: string, ctx: BuildContext, el: Element): void {
+        this.checkTokens(raw, BLOCK_TOKENS, ctx, el, "block");
+    }
+
+    private checkBlockDefaultTokens(raw: string, el: Element, report: (error: SchemaError) => void): void {
+        this.checkTokensVia(raw, BLOCK_TOKENS, el, "blockDefault", report);
+    }
+
+    private checkFinalDefaultTokens(raw: string, el: Element, report: (error: SchemaError) => void): void {
+        this.checkTokensVia(raw, [...COMPLEX_FINAL_TOKENS, ...SIMPLE_FINAL_TOKENS], el, "finalDefault", report);
+    }
+
+    /** Like checkTokens, but takes a bare report function (used from compile()/adoptDocument()). */
+    private checkTokensVia(
+        raw: string,
+        allowed: readonly string[],
+        el: Element,
+        attrName: string,
+        report: (error: SchemaError) => void,
+    ): void {
+        const tokens = raw.trim().split(/\s+/);
+        for (const t of tokens) {
+            if (t === "#all") continue;
+            if (!allowed.includes(t)) {
+                report({
+                    severity: "error",
+                    code: "INVALID_DECLARATION",
+                    message: `Unknown token '${t}' in ${attrName}; allowed tokens are: ${allowed.join(", ")}, or #all.`,
+                    location: locationOf(el),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+    }
+
+    /**
+     * Validate an elementFormDefault/attributeFormDefault value (XSD 1.0
+     * §3.2.1): only 'qualified' and 'unqualified' are legal.
+     */
+    private checkFormDefault(
+        el: Element,
+        attrName: string,
+        report: (error: SchemaError) => void,
+    ): { qualified: boolean } {
+        const raw = el.getAttribute(attrName);
+        if (raw !== null && raw !== "qualified" && raw !== "unqualified") {
+            report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: `The ${attrName} attribute must be 'qualified' or 'unqualified', got '${raw}'.`,
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
+        }
+        return { qualified: raw === "qualified" };
+    }
+
+    private checkComplexFinalTokens(raw: string, ctx: BuildContext, el: Element): void {
+        this.checkTokens(raw, COMPLEX_FINAL_TOKENS, ctx, el, "final");
+    }
+
+    private checkSimpleFinalTokens(raw: string, ctx: BuildContext, el: Element): void {
+        this.checkTokens(raw, SIMPLE_FINAL_TOKENS, ctx, el, "final");
+    }
+
+    /**
      * Normalize a whitespace-separated token list (block/final/blockDefault/
      * finalDefault): an explicit `#all` expands to every allowed token, and
      * unknown tokens are dropped. When `raw` is null, `defaults` is used.
@@ -3017,12 +3473,14 @@ export class SchemaCompilerImpl implements SchemaCompiler {
     /** The complex type's final token list: own final attribute, else finalDefault. */
     private finalForComplexType(el: Element, ctx: BuildContext): string {
         const raw = el.getAttribute("final");
+        if (raw !== null) this.checkComplexFinalTokens(raw, ctx, el);
         return this.normalizeTokens(raw, this.filterTokens(ctx.finalDefault, COMPLEX_FINAL_TOKENS), COMPLEX_FINAL_TOKENS);
     }
 
     /** The simple type's final token list: own final attribute, else finalDefault. */
     private finalForSimpleType(el: Element, ctx: BuildContext): string {
         const raw = el.getAttribute("final");
+        if (raw !== null) this.checkSimpleFinalTokens(raw, ctx, el);
         return this.normalizeTokens(raw, this.filterTokens(ctx.finalDefault, SIMPLE_FINAL_TOKENS), SIMPLE_FINAL_TOKENS);
     }
 
@@ -3170,6 +3628,135 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     phase: "schema-compilation",
                 });
             }
+        }
+    }
+
+    /**
+     * XSD 1.0 Part 2 §4.3 — schema conformance for the facet framework (CHK-025).
+     *
+     * Checks the facets of one simple-type restriction:
+     * - facet values are in the facet's lexical space (length-family and scale
+     *   facets are non-negative integers, whiteSpace is one of the three values);
+     * - no duplicate facet kind except pattern and enumeration (which accumulate);
+     * - mutually exclusive combinations (length vs min/maxLength, the two
+     *   min/max bound pairs);
+     * - bound ordering (a lower bound must not exceed an upper bound, compared
+     *   when both values are plain decimals);
+     * - fractionDigits must not exceed totalDigits.
+     */
+    private checkFacetConformance(
+        facets: ReadonlyArray<{ kind: string; value: string; node: Element }>,
+        ctx: BuildContext,
+    ): void {
+        const byKind = new Map<string, Array<{ value: string; node: Element }>>();
+        for (const f of facets) {
+            const list = byKind.get(f.kind);
+            if (list) list.push(f);
+            else byKind.set(f.kind, [f]);
+        }
+
+        // Duplicate kinds: only pattern and enumeration may appear more than once.
+        for (const [kind, list] of byKind) {
+            if (kind === "pattern" || kind === "enumeration") continue;
+            if (list.length > 1) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_FACET_COMBINATION",
+                    message: `A restriction may contain at most one ${kind} facet, but found ${list.length}; only pattern and enumeration facets may be repeated.`,
+                    location: locationOf(list[1].node),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // Facet value lexical spaces.
+        const NON_NEGATIVE_INTEGER_KINDS = ["length", "minLength", "maxLength", "totalDigits", "fractionDigits"];
+        for (const [kind, list] of byKind) {
+            for (const f of list) {
+                if (NON_NEGATIVE_INTEGER_KINDS.includes(kind) && !/^[0-9]+$/.test(f.value)) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_FACET_VALUE",
+                        message: `The ${kind} facet value '${f.value}' must be a non-negative integer.`,
+                        location: locationOf(f.node),
+                        phase: "schema-compilation",
+                    });
+                }
+                if (kind === "whiteSpace" && !["preserve", "replace", "collapse"].includes(f.value)) {
+                    ctx.report({
+                        severity: "error",
+                        code: "INVALID_FACET_VALUE",
+                        message: `The whiteSpace facet value '${f.value}' must be one of preserve, replace, or collapse.`,
+                        location: locationOf(f.node),
+                        phase: "schema-compilation",
+                    });
+                }
+            }
+        }
+
+        // Mutual exclusions.
+        if (byKind.has("length") && (byKind.has("minLength") || byKind.has("maxLength"))) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_FACET_COMBINATION",
+                message: "A length facet cannot coexist with minLength or maxLength facets.",
+                location: locationOf(byKind.get("length")![0].node),
+                phase: "schema-compilation",
+            });
+        }
+        if (byKind.has("minInclusive") && byKind.has("minExclusive")) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_FACET_COMBINATION",
+                message: "minInclusive and minExclusive are mutually exclusive.",
+                location: locationOf(byKind.get("minExclusive")![0].node),
+                phase: "schema-compilation",
+            });
+        }
+        if (byKind.has("maxInclusive") && byKind.has("maxExclusive")) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_FACET_COMBINATION",
+                message: "maxInclusive and maxExclusive are mutually exclusive.",
+                location: locationOf(byKind.get("maxExclusive")![0].node),
+                phase: "schema-compilation",
+            });
+        }
+
+        // Bound ordering — compare only when both values are plain decimals.
+        const boundPairs: Array<[string, string]> = [
+            ["minInclusive", "maxInclusive"],
+            ["minInclusive", "maxExclusive"],
+            ["minExclusive", "maxInclusive"],
+            ["minExclusive", "maxExclusive"],
+        ];
+        for (const [low, high] of boundPairs) {
+            const l = byKind.get(low)?.[0];
+            const h = byKind.get(high)?.[0];
+            if (!l || !h) continue;
+            if (!/^[+-]?[0-9]+(\.[0-9]+)?$/.test(l.value) || !/^[+-]?[0-9]+(\.[0-9]+)?$/.test(h.value)) continue;
+            if (Number(l.value) > Number(h.value)) {
+                ctx.report({
+                    severity: "error",
+                    code: "INVALID_FACET_COMBINATION",
+                    message: `The ${low} facet value '${l.value}' must not exceed the ${high} facet value '${h.value}'.`,
+                    location: locationOf(l.node),
+                    phase: "schema-compilation",
+                });
+            }
+        }
+
+        // Scale facets: fractionDigits must not exceed totalDigits.
+        const td = byKind.get("totalDigits")?.[0];
+        const fd = byKind.get("fractionDigits")?.[0];
+        if (td && fd && /^[0-9]+$/.test(td.value) && /^[0-9]+$/.test(fd.value) && Number(fd.value) > Number(td.value)) {
+            ctx.report({
+                severity: "error",
+                code: "INVALID_FACET_COMBINATION",
+                message: `fractionDigits (${fd.value}) must not exceed totalDigits (${td.value}).`,
+                location: locationOf(fd.node),
+                phase: "schema-compilation",
+            });
         }
     }
 
