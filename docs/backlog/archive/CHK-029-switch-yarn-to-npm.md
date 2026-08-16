@@ -3,7 +3,7 @@ id: CHK-029
 title: "Switch package management from Yarn to npm"
 area: "ops"
 priority: "high"
-status: "draft"
+status: "done"
 depends_on: []
 required_context: []
 optional_context: []
@@ -74,4 +74,4 @@ npm ci --dry-run
 
 ## Decision / Outcome
 
-*(filled in after completion)*
+Switched the repo's package manager from Yarn 4 to npm. All `yarn` commands in `package.json`, `AGENTS.md`, `scripts/agent-check.mjs`, `.github/workflows/ci.yml`, `.github/workflows/npm-publish.yml`, and supporting docs (`docs/CONTRIBUTING.md`, `docs/agents/commands/`) are replaced with `npm` equivalents. `yalc` devDependency removed (publish:local now uses `npm pack`). `.yarnrc.yml` and `yarn.lock` deleted; `package-lock.json` generated and committed. Guardrails inventory rebased (12 entries, yalc removed). `engines: { "node": ">=18" }` added. All verification passes (`node scripts/agent-check.mjs full`), `npm ci --dry-run` succeeds, and no `yarn` references remain in repo-authored code/config files.

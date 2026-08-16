@@ -258,8 +258,8 @@
     {
       "id": "CHK-029",
       "title": "Switch package management from Yarn to npm",
-      "file": "docs/backlog/active/CHK-029-switch-yarn-to-npm.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-029-switch-yarn-to-npm.md",
+      "status": "done",
       "area": "ops",
       "priority": "high",
       "type": "ticket"

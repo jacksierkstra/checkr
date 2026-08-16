@@ -62,7 +62,7 @@ Do not write any file before they answer.
 - Write (or extend) the enforcement script: `scripts/guardrails.mjs` + `scripts/guardrails.test.mjs`. Keep extractors pure and exported so the tests drive them off fixture text rather than the live repo.
 - Baseline the inventories via `node scripts/guardrails.mjs --update` — writes `scripts/guardrails/*.json`. Commit the command alongside the data so it can be re-derived.
 - Scope the check: checkr is a small single-package repo, so a full scan is the default — no PR-relative scoping needed. The extractors walk `src/` (and read `package.json`) in milliseconds.
-- Register one entry point using this repo's convention: a `guardrails` target in `scripts/agent-check.mjs` (which also runs the fixture tests and is part of `full`), plus the npm script `yarn guardrails`. Name both `guardrails`.
+- Register one entry point using this repo's convention: a `guardrails` target in `scripts/agent-check.mjs` (which also runs the fixture tests and is part of `full`), plus the npm script `npm run guardrails`. Name both `guardrails`.
 - Pre-existing violations go into an explicit ignore list with a TODO, never into a weakened rule. Ratchet down later; never fail the build on day one.
 
 ## 6. Prove it works
@@ -75,7 +75,7 @@ A guardrail that has never been observed failing is not a guardrail.
 
 Report: tool chosen, rules active, violations ignored, how to run it. Then add this line to the repo's `AGENTS.md` (under the verification section or as a dedicated Guardrails section):
 
-> Run `node scripts/agent-check.mjs guardrails` (or `yarn guardrails`) before finishing. It must exit 0. Do not edit the guardrails config or regenerate inventories to make it pass — report it.
+> Run `node scripts/agent-check.mjs guardrails` (or `npm run guardrails`) before finishing. It must exit 0. Do not edit the guardrails config or regenerate inventories to make it pass — report it.
 
 ---
 

@@ -3,22 +3,22 @@
 ## Prerequisites
 
 - Node.js 20+
-- Yarn 4
+- npm (ships with Node.js)
 
 ## Setup
 
 ```sh
-yarn install
+npm ci
 ```
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `yarn test` | Run the test suite (Jest) |
-| `yarn build` | Compile TypeScript to `dist/` |
-| `yarn benchmark` | Run benchmarks |
-| `yarn guardrails` | Run reuse guardrails checks |
+| `npm test` | Run the test suite (Jest) |
+| `npm run build` | Compile TypeScript to `dist/` |
+| `npm run benchmark` | Run benchmarks |
+| `npm run guardrails` | Run reuse guardrails checks |
 
 ## Project structure
 

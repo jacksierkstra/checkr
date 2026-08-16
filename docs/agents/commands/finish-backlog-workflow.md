@@ -11,8 +11,8 @@ The agent implementing a task **never** verifies its own work and **never** comm
 ## Prerequisites
 
 - Working tree is as clean as you want it (uncommitted work is OK — it will be snapshotted as baseline dirt).
-- `node`, `yarn`, `git` available.
-- `yarn install` has been run.
+- `node`, `npm`, `git` available.
+- `npm ci` has been run.
 
 ## Procedure
 

@@ -8,9 +8,9 @@
  *
  * Targets:
  *   full       — test, build, benchmark, validate-brief, guardrails (fail-fast order)
- *   test       — yarn test
- *   build      — yarn build
- *   benchmark  — yarn benchmark
+ *   test       — npm test
+ *   build      — npm run build
+ *   benchmark  — npm run benchmark
  *   validate-brief — node scripts/validate-brief.mjs
  *   guardrails — node --test scripts/guardrails.test.mjs && node scripts/guardrails.mjs
  *
@@ -88,9 +88,9 @@ function runOne(label, cmd, opts = {}) {
 const CHECK_ORDER = ["test", "build", "benchmark", "validate-brief", "guardrails"];
 
 const CHECKS = {
-  test:           () => runOne("TEST", "yarn test"),
-  build:          () => runOne("BUILD", "yarn build"),
-  benchmark:      () => runOne("BENCHMARK", "yarn benchmark", { timeout: 300_000 }),
+  test:           () => runOne("TEST", "npm test"),
+  build:          () => runOne("BUILD", "npm run build"),
+  benchmark:      () => runOne("BENCHMARK", "npm run benchmark", { timeout: 300_000 }),
   "validate-brief": () => runOne("VALIDATE", `node "${resolve(__dirname, "validate-brief.mjs")}"`),
   guardrails:     () =>
     runOne("GUARDRAILS", `node --test "${resolve(__dirname, "guardrails.test.mjs")}" && node "${resolve(__dirname, "guardrails.mjs")}"`),
@@ -101,11 +101,11 @@ const CHECKS = {
 // --------------------------------------------------------------------------
 
 checkTool("node", "node --version", "Install Node.js 20+ from https://nodejs.org");
-checkTool("yarn", "yarn --version", "Install Yarn 4.x: corepack enable && yarn set version 4.x");
+checkTool("npm", "npm --version", "Install Node.js 20+ from https://nodejs.org");
 checkTool("git", "git --version", "Install Git from https://git-scm.com");
 
 if (!existsSync(resolve(root, "node_modules"))) {
-  die("node_modules not found. Run: yarn install --immutable");
+  die("node_modules not found. Run: npm ci");
 }
 
 // --------------------------------------------------------------------------

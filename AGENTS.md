@@ -53,8 +53,8 @@ This is a **single-package repo** (`@jacksierkstra/checkr`). No inter-package bo
 
 | Path | Generator | Command |
 |------|-----------|---------|
-| `dist/` | TypeScript compiler | `yarn build` (`tspc -p tsconfig.build.json`) |
-| `coverage/` | Jest | `yarn test` |
+| `dist/` | TypeScript compiler | `npm run build` (`tspc -p tsconfig.build.json`) |
+| `coverage/` | Jest | `npm test` |
 
 ---
 
@@ -82,7 +82,7 @@ Reuse guardrails are enforced at `scripts/guardrails.mjs` and registered in `gua
 - **src/lib layering** — invariant (no upward imports across the DAG).
 - **relative imports** — invariant (non-test src uses `@lib/*` / `@benchmark/*` aliases only).
 
-Run `node scripts/agent-check.mjs guardrails` (or `yarn guardrails`) before finishing. It must exit 0.
+Run `node scripts/agent-check.mjs guardrails` (or `npm run guardrails`) before finishing. It must exit 0.
 Do not edit the guardrails config or regenerate inventories to make it pass — report it.
 
 **Failure protocol**: When a check fails, re-run only the *smallest* failing command with output visible (the shim already does this for individual targets). Fix. Re-run the targeted check. Finish with the full check.

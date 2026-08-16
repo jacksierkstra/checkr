@@ -13,7 +13,6 @@
     "ts-patch",
     "tsx",
     "typescript",
-    "typescript-transform-paths",
-    "yalc"
+    "typescript-transform-paths"
   ]
 }
