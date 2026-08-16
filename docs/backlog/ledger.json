@@ -254,6 +254,42 @@
       "area": "meta",
       "priority": "medium",
       "type": "ticket"
+    },
+    {
+      "id": "CHK-029",
+      "title": "Switch package management from Yarn to npm",
+      "file": "docs/backlog/active/CHK-029-switch-yarn-to-npm.md",
+      "status": "draft",
+      "area": "ops",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-030",
+      "title": "Switch test runner from Jest to Vitest",
+      "file": "docs/backlog/active/CHK-030-switch-jest-to-vitest.md",
+      "status": "draft",
+      "area": "ops",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-031",
+      "title": "Add ESLint + Prettier toolchain",
+      "file": "docs/backlog/active/CHK-031-add-eslint-prettier.md",
+      "status": "draft",
+      "area": "ops",
+      "priority": "high",
+      "type": "ticket"
+    },
+    {
+      "id": "CHK-032",
+      "title": "Adopt Conventional Commits + Release Please",
+      "file": "docs/backlog/active/CHK-032-adopt-conventional-commits-release-please.md",
+      "status": "draft",
+      "area": "ops",
+      "priority": "high",
+      "type": "ticket"
     }
   ]
 }
