@@ -157,12 +157,30 @@ function builtinAnyType(): ComplexTypeDefinition {
         kind: "complex-type",
         name: builtinQName("anyType"),
         contentType: "mixed",
-        particle: null,
+        // Per errata E1-22 (R-117), the ur-type's {particle} is a ##any
+        // wildcard with processContents=lax, so an element typed anyType
+        // (or with no declared type) accepts any element content and any
+        // attributes, validating them lazily against the schema (CHK-027).
+        particle: {
+            minOccurs: 0,
+            maxOccurs: "unbounded",
+            term: {
+                kind: "wildcard",
+                processContents: "lax",
+                namespaceConstraint: { kind: "any" },
+            },
+        },
         attributeUses: [],
         simpleType: null,
         baseType: null,
         derivationMethod: null,
-        attributeWildcard: null,
+        // The ur-type's {attribute wildcard} is likewise ##any with lax
+        // processing (XSD 1.0 §3.4.2, errata E1-22).
+        attributeWildcard: {
+            kind: "wildcard",
+            processContents: "lax",
+            namespaceConstraint: { kind: "any" },
+        },
         isAbstract: false,
         final: "",
         annotations: [],

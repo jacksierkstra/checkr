@@ -282,8 +282,17 @@ describe("isValidGMonth", () => {
     });
 
     it("accepts with timezone", () => {
-        expect(isValidGMonth("--01Z")).toBe(true);
-        expect(isValidGMonth("--01+05:30")).toBe(true);
+        expect(isValidGMonth("--01--Z")).toBe(true);
+        expect(isValidGMonth("--01--+05:30")).toBe(true);
+    });
+
+    it("accepts canonical form with trailing dashes", () => {
+        expect(isValidGMonth("--05--")).toBe(true);
+    });
+
+    it("rejects timezone without preceding dashes", () => {
+        expect(isValidGMonth("--01Z")).toBe(false);
+        expect(isValidGMonth("--01+05:30")).toBe(false);
     });
 
     it("rejects invalid months", () => {

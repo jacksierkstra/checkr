@@ -240,8 +240,8 @@
     {
       "id": "CHK-027",
       "title": "Errata 1.0 sweep",
-      "file": "docs/backlog/active/CHK-027-errata-1-0-sweep.md",
-      "status": "draft",
+      "file": "docs/backlog/archive/CHK-027-errata-1-0-sweep.md",
+      "status": "done",
       "area": "meta",
       "priority": "medium",
       "type": "ticket"

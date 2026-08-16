@@ -171,9 +171,11 @@ const GYEAR_MONTH_RE = new RegExp(
     `^(-?\\d{4,})-(${MONTH_FRAG})${TZ_FRAG}$`
 );
 
-// gMonth: --MM[Z|±hh:mm]
+// gMonth: --MM[--][Z|±hh:mm] — the canonical form is --MM-- (seven
+// characters) with an optional trailing timezone (errata E2-22); the
+// truncated --MM form without timezone is also accepted (CHK-027).
 const GMONTH_RE = new RegExp(
-    `^--(${MONTH_FRAG})${TZ_FRAG}$`
+    `^--(${MONTH_FRAG})(--(?:${TZ_FRAG}))?$`
 );
 
 // gMonthDay: --MM-DD[Z|±hh:mm]
@@ -361,7 +363,15 @@ export function parseGMonth(value: string): GMonthComponents | null {
     if (!m) return null;
 
     const month = parseInt(m[1]!, 10);
-    const timezone = parseTimezone(m[2]);
+    // The timezone is preceded by the optional '--' separator (errata E2-22).
+    // m[2] is the full '--(tz)' group: undefined → no timezone,
+    // '--' → trailing dashes without timezone, '--Z' → Z timezone, etc.
+    const tzGroup = m[2];
+    let timezone: TimezoneOffset = null;
+    if (tzGroup !== undefined && tzGroup.length > 2) {
+        timezone = parseTimezone(tzGroup.slice(2));
+        if (typeof timezone !== "number" || isNaN(timezone)) return null;
+    }
 
     if (month < 1 || month > 12) return null;
 
@@ -429,7 +439,8 @@ export function isValidGDay(value: string): boolean {
  * At least one component must be non-zero.
  */
 export function parseDuration(value: string): DurationComponents | null {
-    const m = DURATION_RE.exec(value.trim());
+    const trimmed = value.trim();
+    const m = DURATION_RE.exec(trimmed);
     if (!m) return null;
 
     const sign = m[1] === "-" ? -1 : 1;
@@ -452,6 +463,13 @@ export function parseDuration(value: string): DurationComponents | null {
         } else {
             seconds = parseInt(cleaned, 10);
         }
+    }
+
+    // Per errata E2-24, the 'T' must be absent when no time components are
+    // present: P20Y0M15DT is not a valid duration (CHK-027).
+    const hasTimeSeparator = /t/i.test(trimmed);
+    if (hasTimeSeparator && m[5] === undefined && m[6] === undefined && m[7] === undefined) {
+        return null;
     }
 
     // At least one component must be present and non-zero (per spec)

@@ -6,7 +6,8 @@ wayfinder_type: "task"
 parent: "CHK-001"
 area: "meta"
 priority: "medium"
-status: "draft"
+status: "done"
+assignee: "jacks"
 depends_on: ["CHK-025"]
 required_context: ["docs/research/gap-analysis.md"]
 optional_context: ["docs/research/xsts-structure-acquisition.md"]
@@ -48,8 +49,17 @@ Can the Errata 1.0 behaviors be implemented or explicitly diverged from, with th
 
 ## Answer
 
-*(to be filled on resolution)*
+Implemented. All 19 Errata10 test groups (31 schema/instance pairs) produce the expected outcome, verified by running the actual XSTS data through checkr's two-phase API. In-repo regression tests live in `src/lib/xsd/compiler/errata.test.ts` as derived fixtures.
 
 ## Decision / Outcome
 
-*(filled in after completion)*
+Four behaviors required changes:
+
+- **E1-13 (errC005/errC006)** — local `abstract` prohibited. The compiler now reports `INVALID_DECLARATION` when a local element declaration carries an `abstract` attribute (S4S `localElement: abstract use="prohibited"`).
+- **E2-24 (errE004)** — duration `T` must be absent when no time components are present; `parseDuration` rejects `P20Y0M15DT`.
+- **E1-22 / R-117 (errC007)** — `xs:anyType` now has a `##any, lax` wildcard particle and attribute wildcard, so elements typed anyType (or untyped) validate content/attributes lazily.
+- **E2-22 (errA003/errE006)** — `gMonth` lexical form corrected to `--MM[--](Z|±hh:mm)`; the canonical `--MM--` form with trailing dashes is accepted.
+
+Behaviors already correct and locked in by tests: E0-23, E0-10/E1-11, E1-40, E1-9, E1-3, E1-16, E1-21, E2-27, E2-25, E2-17, E2-35.
+
+**No deliberate divergences.** All Errata10 pairs match the suite's expected outcomes.

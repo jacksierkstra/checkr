@@ -1539,6 +1539,17 @@ export class SchemaCompilerImpl implements SchemaCompiler {
                     phase: "schema-compilation",
                 });
             }
+        } else if (el.getAttribute("abstract") !== null) {
+            // Errata E1-13: the abstract attribute is prohibited on local
+            // element declarations (S4S localElement: abstract use="prohibited"),
+            // regardless of its value — only global declarations may be abstract.
+            ctx.report({
+                severity: "error",
+                code: "INVALID_DECLARATION",
+                message: "A local element declaration must not carry an abstract attribute; only global element declarations may declare abstract (XSD 1.0 §3.3.1, errata E1-13).",
+                location: locationOf(el),
+                phase: "schema-compilation",
+            });
         }
 
         // type and inline type are mutually exclusive.
@@ -1611,8 +1622,9 @@ export class SchemaCompilerImpl implements SchemaCompiler {
             ref: refAttr,
             identityConstraints: refAttr ? [] : this.buildIdentityConstraints(el, ctx),
             // A local declaration cannot head a substitution group (XSD 1.0
-            // §3.3.6); it may still declare membership attributes (abstract,
-            // default, fixed, block) when it is a real local declaration.
+            // §3.3.6); it may still declare membership attributes (default,
+            // fixed, block) when it is a real local declaration. The abstract
+            // attribute is prohibited on local elements (errata E1-13).
             substitutionGroup: null,
             abstract: el.getAttribute("abstract") === "true",
             default: el.getAttribute("default") ?? null,
